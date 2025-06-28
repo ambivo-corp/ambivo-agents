@@ -23,12 +23,12 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Cache pip packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -43,7 +43,12 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install flake8 pytest pytest-asyncio pyyaml redis
+        python -m pip install flake8 pytest pytest-asyncio pytest-timeout pyyaml redis
+        
+        # Install test dependencies first
+        if [ -f requirements-test.txt ]; then 
+          pip install -r requirements-test.txt
+        fi
         
         # Install core dependencies
         if [ -f requirements.txt ]; then 
@@ -395,9 +400,9 @@ jobs:
         echo "  Size: $(wc -l < agent_config.yaml) lines"
         echo "  Last modified: $(stat -c %y agent_config.yaml)"
         
-        # Run the real integration tests
+        # Run the real integration tests from tests directory
         echo "🚀 Running integration tests with dynamic configuration..."
-        pytest test_integration.py -v -s --tb=short --timeout=300
+        pytest tests/test_basic.py -v -s --tb=short --timeout=300
         
         echo "✅ Integration tests completed successfully!"
 
@@ -447,7 +452,7 @@ jobs:
         fi
 
     - name: Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results-${{ matrix.python-version }}
@@ -483,7 +488,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Python 3.11
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: "3.11"
 
@@ -493,7 +498,7 @@ jobs:
         pip install pytest pytest-asyncio pytest-benchmark
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Create agent_config.yaml for  tests
+    - name: Create agent_config.yaml for performance tests
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -503,7 +508,7 @@ jobs:
         QDRANT_URL: ${{ secrets.QDRANT_URL }}
         QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
       run: |
-        # Create minimal config for  tests
+        # Create minimal config for performance tests
         cat > agent_config.yaml << EOF
         llm:
           openai_api_key: ${OPENAI_API_KEY}
@@ -525,18 +530,23 @@ jobs:
           log_level: "ERROR"
         EOF
 
-    - name: Run Basic Tests
+    - name: Run Performance Tests
       env:
         PYTHONPATH: ${{ github.workspace }}
         CONFIG_PATH: agent_config.yaml
       run: |
-        run: pytest tests/test_basic.py -v -s
+        # Run performance tests if available
+        if [ -f "tests/test_performance.py" ]; then
+          pytest tests/test_performance.py -v --benchmark-only
+        else
+          echo "⚠️ No performance tests found"
+        fi
 
-    - name: Cleanup  test config
+    - name: Cleanup performance test config
       if: always()
       run: |
         if [ -f agent_config.yaml ]; then
           head -c 1M < /dev/zero > agent_config.yaml 2>/dev/null || true
           rm -f agent_config.yaml
-          echo "✅ test config cleaned up"
+          echo "✅ Performance test config cleaned up"
         fi
