@@ -39,7 +39,7 @@ For production scenarios, we recommend:
 ### Python Library Usage (Recommended)
 
 ```python
-from ambivo_agents import YouTubeDownloadAgent, KnowledgeBaseAgent, WebSearchAgent
+from ambivo_agents import YouTubeDownloadAgent
 import asyncio
 
 async def main():
@@ -102,7 +102,7 @@ from ambivo_agents.services import create_agent_service
 service = create_agent_service()
 session_id = service.create_session()
 
-# Service automatically routes to appropriate agent
+# Service automatically routes to the appropriate agent
 result = await service.process_message(
     message="download audio from youtube.com/watch?v=example",  # → YouTubeAgent
     session_id=session_id,
@@ -172,10 +172,10 @@ result = await service.process_message(
 ### Required
 - **Python 3.11+**
 - **Docker** (for code execution, media processing, YouTube downloads)
-- **Redis** (Cloud Redis recommended: Redis Cloud, AWS ElastiCache, etc.)
+- **Redis** (Cloud Redis recommended: Redis Cloud)
 
 ### Recommended Cloud Services
-- **Redis Cloud** or **AWS ElastiCache** for memory management
+- **Redis Cloud** 
 - **Qdrant Cloud** for knowledge base operations
 - **AWS Bedrock**, **OpenAI**, or **Anthropic** for LLM services
 
@@ -189,11 +189,7 @@ result = await service.process_message(
 - **Qdrant Cloud API Key** (for Knowledge Base operations)
 - **Redis Cloud credentials** (for memory management)
 
-**Why Cloud Services?**
-- **Reliability**: Enterprise-grade uptime and performance
-- **Scalability**: Auto-scaling based on usage
-- **Security**: Built-in encryption and access controls
-- **Maintenance**: No infrastructure management required
+
 
 ## Installation
 
@@ -229,7 +225,7 @@ docker pull sgosain/amb-ubuntu-python-public-pod
 
 ### 3. Setup Redis
 
-**Recommended: Cloud Redis (Redis Cloud, AWS ElastiCache, etc.)**
+**Recommended: Cloud Redis **
 ```yaml
 # In agent_config.yaml
 redis:
@@ -387,7 +383,7 @@ async def download_youtube():
     
     # Download audio
     result = await agent._download_youtube_audio(
-        "https://youtube.com/watch?v=dQw4w9WgXcQ"
+        "https://youtube.com/watch?v=example"
     )
     
     if result['success']:
@@ -397,7 +393,7 @@ async def download_youtube():
     
     # Get video info
     info = await agent._get_youtube_info(
-        "https://youtube.com/watch?v=dQw4w9WgXcQ"
+        "https://youtube.com/watch?v=example"
     )
     
     if info['success']:
@@ -526,7 +522,7 @@ ambivo-agents health
 ambivo-agents
 
 # Direct YouTube download
-ambivo-agents youtube download "https://youtube.com/watch?v=dQw4w9WgXcQ"
+ambivo-agents youtube download "https://youtube.com/watch?v=example"
 
 # Smart message routing
 ambivo-agents chat "download audio from https://youtube.com/watch?v=example"
@@ -537,12 +533,12 @@ ambivo-agents chat "extract audio from video.mp4"
 ### Command Line Examples
 ```bash
 # YouTube Downloads
-ambivo-agents youtube download "https://youtube.com/watch?v=dQw4w9WgXcQ" --audio-only
-ambivo-agents youtube download "https://youtube.com/watch?v=dQw4w9WgXcQ" --video
-ambivo-agents youtube info "https://youtube.com/watch?v=dQw4w9WgXcQ"
+ambivo-agents youtube download "https://youtube.com/watch?v=example" --audio-only
+ambivo-agents youtube download "https://youtube.com/watch?v=example" --video
+ambivo-agents youtube info "https://youtube.com/watch?v=example"
 
 # Smart Chat (automatically routes to appropriate agent)
-ambivo-agents chat "download audio from https://youtube.com/watch?v=dQw4w9WgXcQ"
+ambivo-agents chat "download audio from https://youtube.com/watch?v=example"
 ambivo-agents chat "search for latest AI developments"
 ambivo-agents chat "extract audio from video.mp4 as high quality mp3"
 
