@@ -1,0 +1,28 @@
+Ambivo Agents Best Practices
+
+Performance Optimization:
+- Enable Redis compression for large datasets
+- Use appropriate chunk sizes for document ingestion
+- Configure connection pooling for high-throughput applications
+- Monitor memory usage and scale Redis as needed
+
+Security Guidelines:
+- Always run code execution in isolated Docker containers
+- Use environment variables for API keys and secrets
+- Enable TLS/SSL for all network communications
+- Implement proper input validation and sanitization
+- Regular security audits and updates
+
+Knowledge Base Management:
+- Use descriptive collection names
+- Add meaningful metadata to documents
+- Regular backup of Qdrant data
+- Monitor query performance and optimize as needed
+- Implement proper document lifecycle management
+
+Deployment Recommendations:
+- Use Docker Compose for multi-service deployments
+- Implement health checks for all services
+- Set up monitoring and alerting
+- Plan for disaster recovery
+- Use load balancers for high availability

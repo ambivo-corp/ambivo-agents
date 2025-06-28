@@ -1,0 +1,52 @@
+# Core dependencies
+redis>=4.5.0
+redis[asyncio]
+docker>=6.0.0
+asyncio-mqtt>=0.11.0
+cachetools
+lz4
+
+# LangChain and LLM dependencies
+openai==1.84.0
+langchain==0.3.25
+langchain-community==0.3.24
+langchain-core==0.3.63
+langchain-openai==0.3.19
+langchainhub==0.1.21
+langchain-text-splitters==0.3.8
+langchain_anthropic==0.3.15
+langchain_aws
+langchain-voyageai
+huggingface-hub
+
+# LlamaIndex dependencies
+llama-index-core
+llama-index-embeddings-langchain
+llama-index-llms-langchain
+llama-index-llms-openai
+llama-index-vector-stores-qdrant
+llama-index-readers-smart-pdf-loader
+
+# API and web framework dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+
+# Cloud provider SDKs
+boto3>=1.34.0
+
+# Utility dependencies
+python-dotenv>=1.0.0
+pyyaml>=6.0
+psutil>=5.9.0
+qdrant-client
+numexpr
+
+# Development dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+isort>=5.12.0
+
+unstructured
+langchain-unstructured

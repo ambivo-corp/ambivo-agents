@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ambivo-agents"
+version = "1.3.0"
+description = "Multi-Agent AI System for automation"
+authors = [
+    {name = "Hemant Gosain 'Sunny'", email = "sgosain@ambivo.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "redis>=4.5.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    "click>=8.0.0",
+    "openai>=1.0.0",
+    "anthropic>=0.8.0",
+    "docker>=6.0.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+all = [
+    "qdrant-client>=1.6.0",
+    "llama-index>=0.9.0",
+    "langchain-unstructured>=0.1.0",
+    "beautifulsoup4>=4.12.0",
+    "playwright>=1.40.0",
+    "pytubefix>=6.0.0",
+    "pydantic>=2.0.0",
+    "boto3>=1.34.0",
+    "langchain-openai>=0.0.5",
+    "langchain-anthropic>=0.1.0",
+    "langchain-aws>=0.1.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+ambivo-agents = "ambivo_agents.cli:cli"
+ambivo = "ambivo_agents.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/ambivo-corp/ambivo-agents"
+Repository = "https://github.com/ambivo-corp/ambivo-agents"
+Issues = "https://github.com/ambivo-corp/ambivo-agents/issues"
+Documentation = "https://github.com/ambivo-corp/ambivo-agents/blob/main/README.md"
+Company = "https://www.ambivo.com"
+
+[tool.setuptools.packages.find]
+include = ["ambivo_agents*"]
+
+[tool.setuptools.package-data]
+ambivo_agents = ["*.yaml", "*.yml", "*.json", "*.md"]

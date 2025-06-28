@@ -1,0 +1,26 @@
+Ambivo Products and Services
+
+1. Ambivo Agents Platform
+   - Multi-agent AI system for enterprise automation
+   - Supports code execution, web scraping, media processing
+   - Redis-based memory management
+   - Docker-based secure execution
+   - Multi-LLM provider support (OpenAI, Anthropic, AWS Bedrock)
+
+2. Knowledge Base Solutions
+   - Vector database integration with Qdrant
+   - Document ingestion and semantic search
+   - Support for PDF, DOCX, TXT, and web content
+   - Custom metadata and chunking strategies
+
+3. Pricing Plans
+   - Starter Plan: $99/month - Basic features for small teams
+   - Professional Plan: $299/month - Advanced features and integrations
+   - Enterprise Plan: Custom pricing - Full platform access
+   - Consulting Services: $200/hour - Custom development and training
+
+4. Support Services
+   - 24/7 technical support
+   - Custom agent development
+   - Training and onboarding
+   - API integration assistance

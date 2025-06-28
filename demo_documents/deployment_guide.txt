@@ -1,0 +1,77 @@
+Ambivo Agents Deployment Guide
+
+Production Deployment Steps:
+
+1. Infrastructure Setup
+   - Provision Ubuntu 20.04+ servers
+   - Install Docker and Docker Compose
+   - Setup Redis cluster for high availability
+   - Configure load balancer (nginx/HAProxy)
+
+2. Qdrant Vector Database
+   - Deploy Qdrant cluster with persistent storage
+   - Configure authentication and API keys
+   - Setup backup and monitoring
+   - Optimize memory and disk settings
+
+3. Environment Configuration
+   - Create production agent_config.yaml
+   - Set environment variables for secrets
+   - Configure logging and monitoring
+   - Setup health checks and alerts
+
+4. Agent Service Deployment
+   - Build Docker images for production
+   - Deploy using Docker Compose or Kubernetes
+   - Configure auto-scaling policies
+   - Setup rolling updates
+
+5. Security Hardening
+   - Enable TLS/SSL encryption
+   - Configure firewall rules
+   - Setup VPN access for management
+   - Implement access controls and auditing
+
+6. Monitoring and Maintenance
+   - Deploy monitoring stack (Prometheus, Grafana)
+   - Configure log aggregation (ELK Stack)
+   - Setup automated backups
+   - Implement disaster recovery procedures
+
+Docker Compose Example:
+```yaml
+version: '3.8'
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  ambivo-agents:
+    image: ambivo/agents:latest
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - qdrant
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - REDIS_HOST=redis
+      - QDRANT_URL=http://qdrant:6333
+```
+
+Monitoring Metrics:
+- Request rate and latency
+- Agent response times
+- Memory and CPU usage
+- Error rates by agent type
+- LLM provider performance
+- Redis memory usage
+- Qdrant query performance

@@ -1,0 +1,55 @@
+Ambivo Agents Technical Specifications
+
+System Requirements:
+- Python 3.8 or higher
+- Docker Engine 20.0+
+- Redis 6.0+
+- Minimum 4GB RAM
+- 10GB available disk space
+
+Supported Platforms:
+- Linux (Ubuntu 18.04+, CentOS 7+)
+- macOS 10.15+
+- Windows 10+ (with WSL2)
+
+Architecture Components:
+1. Core Framework
+   - BaseAgent abstract class with standardized interfaces
+   - Multi-provider LLM service with automatic rotation
+   - Redis-based memory management with compression
+   - YAML-based configuration system
+
+2. Agent Types
+   - Assistant Agent: General conversation and Q&A
+   - Code Executor Agent: Python/Bash execution in Docker
+   - Knowledge Base Agent: Document ingestion and retrieval
+   - Media Editor Agent: FFmpeg-based media processing
+   - Web Scraper Agent: Playwright/requests-based scraping
+   - Web Search Agent: Multi-provider search capabilities
+   - Proxy Agent: Intelligent message routing
+
+3. Security Features
+   - Docker container isolation for code execution
+   - Network isolation and resource limits
+   - Input sanitization and validation
+   - Rate limiting and quota management
+   - Error handling and logging
+
+4. Performance Characteristics
+   - Horizontal scaling with Redis cluster
+   - Concurrent request processing
+   - Intelligent caching with TTL
+   - Compression for memory optimization
+   - Provider rotation for load balancing
+
+API Endpoints:
+- POST /agents/message - Process agent message
+- GET /agents/health - System health check
+- GET /agents/stats - Performance statistics
+- POST /agents/session - Create new session
+- DELETE /agents/session/{id} - Delete session
+
+Supported File Formats:
+- Documents: PDF, DOCX, TXT, HTML, Markdown
+- Media: MP4, AVI, MOV, MP3, WAV, AAC, FLAC
+- Data: JSON, CSV, XML, YAML

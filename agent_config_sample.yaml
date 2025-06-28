@@ -1,0 +1,182 @@
+# Ambivo Agents CLI Configuration - Version 1.0
+# Preferred filename: agent_config.yaml
+# Alternative locations: ~/.ambivo/agent_config.yaml, or specify with --config
+
+# CLI Settings
+cli:
+  version: '1.0.0'
+  default_mode: 'shell'        # 'shell' or 'help' - what happens when no command given
+  auto_session: true           # Automatically create session if none exists
+  session_prefix: 'ambivo'     # Prefix for auto-generated session names
+  verbose: false               # Enable verbose output by default
+  theme: 'default'             # 'default', 'minimal', 'colorful'
+
+# Agent-specific configurations
+agents:
+  # YouTube Download Agent
+  youtube:
+    default_audio_only: true           # Default to audio-only downloads
+    output_directory: './downloads'    # Where to save downloads
+    max_concurrent_downloads: 3        # Maximum simultaneous downloads
+    quality: 'best'                    # 'best', 'worst', 'bestvideo', 'bestaudio'
+    format: 'mp4'                      # Preferred video format
+    audio_format: 'mp3'                # Preferred audio format
+
+  # Media Editor Agent
+  media:
+    temp_directory: './temp'           # Temporary files location
+    output_directory: './processed'    # Processed files location
+    supported_formats:                 # Supported file formats
+      - 'mp4'
+      - 'avi'
+      - 'mov'
+      - 'mkv'
+      - 'mp3'
+      - 'wav'
+      - 'flac'
+    ffmpeg_path: 'ffmpeg'              # Path to FFmpeg executable
+    default_video_codec: 'h264'        # Default video codec
+    default_audio_codec: 'aac'         # Default audio codec
+    max_file_size_mb: 1000             # Maximum file size to process
+
+  # Knowledge Base Agent
+  knowledge_base:
+    default_embedding_model: 'sentence-transformers/all-MiniLM-L6-v2'
+    chunk_size: 1000                   # Text chunk size for processing
+    chunk_overlap: 200                 # Overlap between chunks
+    max_documents: 10000              # Maximum documents per knowledge base
+    vector_dimensions: 384             # Vector embedding dimensions
+    similarity_threshold: 0.7          # Minimum similarity for search results
+
+  # Web Search Agent
+  web_search:
+    default_max_results: 5             # Default number of search results
+    timeout: 30                        # Request timeout in seconds
+    providers:                         # Available search providers
+      - 'brave'
+      - 'duckduckgo'
+      - 'google'
+    default_provider: 'brave'          # Primary search provider
+    safe_search: true                  # Enable safe search
+    region: 'US'                       # Search region
+    language: 'en'                     # Search language
+
+  # Web Scraper Agent
+  web_scraper:
+    user_agent: 'Ambivo-Agent/1.0.0 (Educational Purpose)'
+    timeout: 30                        # Request timeout
+    max_retries: 3                     # Maximum retry attempts
+    delay_between_requests: 1          # Delay in seconds between requests
+    respect_robots_txt: true           # Follow robots.txt rules
+    max_pages_per_domain: 100          # Limit pages per domain
+    allowed_domains: []                # Whitelist of allowed domains (empty = all)
+    blocked_domains:                   # Blacklist of blocked domains
+      - 'example-blocked.com'
+
+  # Code Executor Agent
+  code_executor:
+    docker_enabled: false              # Enable Docker for code execution
+    allowed_languages:                 # Supported programming languages
+      - 'python'
+      - 'javascript'
+      - 'bash'
+      - 'sql'
+    timeout: 300                       # Execution timeout in seconds
+    memory_limit: '512m'               # Memory limit for containers
+    cpu_limit: '1'                     # CPU limit for containers
+    network_access: false              # Allow network access in containers
+    max_output_size: 10000             # Maximum output size in characters
+
+# Session Management
+session:
+  auto_cleanup: true                   # Automatically cleanup old sessions
+  session_timeout: 3600                # Session timeout in seconds (1 hour)
+  max_sessions: 10                     # Maximum concurrent sessions
+  save_history: true                   # Save session history
+  history_file: '~/.ambivo/history'    # History file location
+
+# Logging Configuration
+logging:
+  level: 'INFO'                        # Log level: DEBUG, INFO, WARNING, ERROR
+  file: './logs/ambivo-agents.log'     # Log file location
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  max_file_size: '10MB'                # Maximum log file size
+  backup_count: 5                      # Number of backup log files
+  console_output: true                 # Also log to console
+
+# Performance Settings
+performance:
+  max_concurrent_agents: 5             # Maximum concurrent agent instances
+  memory_threshold: 0.8                # Memory usage threshold (80%)
+  cpu_threshold: 0.9                   # CPU usage threshold (90%)
+  cache_enabled: true                  # Enable response caching
+  cache_ttl: 300                       # Cache time-to-live in seconds
+
+# Security Settings
+security:
+  api_key_file: '~/.ambivo/api_keys'   # File containing API keys
+  encrypt_sessions: false              # Encrypt session data
+  rate_limiting: true                  # Enable rate limiting
+  max_requests_per_minute: 60          # Maximum requests per minute
+  allowed_hosts: []                    # Whitelist of allowed hosts (empty = all)
+
+# Integration Settings
+integrations:
+  # OpenAI API
+  openai:
+    api_key: ''                        # OpenAI API key (leave empty to use env var)
+    model: 'gpt-3.5-turbo'            # Default model
+    max_tokens: 2000                   # Maximum tokens per request
+    temperature: 0.7                   # Response randomness
+
+  # Anthropic Claude API
+  anthropic:
+    api_key: ''                        # Anthropic API key
+    model: 'claude-3-sonnet-20240229'  # Default model
+    max_tokens: 2000                   # Maximum tokens per request
+
+  # Google Services
+  google:
+    credentials_file: ''               # Path to Google credentials JSON
+    drive_folder_id: ''                # Default Google Drive folder
+
+  # Database
+  database:
+    type: 'sqlite'                     # Database type: sqlite, postgresql, mysql
+    url: 'sqlite:///./ambivo_agents.db' # Database connection URL
+    pool_size: 5                       # Connection pool size
+
+# Custom Commands
+custom_commands:
+  # Define custom shell commands
+  shortcuts:
+    'dl': 'youtube download'           # 'dl <url>' becomes 'youtube download <url>'
+    'search': 'chat search for'        # 'search <query>' becomes 'chat search for <query>'
+    'extract': 'chat extract audio from' # 'extract <file>' becomes 'chat extract audio from <file>'
+
+# Environment-specific Settings
+environments:
+  development:
+    cli:
+      verbose: true
+    logging:
+      level: 'DEBUG'
+      console_output: true
+
+  production:
+    cli:
+      verbose: false
+    logging:
+      level: 'WARNING'
+      console_output: false
+    security:
+      rate_limiting: true
+      encrypt_sessions: true
+
+# User Preferences
+user:
+  name: ''                             # User display name
+  email: ''                            # User email
+  timezone: 'UTC'                      # User timezone
+  language: 'en'                       # Preferred language
+  date_format: '%Y-%m-%d %H:%M:%S'     # Date format preference
