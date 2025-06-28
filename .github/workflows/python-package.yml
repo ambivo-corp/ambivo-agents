@@ -498,7 +498,7 @@ jobs:
         pip install pytest pytest-asyncio pytest-benchmark
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Create agent_config.yaml for performance tests
+    - name: Create agent_config.yaml for tests
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -542,11 +542,11 @@ jobs:
           echo "⚠️ No performance tests found"
         fi
 
-    - name: Cleanup performance test config
+    - name: Cleanup test config
       if: always()
       run: |
         if [ -f agent_config.yaml ]; then
           head -c 1M < /dev/zero > agent_config.yaml 2>/dev/null || true
           rm -f agent_config.yaml
-          echo "✅ Performance test config cleaned up"
+          echo "test config cleaned up"
         fi

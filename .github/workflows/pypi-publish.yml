@@ -69,4 +69,244 @@ jobs:
         TAG="${{ steps.target.outputs.tag }}"
         echo "🏷️ Publishing version: ${TAG}"
         
-        # Check if this
+        # Check if this is a valid version tag
+        if [[ ${TAG} =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+          echo "✅ Valid version tag detected"
+        else
+          echo "❌ Invalid version tag format: ${TAG}"
+          echo "Expected format: v1.0.0, v1.0.0-beta, v1.0.0-alpha, v1.0.0-rc1"
+          exit 1
+        fi
+
+    - name: Check if version already exists
+      run: |
+        TAG="${{ steps.target.outputs.tag }}"
+        PACKAGE_NAME="ambivo-agents"
+        
+        # Remove 'v' prefix for PyPI version check
+        VERSION="${TAG#v}"
+        
+        echo "🔍 Checking if version ${VERSION} already exists..."
+        
+        if [ "${{ steps.target.outputs.environment }}" = "testpypi" ]; then
+          # Check Test PyPI
+          if pip index versions ${PACKAGE_NAME} --index-url https://test.pypi.org/simple/ 2>/dev/null | grep -q "${VERSION}"; then
+            echo "⚠️ Version ${VERSION} already exists on Test PyPI"
+            echo "ℹ️ This is normal for Test PyPI - continuing anyway"
+          else
+            echo "✅ Version ${VERSION} is new on Test PyPI"
+          fi
+        else
+          # Check Production PyPI
+          if pip index versions ${PACKAGE_NAME} 2>/dev/null | grep -q "${VERSION}"; then
+            echo "❌ Version ${VERSION} already exists on Production PyPI"
+            echo "💡 You need to increment the version number"
+            exit 1
+          else
+            echo "✅ Version ${VERSION} is new on Production PyPI"
+          fi
+        fi
+
+    - name: Build package
+      run: |
+        echo "🔧 Building package for ${{ steps.target.outputs.pypi_name }}..."
+        python -m build
+        echo "✅ Package built successfully"
+        
+        # Show what was built
+        ls -la dist/
+        echo "📦 Built files:"
+        for file in dist/*; do
+          echo "  - $(basename $file) ($(du -h $file | cut -f1))"
+        done
+
+    - name: Verify package
+      run: |
+        echo "🔍 Verifying package contents..."
+        twine check dist/*
+        echo "✅ Package verification passed"
+
+    - name: Test installation (dry run)
+      run: |
+        echo "🧪 Testing package installation..."
+        
+        # Create a temporary virtual environment to test installation
+        python -m venv test_env
+        source test_env/bin/activate
+        
+        # Install the built package
+        pip install dist/*.whl
+        
+        # Test basic import
+        python -c "
+        try:
+            import ambivo_agents
+            print('✅ Package imports successfully')
+            version = getattr(ambivo_agents, '__version__', 'unknown')
+            print(f'📦 Package version: {version}')
+            
+            # Test basic agent creation (without API keys)
+            try:
+                from ambivo_agents import KnowledgeBaseAgent
+                print('✅ Agent classes import successfully')
+            except Exception as e:
+                print(f'⚠️ Agent import issue: {e}')
+                print('ℹ️ This is expected without configuration')
+                
+        except ImportError as e:
+            print(f'❌ Import test failed: {e}')
+            exit(1)
+        "
+        
+        # Cleanup
+        deactivate
+        rm -rf test_env
+
+    - name: Wait for approval (Production only)
+      if: steps.target.outputs.environment == 'pypi'
+      run: |
+        echo "🛡️ Production deployment detected"
+        echo "⏸️ Waiting for manual approval..."
+        echo "👥 Reviewers will be notified to approve this deployment"
+        echo "🏷️ Version: ${{ steps.target.outputs.tag }}"
+        echo "🎯 Target: Production PyPI"
+
+    - name: Publish to PyPI
+      env:
+        TWINE_USERNAME: __token__
+        # Use environment-specific secrets (same name, different values per environment)
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        TWINE_REPOSITORY_URL: ${{ secrets.PYPI_REPOSITORY_URL }}
+      run: |
+        echo "🚀 Publishing to ${{ steps.target.outputs.pypi_name }}..."
+        echo "🔑 Using token from '${{ steps.target.outputs.environment }}' environment"
+        echo "🌐 Repository: ${{ secrets.PYPI_REPOSITORY_URL }}"
+        
+        # Upload to PyPI
+        twine upload dist/* --verbose
+        
+        echo "✅ Package published to ${{ steps.target.outputs.pypi_name }} successfully!"
+        echo "🔗 View at: ${{ steps.target.outputs.pypi_url }}"
+
+    - name: Verify publication
+      run: |
+        echo "🔍 Verifying package was published successfully..."
+        
+        # Wait a moment for PyPI to process
+        sleep 10
+        
+        TAG="${{ steps.target.outputs.tag }}"
+        VERSION="${TAG#v}"
+        
+        if [ "${{ steps.target.outputs.environment }}" = "testpypi" ]; then
+          # Check Test PyPI
+          if pip index versions ambivo-agents --index-url https://test.pypi.org/simple/ 2>/dev/null | grep -q "${VERSION}"; then
+            echo "✅ Package verified on Test PyPI"
+          else
+            echo "⚠️ Package not yet visible on Test PyPI (may take a few minutes)"
+          fi
+        else
+          # Check Production PyPI
+          if pip index versions ambivo-agents 2>/dev/null | grep -q "${VERSION}"; then
+            echo "✅ Package verified on Production PyPI"
+          else
+            echo "⚠️ Package not yet visible on Production PyPI (may take a few minutes)"
+          fi
+        fi
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.target.outputs.tag }}
+        name: Release ${{ steps.target.outputs.tag }}
+        body: |
+          ## 🎉 Ambivo Agents ${{ steps.target.outputs.tag }}
+          
+          **Published to: ${{ steps.target.outputs.pypi_name }}**
+          
+          ### 📦 Installation
+          
+          ```bash
+          ${{ steps.target.outputs.install_cmd }}
+          ```
+          
+          ### 🔧 What's New
+          
+          - Package published to ${{ steps.target.outputs.pypi_name }}
+          - All integration tests passed
+          - See [commit history](https://github.com/ambivo-corp/ambivo-agents/commits/${{ steps.target.outputs.tag }}) for detailed changes
+          
+          ### 🚀 Quick Start
+          
+          ```python
+          from ambivo_agents import KnowledgeBaseAgent
+          
+          # Create agent with explicit context
+          agent, context = KnowledgeBaseAgent.create(user_id="your_user")
+          print(f"Agent {agent.agent_id} ready!")
+          
+          # Use agent...
+          await agent.cleanup_session()
+          ```
+          
+          ### 📚 Documentation
+          
+          - [README](https://github.com/ambivo-corp/ambivo-agents#readme)
+          - [Examples](https://github.com/ambivo-corp/ambivo-agents/blob/main/one_liner_examples.py)
+          
+          ### 🔗 Links
+          
+          - **PyPI Package**: ${{ steps.target.outputs.pypi_url }}
+          - **Environment**: `${{ steps.target.outputs.environment }}`
+          
+          ---
+          
+          **Built  by the Ambivo team**
+        draft: false
+        prerelease: ${{ steps.target.outputs.is_prerelease == 'true' }}
+
+    - name: Production notification
+      if: steps.target.outputs.environment == 'pypi'
+      run: |
+        echo "🎉 PRODUCTION RELEASE PUBLISHED!"
+        echo "📦 Package: ambivo-agents ${{ steps.target.outputs.tag }}"
+        echo "🔗 Production PyPI: https://pypi.org/project/ambivo-agents/"
+        echo "🌟 This is now available for public installation!"
+        echo "💡 Install with: ${{ steps.target.outputs.install_cmd }}"
+
+    - name: Test release notification
+      if: steps.target.outputs.environment == 'testpypi'
+      run: |
+        echo "🧪 TEST RELEASE PUBLISHED!"
+        echo "📦 Package: ambivo-agents ${{ steps.target.outputs.tag }}"
+        echo "🔗 Test PyPI: https://test.pypi.org/project/ambivo-agents/"
+        echo "💡 Test with: ${{ steps.target.outputs.install_cmd }}"
+
+    - name: Post-publish summary
+      if: always()
+      run: |
+        echo "📊 Publish Summary:"
+        echo "  🏷️ Version: ${{ steps.target.outputs.tag }}"
+        echo "  🌍 Environment: ${{ steps.target.outputs.environment }}"
+        echo "  📦 Repository: ${{ steps.target.outputs.pypi_name }}"
+        echo "  🔗 URL: ${{ steps.target.outputs.pypi_url }}"
+        echo "  📋 Built files:"
+        for file in dist/*; do
+          echo "    - $(basename $file)"
+        done
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "  ✅ Status: Published successfully"
+        else
+          echo "  ❌ Status: Failed"
+        fi
+        echo ""
+        echo "🎉 Release workflow complete!"
+
+    - name: Cleanup
+      if: always()
+      run: |
+        echo "🧹 Cleaning up build artifacts..."
+        rm -rf dist/ build/ *.egg-info/ test_env/
+        echo "✅ Cleanup complete"

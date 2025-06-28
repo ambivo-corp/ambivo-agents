@@ -2,12 +2,77 @@
 
 A minimalistic toolkit for AI-powered automation including media processing, knowledge base operations, web scraping, YouTube downloads, and more.
 
-## 🌟  Direct Agent Creation Paradigm
+## ⚠️ Alpha Release Disclaimer
 
+**This library is currently in alpha stage.** While functional, it may contain bugs, undergo breaking changes, and lack complete documentation. **Developers should thoroughly evaluate and test the library before considering it for production use.** Use in production environments is at your own risk.
+
+For production scenarios, we recommend:
+- Extensive testing in your specific environment
+- Implementing proper error handling and monitoring
+- Having rollback plans in place
+- Staying updated with releases for critical fixes
+
+**Development Roadmap**: We are actively working toward a stable 1.0 release. Breaking changes may occur during the alpha phase as we refine the API and improve stability.
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Agent Creation](#agent-creation)
+- [Features](#features)
+- [Available Agents](#available-agents)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Command Line Interface](#command-line-interface)
+- [Architecture](#architecture)
+- [Docker Setup](#docker-setup)
+- [Troubleshooting](#troubleshooting)
+- [Security Considerations](#security-considerations)
+- [Contributing](#contributing)
+- [License](#license)
+- [Author](#author)
+- [Support](#support)
+
+## Quick Start
+
+### Python Library Usage (Recommended)
 
 ```python
-# 🌟 RECOMMENDED APPROACH
-from ambivo_agents import YouTubeDownloadAgent, KnowledgeBaseAgent
+from ambivo_agents import YouTubeDownloadAgent, KnowledgeBaseAgent, WebSearchAgent
+import asyncio
+
+async def main():
+    # Agent creation with explicit context
+    agent, context = YouTubeDownloadAgent.create(user_id="john")
+    
+    print(f"✅ Agent: {agent.agent_id}")
+    print(f"📋 Session: {context.session_id}")
+    print(f"👤 User: {context.user_id}")
+    
+    # Download audio from YouTube
+    result = await agent._download_youtube_audio(
+        "https://youtube.com/watch?v=dQw4w9WgXcQ"
+    )
+    
+    if result['success']:
+        print(f"✅ Downloaded: {result['filename']}")
+    
+    # Cleanup when done
+    await agent.cleanup_session()
+
+# Run
+asyncio.run(main())
+```
+
+## Agent Creation
+
+### Direct Agent Creation (Recommended)
+
+Use the `.create()` method for direct control over specific agent types:
+
+```python
+from ambivo_agents import YouTubeDownloadAgent
 
 # Create agent with explicit context
 agent, context = YouTubeDownloadAgent.create(user_id="john")
@@ -21,12 +86,42 @@ result = await agent._download_youtube_audio("https://youtube.com/watch?v=exampl
 await agent.cleanup_session()
 ```
 
-**Benefits of the approach:**
+**When to use `.create()`:**
+- Direct control over specific agent types
+- Single-agent applications
+- Explicit context management
+- Prototyping and development
+
+### Service-Based Creation
+
+Use the service method for multi-agent systems with intelligent routing:
+
+```python
+from ambivo_agents.services import create_agent_service
+
+service = create_agent_service()
+session_id = service.create_session()
+
+# Service automatically routes to appropriate agent
+result = await service.process_message(
+    message="download audio from youtube.com/watch?v=example",  # → YouTubeAgent
+    session_id=session_id,
+    user_id="user123"
+)
+```
+
+**When to use Service:**
+- Multi-agent applications
+- Intelligent message routing
+- Production chatbots/assistants
+- Unified session management
+
+**Benefits of this approach:**
 - ✅ **Explicit Context**: Session IDs, user IDs, and metadata are always visible
 - ✅ **Better Control**: Full lifecycle management of agents and sessions
 - ✅ **Built-in Memory**: Conversation history built into every agent
 
-## 🚀 Features
+## Features
 
 ### Core Capabilities
 - **Multi-Agent Architecture**: Specialized agents for different tasks with intelligent routing
@@ -35,50 +130,54 @@ await agent.cleanup_session()
 - **Multi-Provider LLM Support**: Automatic failover between OpenAI, Anthropic, and AWS Bedrock
 - **Configuration-Driven**: All features controlled via `agent_config.yaml`
 
+## Available Agents
 
-### Available Agents
-
-#### 🤖 Assistant Agent
+### 🤖 Assistant Agent
 - General purpose conversational AI
 - Context-aware responses
 - Multi-turn conversations
 
-#### 💻 Code Executor Agent  
+### 💻 Code Executor Agent
 - Secure Python and Bash execution in Docker
 - Isolated environment with resource limits
 - Real-time output streaming
 
-#### 🔍 Web Search Agent
+### 🔍 Web Search Agent
 - Multi-provider search (Brave, AVES APIs)
-- s and academic search capabilities
+- Academic search capabilities
 - Automatic provider failover
 
-#### 🕷️ Web Scraper Agent
+### 🕷️ Web Scraper Agent
 - Proxy-enabled scraping (ScraperAPI compatible)
 - Playwright and requests-based scraping
 - Batch URL processing with rate limiting
 
-#### 📚 Knowledge Base Agent
+### 📚 Knowledge Base Agent
 - Document ingestion (PDF, DOCX, TXT, web URLs)
 - Vector similarity search with Qdrant
 - Semantic question answering
 
-#### 🎥 Media Editor Agent
+### 🎥 Media Editor Agent
 - Audio/video processing with FFmpeg
 - Format conversion, resizing, trimming
 - Audio extraction and volume adjustment
 
-#### 🎬 YouTube Download Agent
+### 🎬 YouTube Download Agent
 - Download videos and audio from YouTube
 - Docker-based execution with pytubefix
 - Automatic title sanitization and metadata extraction
 
-## 📋 Prerequisites
+## Prerequisites
 
 ### Required
 - **Python 3.11+**
 - **Docker** (for code execution, media processing, YouTube downloads)
-- **Redis** (for memory management)
+- **Redis** (Cloud Redis recommended: Redis Cloud, AWS ElastiCache, etc.)
+
+### Recommended Cloud Services
+- **Redis Cloud** or **AWS ElastiCache** for memory management
+- **Qdrant Cloud** for knowledge base operations
+- **AWS Bedrock**, **OpenAI**, or **Anthropic** for LLM services
 
 ### API Keys (Optional - based on enabled features)
 - **OpenAI API Key** (for GPT models)
@@ -87,8 +186,16 @@ await agent.cleanup_session()
 - **Brave Search API Key** (for web search)
 - **AVES API Key** (for web search)
 - **ScraperAPI/Proxy credentials** (for web scraping)
+- **Qdrant Cloud API Key** (for Knowledge Base operations)
+- **Redis Cloud credentials** (for memory management)
 
-## 🛠️ Installation
+**Why Cloud Services?**
+- **Reliability**: Enterprise-grade uptime and performance
+- **Scalability**: Auto-scaling based on usage
+- **Security**: Built-in encryption and access controls
+- **Maintenance**: No infrastructure management required
+
+## Installation
 
 ### 1. Install Dependencies
 ```bash
@@ -121,8 +228,19 @@ docker pull sgosain/amb-ubuntu-python-public-pod
 ```
 
 ### 3. Setup Redis
+
+**Recommended: Cloud Redis (Redis Cloud, AWS ElastiCache, etc.)**
+```yaml
+# In agent_config.yaml
+redis:
+  host: "your-redis-cloud-endpoint.redis.cloud"
+  port: 6379
+  password: "your-redis-password"
+```
+
+**Alternative: Local Redis**
 ```bash
-# Using Docker
+# Using Docker (for development)
 docker run -d --name redis -p 6379:6379 redis:latest
 
 # Or install locally
@@ -130,17 +248,18 @@ docker run -d --name redis -p 6379:6379 redis:latest
 # brew install redis                 # macOS
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 Create `agent_config.yaml` in your project root:
 
 ```yaml
 # Redis Configuration (Required)
 redis:
-  host: "localhost"
+  host: "your-redis-cloud-endpoint.redis.cloud"  # Recommended: Cloud Redis
   port: 6379
   db: 0
-  password: null  # Set if using Redis AUTH
+  password: "your-redis-password"  # Required for cloud
+  # Alternative local: host: "localhost", password: null
 
 # LLM Configuration (Required - at least one provider)
 llm:
@@ -186,8 +305,9 @@ web_scraping:
 
 # Knowledge Base Configuration (if enabled)
 knowledge_base:
-  qdrant_url: "http://localhost:6333"
-  qdrant_api_key: null  # Set if using Qdrant Cloud
+  qdrant_url: "https://your-cluster.qdrant.tech"  # Recommended: Qdrant Cloud
+  qdrant_api_key: "your-qdrant-api-key"           # Required for cloud
+  # Alternative local: "http://localhost:6333"
   chunk_size: 1024
   chunk_overlap: 20
   similarity_top_k: 5
@@ -232,84 +352,33 @@ memory_management:
     ttl_seconds: 300
 ```
 
-## 🚀 Quick Start
+## Project Structure
 
-### 🌟  Python API (RECOMMENDED)
-
-```python
-from ambivo_agents import YouTubeDownloadAgent, KnowledgeBaseAgent, WebSearchAgent
-import asyncio
-
-async def main():
-    # 🌟  Direct agent creation with explicit context
-    agent, context = YouTubeDownloadAgent.create(user_id="john")
-    
-    print(f"✅ Agent: {agent.agent_id}")
-    print(f"📋 Session: {context.session_id}")
-    print(f"👤 User: {context.user_id}")
-    
-    # Download audio from YouTube
-    result = await agent._download_youtube_audio(
-        "https://youtube.com/watch?v=dQw4w9WgXcQ"
-    )
-    
-    if result['success']:
-        print(f"✅ Downloaded: {result['filename']}")
-    
-    # Cleanup when done
-    await agent.cleanup_session()
-
-# Run
-asyncio.run(main())
+```
+ambivo_agents/
+├── agents/          # Agent implementations
+│   ├── assistant.py
+│   ├── code_executor.py
+│   ├── knowledge_base.py
+│   ├── media_editor.py
+│   ├── simple_web_search.py
+│   ├── web_scraper.py
+│   ├── web_search.py
+│   └── youtube_download.py
+├── config/          # Configuration management
+├── core/            # Core functionality
+│   ├── base.py
+│   ├── llm.py
+│   └── memory.py
+├── executors/       # Execution environments
+├── services/        # Service layer
+├── __init__.py      # Package initialization
+└── cli.py          # Command line interface
 ```
 
-### Context Manager Pattern (Auto-Cleanup)
+## Usage Examples
 
-```python
-from ambivo_agents import KnowledgeBaseAgent, AgentSession
-import asyncio
-
-async def main():
-    # 🔄 Auto-cleanup with context manager
-    async with AgentSession(KnowledgeBaseAgent, user_id="sarah") as agent:
-        print(f"Session: {agent.context.session_id}")
-        
-        # Use agent - cleanup happens automatically
-        result = await agent._query_knowledge_base(
-            kb_name="company_docs",
-            query="What is our return policy?"
-        )
-        
-        print(result['answer'])
-    # Agent automatically cleaned up here
-
-asyncio.run(main())
-```
-
-### Command Line Interface
-
-```bash
-# Install the CLI
-pip install ambivo-agents
-
-# Health check using  paradigm
-ambivo-agents health
-
-# Interactive chat mode with smart routing
-ambivo-agents interactive
-
-# Direct YouTube download
-ambivo-agents youtube download "https://youtube.com/watch?v=dQw4w9WgXcQ"
-
-# Smart message routing
-ambivo-agents chat "download audio from https://youtube.com/watch?v=example"
-ambivo-agents chat "search for latest AI trends"
-ambivo-agents chat "extract audio from video.mp4"
-```
-
-## 📖 Usage Examples
-
-### 🎬 YouTube Downloads ( Direct Approach)
+### 🎬 YouTube Downloads
 ```python
 from ambivo_agents import YouTubeDownloadAgent
 
@@ -339,7 +408,7 @@ async def download_youtube():
     await agent.cleanup_session()
 ```
 
-### 📚 Knowledge Base Operations ( Direct Approach)
+### 📚 Knowledge Base Operations
 ```python
 from ambivo_agents import KnowledgeBaseAgent
 
@@ -377,7 +446,7 @@ async def knowledge_base_demo():
     await agent.cleanup_session()
 ```
 
-### 🔍 Web Search ( Direct Approach)
+### 🔍 Web Search
 ```python
 from ambivo_agents import WebSearchAgent
 
@@ -401,7 +470,7 @@ async def search_demo():
     await agent.cleanup_session()
 ```
 
-### 🎵 Media Processing ( Direct Approach)
+### 🎵 Media Processing
 ```python
 from ambivo_agents import MediaEditorAgent
 
@@ -421,6 +490,50 @@ async def media_demo():
     await agent.cleanup_session()
 ```
 
+### Context Manager Pattern (Auto-Cleanup)
+
+```python
+from ambivo_agents import KnowledgeBaseAgent, AgentSession
+import asyncio
+
+async def main():
+    # Auto-cleanup with context manager
+    async with AgentSession(KnowledgeBaseAgent, user_id="sarah") as agent:
+        print(f"Session: {agent.context.session_id}")
+        
+        # Use agent - cleanup happens automatically
+        result = await agent._query_knowledge_base(
+            kb_name="company_docs",
+            query="What is our return policy?"
+        )
+        
+        print(result['answer'])
+    # Agent automatically cleaned up here
+
+asyncio.run(main())
+```
+
+## Command Line Interface
+
+```bash
+# Install the CLI
+pip install ambivo-agents
+
+# Health check 
+ambivo-agents health
+
+# Chat mode with smart routing
+ambivo-agents
+
+# Direct YouTube download
+ambivo-agents youtube download "https://youtube.com/watch?v=dQw4w9WgXcQ"
+
+# Smart message routing
+ambivo-agents chat "download audio from https://youtube.com/watch?v=example"
+ambivo-agents chat "search for latest AI trends"
+ambivo-agents chat "extract audio from video.mp4"
+```
+
 ### Command Line Examples
 ```bash
 # YouTube Downloads
@@ -437,19 +550,7 @@ ambivo-agents chat "extract audio from video.mp4 as high quality mp3"
 ambivo-agents interactive
 ```
 
-## 🔧 Architecture
-
-### 🌟  Direct Agent Creation
-The  paradigm eliminates the service layer and creates agents directly:
-
-```python
-# 🌟  Direct creation with explicit context
-agent, context = YouTubeDownloadAgent.create(user_id="john")
-
-# Service-based approach
-service = create_agent_service()
-result = await service.process_message(...)
-```
+## Architecture
 
 ### Agent Capabilities
 Each agent provides specialized functionality:
@@ -472,7 +573,7 @@ Each agent provides specialized functionality:
 - **Rate limiting** and error handling
 - **Provider rotation** based on availability and performance
 
-## 🐳 Docker Setup
+## Docker Setup
 
 ### Custom Docker Image
 If you need additional dependencies, extend the base image:
@@ -493,15 +594,15 @@ The agents automatically handle volume mounting for:
 - YouTube download directories  
 - Code execution workspaces
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
 1. **Redis Connection Failed**
    ```bash
-   # Check Redis is running
-   redis-cli ping
-   # Should return "PONG"
+   # For cloud Redis: Check connection details in agent_config.yaml
+   # For local Redis: Check if running
+   redis-cli ping  # Should return "PONG"
    ```
 
 2. **Docker Not Available**
@@ -537,43 +638,7 @@ service:
   log_to_file: true
 ```
 
-
-
-### Service-Based
-```python
-from ambivo_agents.services import create_agent_service
-
-service = create_agent_service()
-session_id = service.create_session()
-
-result = await service.process_message(
-    message="download audio from youtube.com/watch?v=example",
-    session_id=session_id,
-    user_id="user123"
-)
-```
-
-### Direct Agent Creation
-```python
-from ambivo_agents import YouTubeDownloadAgent
-
-agent, context = YouTubeDownloadAgent.create(user_id="user123")
-
-result = await agent._download_youtube_audio(
-    "https://youtube.com/watch?v=example"
-)
-
-await agent.cleanup_session()
-```
-
-### Benefits of Migration
-- ✅ **Explicit Context**: Always know your session ID and user context
-- ✅ **Direct Control**: No hidden service layer
-- ✅ **Better Debugging**: Clear error messages and stack traces
-- ✅ **Type Safety**: Direct method calls with proper typing
-- ✅ **Performance**: No routing overhead
-
-## 🔐 Security Considerations
+## Security Considerations
 
 - **Docker Isolation**: All code execution happens in isolated containers
 - **Network Restrictions**: Containers run with `network_disabled=True` by default
@@ -582,7 +647,7 @@ await agent.cleanup_session()
 - **Input Sanitization**: All user inputs are validated and sanitized
 - **Session Isolation**: Each agent session is completely isolated
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
@@ -590,35 +655,36 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 ```bash
 # Clone repository
 git clone https://github.com/ambivo-corp/ambivo-agents.git
-cd ambivo-agents # project root
-# make sure you have ambivo-agents.yaml with the relevant keys/secrets in the project root.
+cd ambivo-agents
 
 # Install in development mode
 pip install -e .
 
-
-python examples/<example.py>  # Run any example script
-
-
+# Run examples
+python examples/<example.py>
 ```
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## 👨‍💻 Author
+**Alpha Release**: This software is provided "as is" without warranty. Users assume all risks associated with its use, particularly in production environments.
+
+## Author
 
 **Hemant Gosain 'Sunny'**
 - Company: [Ambivo](https://www.ambivo.com)
-- Email: sgosain@ambivo.com
+- Email: info@ambivo.com
 
-## 🆘 Support
+## Support
 
-- 📧 Email: sgosain@ambivo.com
+- 📧 Email: info@ambivo.com
 - 🌐 Website: https://www.ambivo.com
 - 📖 Documentation: [Coming Soon]
-- 🐛 Issues: [GitHub Issues](https://github.com/ambivo-corp/ambivo-agents.git)
+- 🐛 Issues: [GitHub Issues](https://github.com/ambivo-corp/ambivo-agents/issues)
+
+**Alpha Support**: As an alpha release, support is provided on a best-effort basis. Response times may vary, and some issues may require significant investigation.
 
 ---
 
-*Built with 🛡️ by the Ambivo team.
+*Developed by the Ambivo team.*
