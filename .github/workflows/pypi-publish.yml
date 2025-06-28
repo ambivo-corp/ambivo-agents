@@ -50,12 +50,14 @@ jobs:
           echo "environment=testpypi" >> $GITHUB_OUTPUT
           echo "pypi_name=Test PyPI" >> $GITHUB_OUTPUT
           echo "pypi_url=https://test.pypi.org/project/ambivo-agents/" >> $GITHUB_OUTPUT
+          echo "repository_url=https://test.pypi.org/legacy/" >> $GITHUB_OUTPUT
           echo "is_prerelease=true" >> $GITHUB_OUTPUT
           echo "install_cmd=pip install -i https://test.pypi.org/simple/ ambivo-agents==${TAG}" >> $GITHUB_OUTPUT
         else
           echo "environment=pypi" >> $GITHUB_OUTPUT
           echo "pypi_name=Production PyPI" >> $GITHUB_OUTPUT
           echo "pypi_url=https://pypi.org/project/ambivo-agents/" >> $GITHUB_OUTPUT
+          echo "repository_url=https://upload.pypi.org/legacy/" >> $GITHUB_OUTPUT
           echo "is_prerelease=false" >> $GITHUB_OUTPUT
           echo "install_cmd=pip install ambivo-agents==${TAG}" >> $GITHUB_OUTPUT
         fi
@@ -63,6 +65,7 @@ jobs:
         echo "🎯 Target: ${{ steps.target.outputs.pypi_name }}"
         echo "🏷️ Version: ${TAG}"
         echo "🌍 Environment: ${{ steps.target.outputs.environment }}"
+        echo "🌐 Repository URL: ${{ steps.target.outputs.repository_url }}"
 
     - name: Verify version tag
       run: |
@@ -174,13 +177,27 @@ jobs:
     - name: Publish to PyPI
       env:
         TWINE_USERNAME: __token__
-        # Use environment-specific secrets (same name, different values per environment)
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        TWINE_REPOSITORY_URL: ${{ secrets.PYPI_REPOSITORY_URL }}
+        # Use different secret names for different environments
+        TWINE_PASSWORD: ${{ steps.target.outputs.environment == 'testpypi' && secrets.TEST_PYPI_API_TOKEN || secrets.PYPI_API_TOKEN }}
+        TWINE_REPOSITORY_URL: ${{ steps.target.outputs.repository_url }}
       run: |
         echo "🚀 Publishing to ${{ steps.target.outputs.pypi_name }}..."
         echo "🔑 Using token from '${{ steps.target.outputs.environment }}' environment"
-        echo "🌐 Repository: ${{ secrets.PYPI_REPOSITORY_URL }}"
+        echo "🌐 Repository: ${{ steps.target.outputs.repository_url }}"
+        
+        # Verify we have the token
+        if [ -z "$TWINE_PASSWORD" ]; then
+          echo "❌ TWINE_PASSWORD is empty!"
+          echo "💡 Make sure you have the correct secret configured:"
+          if [ "${{ steps.target.outputs.environment }}" = "testpypi" ]; then
+            echo "   - Secret name: TEST_PYPI_API_TOKEN"
+            echo "   - Environment: testpypi"
+          else
+            echo "   - Secret name: PYPI_API_TOKEN"
+            echo "   - Environment: pypi"
+          fi
+          exit 1
+        fi
         
         # Upload to PyPI
         twine upload dist/* --verbose
@@ -263,7 +280,7 @@ jobs:
           
           ---
           
-          **Built  by the Ambivo team**
+          **Built by the Ambivo team**
         draft: false
         prerelease: ${{ steps.target.outputs.is_prerelease == 'true' }}
 
