@@ -1,0 +1,72 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0, v1.0.0-beta, etc.
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual triggering
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Dynamic environment selection based on tag type
+    environment: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') || contains(github.ref, '-rc') && 'testpypi' || 'pypi' }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine setuptools wheel
+
+    - name: Determine deployment target
+      id: target
+      run: |
+        # Get the tag from either push event or manual input
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          TAG="${{ github.event.inputs.tag }}"
+        else
+          TAG="${GITHUB_REF#refs/tags/}"
+        fi
+        
+        echo "tag=${TAG}" >> $GITHUB_OUTPUT
+        
+        # Determine environment and settings based on tag
+        if [[ "${TAG}" == *"-beta"* ]] || [[ "${TAG}" == *"-alpha"* ]] || [[ "${TAG}" == *"-rc"* ]]; then
+          echo "environment=testpypi" >> $GITHUB_OUTPUT
+          echo "pypi_name=Test PyPI" >> $GITHUB_OUTPUT
+          echo "pypi_url=https://test.pypi.org/project/ambivo-agents/" >> $GITHUB_OUTPUT
+          echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          echo "install_cmd=pip install -i https://test.pypi.org/simple/ ambivo-agents==${TAG}" >> $GITHUB_OUTPUT
+        else
+          echo "environment=pypi" >> $GITHUB_OUTPUT
+          echo "pypi_name=Production PyPI" >> $GITHUB_OUTPUT
+          echo "pypi_url=https://pypi.org/project/ambivo-agents/" >> $GITHUB_OUTPUT
+          echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          echo "install_cmd=pip install ambivo-agents==${TAG}" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "🎯 Target: ${{ steps.target.outputs.pypi_name }}"
+        echo "🏷️ Version: ${TAG}"
+        echo "🌍 Environment: ${{ steps.target.outputs.environment }}"
+
+    - name: Verify version tag
+      run: |
+        TAG="${{ steps.target.outputs.tag }}"
+        echo "🏷️ Publishing version: ${TAG}"
+        
+        # Check if this
