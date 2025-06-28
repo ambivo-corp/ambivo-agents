@@ -27,10 +27,29 @@ var/
 .env.*
 !.env.example
 
+# API Keys and secrets
+*.key
+*.secret
+*.pem
+*.p12
+*.pfx
+secrets/
+config/secrets/
+
+# Backup files that might contain secrets
+*.backup
+*.bak
+*_backup
+*_bak
+
+# Test outputs and temporary files
+.pytest_cache/
+test_outputs/
+
 # Virtual environment
 venv/
 ENV/
-env/
+
 
 # IDE files
 .idea/
@@ -43,8 +62,7 @@ env/
 .tmp/
 tmp/
 *.tmp
-*.bak
-*.swp
+
 *~
 
 # OS specific
