@@ -196,22 +196,29 @@ jobs:
           echo "🔗 Existing package: https://test.pypi.org/project/ambivo-agents/"
         else
           echo "🔍 Verifying package was published to Test PyPI..."
+          echo "✅ Package upload completed successfully (twine upload succeeded)"
+          echo "🔗 Check package at: https://test.pypi.org/project/ambivo-agents/"
+          echo ""
+          echo "ℹ️ Note: It may take a few minutes for the package to appear in pip index"
+          echo "💡 You can verify manually at: https://test.pypi.org/project/ambivo-agents/"
           
-          # Wait a moment for PyPI to process
-          sleep 10
-          
+          # Optional: Try to verify with pip index (but don't fail if it's not ready)
           TAG="${{ steps.target.outputs.tag }}"
           VERSION="${TAG#v}"
           
+          echo "🔍 Attempting to verify with pip index..."
           if pip index versions ambivo-agents --index-url https://test.pypi.org/simple/ 2>/dev/null | grep -q "${VERSION}"; then
-            echo "✅ Package verified on Test PyPI"
+            echo "✅ Package immediately visible in pip index"
           else
-            echo "⚠️ Package not yet visible on Test PyPI (may take a few minutes)"
+            echo "⏳ Package not yet visible in pip index (normal - can take 1-5 minutes)"
+            echo "✅ Upload was successful based on twine response"
           fi
         fi
 
     - name: Create GitHub Release (Pre-release)
       uses: softprops/action-gh-release@v1
+      continue-on-error: true  # Don't fail the workflow if release creation fails
+      id: create_release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -272,6 +279,26 @@ jobs:
           **Built by the Ambivo team**
         draft: false
         prerelease: true
+
+    - name: Handle GitHub Release Result
+      run: |
+        if [ "${{ steps.create_release.outcome }}" = "success" ]; then
+          echo "✅ GitHub release created successfully"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.target.outputs.tag }}"
+        else
+          echo "⚠️ GitHub release creation failed (this doesn't affect PyPI publishing)"
+          echo "💡 Possible causes:"
+          echo "   - GITHUB_TOKEN lacks 'contents: write' permission"
+          echo "   - Branch protection rules preventing release creation"
+          echo "   - Repository settings restricting release creation"
+          echo ""
+          echo "🔧 To fix this:"
+          echo "   1. Go to repo Settings → Actions → General"
+          echo "   2. Set 'Workflow permissions' to 'Read and write permissions'"
+          echo "   3. Or manually create the release at: https://github.com/${{ github.repository }}/releases/new?tag=${{ steps.target.outputs.tag }}"
+          echo ""
+          echo "✅ PyPI publishing was successful regardless of this issue"
+        fi
 
     - name: Test release notification
       run: |
@@ -467,21 +494,28 @@ jobs:
     - name: Verify Production PyPI publication
       run: |
         echo "🔍 Verifying package was published to Production PyPI..."
+        echo "✅ Package upload completed successfully (twine upload succeeded)"
+        echo "🔗 Check package at: https://pypi.org/project/ambivo-agents/"
+        echo ""
+        echo "ℹ️ Note: It may take a few minutes for the package to appear in pip index"
+        echo "💡 You can verify manually at: https://pypi.org/project/ambivo-agents/"
         
-        # Wait a moment for PyPI to process
-        sleep 10
-        
+        # Optional: Try to verify with pip index (but don't fail if it's not ready)
         TAG="${{ steps.target.outputs.tag }}"
         VERSION="${TAG#v}"
         
+        echo "🔍 Attempting to verify with pip index..."
         if pip index versions ambivo-agents 2>/dev/null | grep -q "${VERSION}"; then
-          echo "✅ Package verified on Production PyPI"
+          echo "✅ Package immediately visible in pip index"
         else
-          echo "⚠️ Package not yet visible on Production PyPI (may take a few minutes)"
+          echo "⏳ Package not yet visible in pip index (normal - can take 1-5 minutes)"
+          echo "✅ Upload was successful based on twine response"
         fi
 
     - name: Create GitHub Release (Stable)
       uses: softprops/action-gh-release@v1
+      continue-on-error: true  # Don't fail the workflow if release creation fails
+      id: create_production_release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -539,6 +573,26 @@ jobs:
           **Built by the Ambivo team**
         draft: false
         prerelease: false
+
+    - name: Handle Production GitHub Release Result
+      run: |
+        if [ "${{ steps.create_production_release.outcome }}" = "success" ]; then
+          echo "✅ GitHub release created successfully"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.target.outputs.tag }}"
+        else
+          echo "⚠️ GitHub release creation failed (this doesn't affect PyPI publishing)"
+          echo "💡 Possible causes:"
+          echo "   - GITHUB_TOKEN lacks 'contents: write' permission"
+          echo "   - Branch protection rules preventing release creation"
+          echo "   - Repository settings restricting release creation"
+          echo ""
+          echo "🔧 To fix this:"
+          echo "   1. Go to repo Settings → Actions → General"
+          echo "   2. Set 'Workflow permissions' to 'Read and write permissions'"
+          echo "   3. Or manually create the release at: https://github.com/${{ github.repository }}/releases/new?tag=${{ steps.target.outputs.tag }}"
+          echo ""
+          echo "✅ PyPI publishing was successful regardless of this issue"
+        fi
 
     - name: Production notification
       run: |
