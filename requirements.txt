@@ -28,8 +28,8 @@ llama-index-vector-stores-qdrant
 llama-index-readers-smart-pdf-loader
 
 # API and web framework dependencies
-fastapi==0.115.13
-uvicorn[standard]==0.34.3
+#fastapi==0.115.13
+#uvicorn[standard]==0.34.3
 pydantic==2.11.7
 
 # Cloud provider SDKs
