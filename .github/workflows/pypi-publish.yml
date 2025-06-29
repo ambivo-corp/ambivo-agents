@@ -73,7 +73,8 @@ jobs:
           exit 1
         fi
 
-    - name: Check if version already exists
+    - name: Check if version already exists on Test PyPI
+      id: version_check
       run: |
         TAG="${{ steps.target.outputs.tag }}"
         PACKAGE_NAME="ambivo-agents"
@@ -83,12 +84,15 @@ jobs:
         
         echo "🔍 Checking if version ${VERSION} already exists on Test PyPI..."
         
-        # Check Test PyPI (allow duplicates for testing)
+        # Check Test PyPI
         if pip index versions ${PACKAGE_NAME} --index-url https://test.pypi.org/simple/ 2>/dev/null | grep -q "${VERSION}"; then
           echo "⚠️ Version ${VERSION} already exists on Test PyPI"
-          echo "ℹ️ This is normal for Test PyPI - continuing anyway"
+          echo "skip_upload=true" >> $GITHUB_OUTPUT
+          echo "reason=Version already exists - this is normal for Test PyPI during development" >> $GITHUB_OUTPUT
         else
           echo "✅ Version ${VERSION} is new on Test PyPI"
+          echo "skip_upload=false" >> $GITHUB_OUTPUT
+          echo "reason=New version, proceeding with upload" >> $GITHUB_OUTPUT
         fi
 
     - name: Build package
@@ -147,6 +151,7 @@ jobs:
         rm -rf test_env
 
     - name: Publish to Test PyPI
+      if: steps.version_check.outputs.skip_upload == 'false'
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}  # Direct secret access
@@ -170,20 +175,39 @@ jobs:
         
         echo "✅ Package published to Test PyPI successfully!"
 
+    - name: Skip Test PyPI upload (version exists)
+      if: steps.version_check.outputs.skip_upload == 'true'
+      run: |
+        echo "⏭️ SKIPPING Test PyPI upload"
+        echo "📦 Version: ${{ steps.target.outputs.tag }}"
+        echo "💡 Reason: ${{ steps.version_check.outputs.reason }}"
+        echo "🔗 Existing package: https://test.pypi.org/project/ambivo-agents/"
+        echo ""
+        echo "ℹ️ This is normal for Test PyPI during development."
+        echo "🚀 To publish a new version:"
+        echo "   1. Update version in your code (e.g., 1.3.1)"
+        echo "   2. Create new tag: git tag v1.3.1-beta"
+        echo "   3. Push tag: git push origin v1.3.1-beta"
+
     - name: Verify Test PyPI publication
       run: |
-        echo "🔍 Verifying package was published to Test PyPI..."
-        
-        # Wait a moment for PyPI to process
-        sleep 10
-        
-        TAG="${{ steps.target.outputs.tag }}"
-        VERSION="${TAG#v}"
-        
-        if pip index versions ambivo-agents --index-url https://test.pypi.org/simple/ 2>/dev/null | grep -q "${VERSION}"; then
-          echo "✅ Package verified on Test PyPI"
+        if [ "${{ steps.version_check.outputs.skip_upload }}" = "true" ]; then
+          echo "⏭️ Skipped upload - version already exists on Test PyPI"
+          echo "🔗 Existing package: https://test.pypi.org/project/ambivo-agents/"
         else
-          echo "⚠️ Package not yet visible on Test PyPI (may take a few minutes)"
+          echo "🔍 Verifying package was published to Test PyPI..."
+          
+          # Wait a moment for PyPI to process
+          sleep 10
+          
+          TAG="${{ steps.target.outputs.tag }}"
+          VERSION="${TAG#v}"
+          
+          if pip index versions ambivo-agents --index-url https://test.pypi.org/simple/ 2>/dev/null | grep -q "${VERSION}"; then
+            echo "✅ Package verified on Test PyPI"
+          else
+            echo "⚠️ Package not yet visible on Test PyPI (may take a few minutes)"
+          fi
         fi
 
     - name: Create GitHub Release (Pre-release)
@@ -196,13 +220,17 @@ jobs:
         body: |
           ## 🧪 Ambivo Agents ${{ steps.target.outputs.tag }} (Test Release)
           
-          **Published to: Test PyPI ONLY**
+          **Published to: Test PyPI**
           
           ### 📦 Installation
           
           ```bash
           ${{ steps.target.outputs.install_cmd }}
           ```
+          
+          ### 📊 Publication Status
+          
+          ${{ steps.version_check.outputs.skip_upload == 'true' && '⏭️ **Version already existed on Test PyPI** - skipped duplicate upload' || '✅ **Successfully published to Test PyPI**' }}
           
           ### ⚠️ Important
           
@@ -213,7 +241,7 @@ jobs:
           
           ### 🔧 What's New
           
-          - Package published to Test PyPI for testing
+          - Package available on Test PyPI for testing
           - All integration tests passed
           - See [commit history](https://github.com/ambivo-corp/ambivo-agents/commits/${{ steps.target.outputs.tag }}) for detailed changes
           
@@ -237,7 +265,7 @@ jobs:
           
           ### ➡️ Next Steps
           
-          After testing this version, create a stable release tag (e.g., `v1.0.0`) to publish to Production PyPI.
+          ${{ steps.version_check.outputs.skip_upload == 'true' && 'This version already exists. To publish a new version:\n  1. Update version in your code (e.g., 1.3.1)\n  2. Create new tag: `git tag v1.3.1-beta`\n  3. Push tag: `git push origin v1.3.1-beta`' || 'After testing this version, create a stable release tag (e.g., `v1.0.0`) to publish to Production PyPI.' }}
           
           ---
           
@@ -247,13 +275,25 @@ jobs:
 
     - name: Test release notification
       run: |
-        echo "🧪 TEST RELEASE PUBLISHED!"
-        echo "📦 Package: ambivo-agents ${{ steps.target.outputs.tag }}"
-        echo "🔗 Test PyPI: https://test.pypi.org/project/ambivo-agents/"
-        echo "💡 Test with: ${{ steps.target.outputs.install_cmd }}"
-        echo ""
-        echo "⚠️ This is a TEST RELEASE - not available on Production PyPI"
-        echo "🚀 Create a stable tag (e.g., v1.0.0) for Production PyPI"
+        if [ "${{ steps.version_check.outputs.skip_upload }}" = "true" ]; then
+          echo "⏭️ TEST RELEASE SKIPPED!"
+          echo "📦 Package: ambivo-agents ${{ steps.target.outputs.tag }}"
+          echo "💡 Reason: Version already exists on Test PyPI"
+          echo "🔗 Existing package: https://test.pypi.org/project/ambivo-agents/"
+          echo ""
+          echo "🚀 To publish a new version:"
+          echo "   1. Update version in your code (e.g., 1.3.1)"
+          echo "   2. Create new tag: git tag v1.3.1-beta"
+          echo "   3. Push tag: git push origin v1.3.1-beta"
+        else
+          echo "🧪 TEST RELEASE PUBLISHED!"
+          echo "📦 Package: ambivo-agents ${{ steps.target.outputs.tag }}"
+          echo "🔗 Test PyPI: https://test.pypi.org/project/ambivo-agents/"
+          echo "💡 Test with: ${{ steps.target.outputs.install_cmd }}"
+          echo ""
+          echo "⚠️ This is a TEST RELEASE - not available on Production PyPI"
+          echo "🚀 Create a stable tag (e.g., v1.0.0) for Production PyPI"
+        fi
 
   # Job 2: Production PyPI (for stable releases ONLY)
   publish-pypi:
