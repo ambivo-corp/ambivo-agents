@@ -352,6 +352,10 @@ class AgentFactory:
                 raise ValueError("YouTube download not enabled in agent_config.yaml")
             from ..agents.youtube_download import YouTubeDownloadAgent
             return YouTubeDownloadAgent(agent_id, memory_manager, llm_service, **kwargs)
+        elif agent_type == "moderator":
+
+            from ..agents.moderator import ModeratorAgent
+            return ModeratorAgent(agent_id, memory_manager, llm_service, **kwargs)
 
         else:
             raise ValueError(f"Unknown or unavailable agent type: {agent_type}")

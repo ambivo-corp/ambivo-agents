@@ -179,6 +179,21 @@ class AgentSession:
             except Exception as e:
                 self.logger.error(f"Failed to create YouTubeDownloadAgent: {e}")
 
+        if self.capabilities.get('moderator', False):
+            moderator_id = f"moderator_{self.session_id}"
+            moderator_memory = create_redis_memory_manager(moderator_id, self.redis_config)
+
+            try:
+                from ..agents.moderator import ModeratorAgent
+                self.agents['moderator'] = ModeratorAgent(
+                    agent_id=moderator_id,
+                    memory_manager=moderator_memory,
+                    llm_service=self.llm_service
+                )
+                self.logger.info("Created ModeratorAgent")
+            except Exception as e:
+                self.logger.error(f"Failed to create ModeratorAgent: {e}")
+
         # Fallback: Create a general researcher agent if no specialized agents were created
         specialized_agents = ['web_search', 'knowledge_base', 'web_scraper', 'media_editor', 'youtube_download']
         if not any(key in self.agents for key in specialized_agents):

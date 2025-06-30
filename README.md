@@ -17,6 +17,7 @@ For production scenarios, we recommend:
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Simple ModeratorAgent Example](#simple-moderatoragent-example)
 - [Agent Creation](#agent-creation)
 - [Features](#features)
 - [Available Agents](#available-agents)
@@ -36,40 +37,230 @@ For production scenarios, we recommend:
 
 ## Quick Start
 
-### Python Library Usage (Recommended)
+### Simple ModeratorAgent Example
+
+The **ModeratorAgent** is the easiest way to get started. It automatically routes your queries to the right specialized agents:
 
 ```python
-from ambivo_agents import YouTubeDownloadAgent
+from ambivo_agents import ModeratorAgent
 import asyncio
 
 async def main():
-    # Agent creation with explicit context
-    agent, context = YouTubeDownloadAgent.create(user_id="john")
+    # Create the moderator (one agent to rule them all!)
+    moderator, context = ModeratorAgent.create(user_id="john")
     
-    print(f"✅ Agent: {agent.agent_id}")
+    print(f"✅ Moderator: {moderator.agent_id}")
     print(f"📋 Session: {context.session_id}")
-    print(f"👤 User: {context.user_id}")
     
-    # Download audio from YouTube
-    result = await agent._download_youtube_audio(
-        "https://youtube.com/watch?v=dQw4w9WgXcQ"
-    )
+    # Just chat! The moderator routes automatically:
     
-    if result['success']:
-        print(f"✅ Downloaded: {result['filename']}")
+    # This will go to YouTubeDownloadAgent
+    response1 = await moderator.chat("Download audio from https://youtube.com/watch?v=dQw4w9WgXcQ")
+    print(f"🎵 {response1}")
+    
+    # This will go to WebSearchAgent  
+    response2 = await moderator.chat("Search for latest AI trends")
+    print(f"🔍 {response2}")
+    
+    # This will go to MediaEditorAgent
+    response3 = await moderator.chat("Extract audio from video.mp4 as MP3")
+    print(f"🎬 {response3}")
+    
+    # This will go to AssistantAgent
+    response4 = await moderator.chat("What is machine learning?")
+    print(f"💬 {response4}")
+    
+    # Check what agents are available
+    status = await moderator.get_agent_status()
+    print(f"🤖 Available agents: {list(status['active_agents'].keys())}")
     
     # Cleanup when done
-    await agent.cleanup_session()
+    await moderator.cleanup_session()
 
-# Run
+# Run it
 asyncio.run(main())
+```
+
+**That's it!** The ModeratorAgent automatically:
+- ✅ **Routes** your queries to the right specialist
+- ✅ **Maintains** conversation context
+- ✅ **Manages** all the underlying agents
+- ✅ **Handles** configuration and setup
+
+### Even Simpler - Command Line
+
+```bash
+# Install and run
+pip install ambivo-agents
+
+# Interactive mode (auto-routing)
+ambivo-agents
+
+# Or single commands
+ambivo-agents -q "Download audio from https://youtube.com/watch?v=example"
+ambivo-agents -q "Search for Python tutorials"
+ambivo-agents -q "Extract audio from video.mp4"
+```
+
+## Simple ModeratorAgent Example
+
+### Why Use ModeratorAgent?
+
+Instead of managing multiple agents yourself, the **ModeratorAgent** is your single point of contact:
+
+```python
+# ❌ Complex: Managing multiple agents
+youtube_agent = YouTubeDownloadAgent.create(user_id="john")[0]
+search_agent = WebSearchAgent.create(user_id="john")[0] 
+media_agent = MediaEditorAgent.create(user_id="john")[0]
+
+# Figure out which agent to use...
+if "youtube.com" in message:
+    response = await youtube_agent.chat(message)
+elif "search" in message:
+    response = await search_agent.chat(message)
+# ... etc
+
+# ✅ Simple: One moderator handles everything
+moderator, context = ModeratorAgent.create(user_id="john")
+response = await moderator.chat(message)  # Auto-routes!
+```
+
+### Basic ModeratorAgent Usage
+
+```python
+from ambivo_agents import ModeratorAgent
+import asyncio
+
+async def simple_example():
+    # Create moderator with auto-configuration
+    moderator, context = ModeratorAgent.create(user_id="alice")
+    
+    print(f"🚀 Session {context.session_id} started")
+    
+    # The moderator routes these automatically:
+    tasks = [
+        "Download https://youtube.com/watch?v=example",           # → YouTube Agent
+        "Search for latest Python frameworks",                   # → Web Search Agent  
+        "Convert video.mp4 to audio",                           # → Media Editor Agent
+        "What's the capital of France?",                        # → Assistant Agent
+        "Scrape https://example.com for content",               # → Web Scraper Agent
+    ]
+    
+    for task in tasks:
+        print(f"\n👤 User: {task}")
+        response = await moderator.chat(task)
+        print(f"🤖 Bot: {response[:100]}...")  # First 100 chars
+    
+    # Check routing info
+    status = await moderator.get_agent_status()
+    print(f"\n📊 Processed via {status['total_agents']} specialized agents")
+    
+    await moderator.cleanup_session()
+
+asyncio.run(simple_example())
+```
+
+### Context-Aware Conversations
+
+The ModeratorAgent maintains conversation context:
+
+```python
+async def context_example():
+    moderator, context = ModeratorAgent.create(user_id="bob")
+    
+    # Initial request
+    response1 = await moderator.chat("Download audio from https://youtube.com/watch?v=example")
+    print(response1)
+    
+    # Follow-up (moderator remembers the YouTube URL)
+    response2 = await moderator.chat("Actually, download the video instead")
+    print(response2)
+    
+    # Another follow-up (still remembers context)
+    response3 = await moderator.chat("Get information about that video")
+    print(response3)
+    
+    await moderator.cleanup_session()
+```
+
+### Custom Agent Configuration
+
+```python
+async def custom_moderator():
+    # Enable only specific agents
+    moderator, context = ModeratorAgent.create(
+        user_id="charlie",
+        enabled_agents=['youtube_download', 'web_search', 'assistant']
+    )
+    
+    # Only these agents will be available for routing
+    status = await moderator.get_agent_status()
+    print(f"Enabled: {list(status['active_agents'].keys())}")
+    
+    await moderator.cleanup_session()
+```
+
+### Integration with Existing Code
+
+```python
+class ChatBot:
+    def __init__(self):
+        self.moderator = None
+        self.context = None
+    
+    async def start_session(self, user_id: str):
+        self.moderator, self.context = ModeratorAgent.create(user_id=user_id)
+        return self.context.session_id
+    
+    async def process_message(self, message: str) -> str:
+        if not self.moderator:
+            raise ValueError("Session not started")
+        
+        return await self.moderator.chat(message)
+    
+    async def end_session(self):
+        if self.moderator:
+            await self.moderator.cleanup_session()
+
+# Usage
+bot = ChatBot()
+session_id = await bot.start_session("user123")
+response = await bot.process_message("Download audio from YouTube")
+await bot.end_session()
 ```
 
 ## Agent Creation
 
-### Direct Agent Creation (Recommended)
+### ModeratorAgent (Recommended for Most Users)
 
-Use the `.create()` method for direct control over specific agent types:
+Use the **ModeratorAgent** for intelligent multi-agent orchestration:
+
+```python
+from ambivo_agents import ModeratorAgent
+
+# Create moderator with auto-routing to specialized agents
+moderator, context = ModeratorAgent.create(user_id="john")
+print(f"Session: {context.session_id}")
+
+# Just chat - moderator handles the routing!
+result = await moderator.chat("Download audio from https://youtube.com/watch?v=example")
+print(result)
+
+# Cleanup when done
+await moderator.cleanup_session()
+```
+
+**When to use ModeratorAgent:**
+- ✅ **Most applications** (recommended default)
+- ✅ **Multi-purpose chatbots** and assistants
+- ✅ **Intelligent routing** between different capabilities
+- ✅ **Context-aware** conversations
+- ✅ **Simplified development** - one agent does everything
+
+### Direct Agent Creation
+
+Use direct creation for specific, single-purpose applications:
 
 ```python
 from ambivo_agents import YouTubeDownloadAgent
@@ -77,24 +268,23 @@ from ambivo_agents import YouTubeDownloadAgent
 # Create agent with explicit context
 agent, context = YouTubeDownloadAgent.create(user_id="john")
 print(f"Session: {context.session_id}")
-print(f"User: {context.user_id}")
 
-# Use agent directly
+# Use agent directly for specific task
 result = await agent._download_youtube_audio("https://youtube.com/watch?v=example")
 
 # Cleanup when done
 await agent.cleanup_session()
 ```
 
-**When to use `.create()`:**
-- Direct control over specific agent types
-- Single-agent applications
-- Explicit context management
-- Prototyping and development
+**When to use Direct Creation:**
+- ✅ **Single-purpose** applications (only YouTube, only search, etc.)
+- ✅ **Specific workflows** with known agent requirements
+- ✅ **Performance-critical** applications (no routing overhead)
+- ✅ **Custom integrations** with existing systems
 
 ### Service-Based Creation
 
-Use the service method for multi-agent systems with intelligent routing:
+Use the service method for production multi-user systems:
 
 ```python
 from ambivo_agents.services import create_agent_service
@@ -104,33 +294,36 @@ session_id = service.create_session()
 
 # Service automatically routes to the appropriate agent
 result = await service.process_message(
-    message="download audio from youtube.com/watch?v=example",  # → YouTubeAgent
+    message="download audio from youtube.com/watch?v=example",
     session_id=session_id,
     user_id="user123"
 )
 ```
 
 **When to use Service:**
-- Multi-agent applications
-- Intelligent message routing
-- Production chatbots/assistants
-- Unified session management
-
-**Benefits of this approach:**
-- ✅ **Explicit Context**: Session IDs, user IDs, and metadata are always visible
-- ✅ **Better Control**: Full lifecycle management of agents and sessions
-- ✅ **Built-in Memory**: Conversation history built into every agent
+- ✅ **Production systems** with multiple users
+- ✅ **Session management** across users
+- ✅ **Scalable architectures** with load balancing
+- ✅ **Advanced monitoring** and analytics
 
 ## Features
 
 ### Core Capabilities
-- **Multi-Agent Architecture**: Specialized agents for different tasks with intelligent routing
-- **Docker-Based Execution**: Secure, isolated execution environment for code and media processing
-- **Redis Memory Management**: Persistent conversation memory with compression and caching
-- **Multi-Provider LLM Support**: Automatic failover between OpenAI, Anthropic, and AWS Bedrock
-- **Configuration-Driven**: All features controlled via `agent_config.yaml`
+- **🤖 ModeratorAgent**: Intelligent multi-agent orchestrator with automatic routing
+- **🔄 Smart Routing**: Automatically routes queries to the most appropriate specialized agent
+- **🧠 Context Memory**: Maintains conversation history and context across interactions
+- **🐳 Docker Integration**: Secure, isolated execution environment for code and media processing
+- **📦 Redis Memory**: Persistent conversation memory with compression and caching
+- **🔀 Multi-Provider LLM**: Automatic failover between OpenAI, Anthropic, and AWS Bedrock
+- **⚙️ Configuration-Driven**: All features controlled via `agent_config.yaml`
 
 ## Available Agents
+
+### 🎛️ **ModeratorAgent** (Recommended)
+- **Intelligent orchestrator** that routes to specialized agents
+- **Context-aware** multi-turn conversations
+- **Automatic agent selection** based on query analysis
+- **Session management** and cleanup
 
 ### 🤖 Assistant Agent
 - General purpose conversational AI
@@ -188,8 +381,6 @@ result = await service.process_message(
 - **ScraperAPI/Proxy credentials** (for web scraping)
 - **Qdrant Cloud API Key** (for Knowledge Base operations)
 - **Redis Cloud credentials** (for memory management)
-
-
 
 ## Installation
 
@@ -357,6 +548,7 @@ ambivo_agents/
 │   ├── code_executor.py
 │   ├── knowledge_base.py
 │   ├── media_editor.py
+│   ├── moderator.py     # 🎛️ ModeratorAgent (main orchestrator)
 │   ├── simple_web_search.py
 │   ├── web_scraper.py
 │   ├── web_search.py
@@ -373,6 +565,83 @@ ambivo_agents/
 ```
 
 ## Usage Examples
+
+### 🎛️ ModeratorAgent Examples
+
+#### Basic Usage with Auto-Routing
+```python
+from ambivo_agents import ModeratorAgent
+import asyncio
+
+async def basic_moderator():
+    # Create the moderator
+    moderator, context = ModeratorAgent.create(user_id="demo_user")
+    
+    print(f"✅ Session: {context.session_id}")
+    
+    # Auto-routing examples
+    examples = [
+        "Download audio from https://youtube.com/watch?v=dQw4w9WgXcQ",
+        "Search for latest artificial intelligence news",  
+        "Extract audio from video.mp4 as high quality MP3",
+        "What is machine learning and how does it work?",
+        "Scrape https://example.com for content"
+    ]
+    
+    for query in examples:
+        print(f"\n👤 User: {query}")
+        response = await moderator.chat(query)
+        print(f"🤖 Bot: {response[:150]}...")
+    
+    # Check which agents handled the requests
+    status = await moderator.get_agent_status()
+    print(f"\n📊 Used {status['total_agents']} specialized agents")
+    for agent_type in status['active_agents']:
+        print(f"   • {agent_type}")
+    
+    await moderator.cleanup_session()
+
+asyncio.run(basic_moderator())
+```
+
+#### Context-Aware Conversations
+```python
+async def context_conversation():
+    moderator, context = ModeratorAgent.create(user_id="context_demo")
+    
+    # Initial request  
+    response1 = await moderator.chat("Download audio from https://youtube.com/watch?v=example")
+    print(f"🎵 {response1}")
+    
+    # Follow-up using context (moderator remembers the YouTube URL)
+    response2 = await moderator.chat("Actually, download the video instead of just audio")
+    print(f"🎬 {response2}")
+    
+    # Another follow-up
+    response3 = await moderator.chat("Get information about that video")
+    print(f"📊 {response3}")
+    
+    await moderator.cleanup_session()
+```
+
+#### Custom Agent Selection
+```python
+async def custom_agents():
+    # Only enable specific capabilities
+    moderator, context = ModeratorAgent.create(
+        user_id="custom_user",
+        enabled_agents=['youtube_download', 'web_search', 'assistant']
+    )
+    
+    # Only these agents will be available
+    status = await moderator.get_agent_status()
+    print(f"Available agents: {list(status['active_agents'].keys())}")
+    
+    response = await moderator.chat("Download https://youtube.com/watch?v=example")
+    print(response)
+    
+    await moderator.cleanup_session()
+```
 
 ### 🎬 YouTube Downloads
 ```python
@@ -489,74 +758,125 @@ async def media_demo():
 ### Context Manager Pattern (Auto-Cleanup)
 
 ```python
-from ambivo_agents import KnowledgeBaseAgent, AgentSession
+from ambivo_agents import ModeratorAgent, AgentSession
 import asyncio
 
 async def main():
     # Auto-cleanup with context manager
-    async with AgentSession(KnowledgeBaseAgent, user_id="sarah") as agent:
-        print(f"Session: {agent.context.session_id}")
+    async with AgentSession(ModeratorAgent, user_id="sarah") as moderator:
+        print(f"Session: {moderator.context.session_id}")
         
-        # Use agent - cleanup happens automatically
-        result = await agent._query_knowledge_base(
-            kb_name="company_docs",
-            query="What is our return policy?"
-        )
+        # Use moderator - cleanup happens automatically
+        response = await moderator.chat("Download audio from https://youtube.com/watch?v=example")
+        print(response)
         
-        print(result['answer'])
-    # Agent automatically cleaned up here
+        # Check agent status
+        status = await moderator.get_agent_status()
+        print(f"Active agents: {list(status['active_agents'].keys())}")
+    # Moderator automatically cleaned up here
 
 asyncio.run(main())
 ```
 
 ## Command Line Interface
 
+The CLI provides full access to the ModeratorAgent:
+
 ```bash
 # Install the CLI
 pip install ambivo-agents
 
-# Health check 
-ambivo-agents health
-
-# Chat mode with smart routing
+# Interactive mode with auto-routing
 ambivo-agents
 
-# Direct YouTube download
-ambivo-agents youtube download "https://youtube.com/watch?v=example"
+# Single queries (auto-routed)
+ambivo-agents -q "Download audio from https://youtube.com/watch?v=example"
+ambivo-agents -q "Search for latest AI trends"
+ambivo-agents -q "Extract audio from video.mp4"
 
-# Smart message routing
-ambivo-agents chat "download audio from https://youtube.com/watch?v=example"
-ambivo-agents chat "search for latest AI trends"
-ambivo-agents chat "extract audio from video.mp4"
+# Check agent status
+ambivo-agents status
+
+# Test all agents
+ambivo-agents --test
 ```
 
 ### Command Line Examples
 ```bash
-# YouTube Downloads
-ambivo-agents youtube download "https://youtube.com/watch?v=example" --audio-only
-ambivo-agents youtube download "https://youtube.com/watch?v=example" --video
-ambivo-agents youtube info "https://youtube.com/watch?v=example"
+# ModeratorAgent routes these automatically:
 
-# Smart Chat (automatically routes to appropriate agent)
-ambivo-agents chat "download audio from https://youtube.com/watch?v=example"
-ambivo-agents chat "search for latest AI developments"
-ambivo-agents chat "extract audio from video.mp4 as high quality mp3"
+# YouTube downloads
+ambivo-agents -q "Download https://youtube.com/watch?v=example --audio-only"
+ambivo-agents -q "Get info about https://youtube.com/watch?v=example"
+
+# Web search
+ambivo-agents -q "Search for latest Python frameworks"
+ambivo-agents -q "Find news about artificial intelligence"
+
+# Media processing  
+ambivo-agents -q "Extract audio from video.mp4 as high quality mp3"
+ambivo-agents -q "Convert video.avi to mp4"
+
+# General assistance
+ambivo-agents -q "What is machine learning?"
+ambivo-agents -q "Explain quantum computing"
 
 # Interactive mode with smart routing
-ambivo-agents interactive
+ambivo-agents
+> Download audio from YouTube
+> Search for AI news
+> Extract audio from my video file
+> What's the weather like?
+```
+
+### CLI Status and Debugging
+
+```bash
+# Check agent status
+ambivo-agents status
+
+# View configuration
+ambivo-agents config  
+
+# Debug mode
+ambivo-agents --debug -q "test query"
+
+# Test all capabilities
+ambivo-agents --test
 ```
 
 ## Architecture
 
+### ModeratorAgent Architecture
+
+The **ModeratorAgent** acts as an intelligent orchestrator:
+
+```
+[User Query] 
+     ↓
+[ModeratorAgent] ← Analyzes intent and context
+     ↓
+[Intent Analysis] ← Uses LLM + patterns + keywords
+     ↓
+[Route Selection] ← Chooses best agent(s)
+     ↓
+[Specialized Agent] ← YouTubeAgent, SearchAgent, etc.
+     ↓
+[Response] ← Combined and contextualized
+     ↓
+[User]
+```
+
 ### Agent Capabilities
 Each agent provides specialized functionality:
 
-- **YouTube Download Agent** → Video/audio downloads with pytubefix
-- **Media Editor Agent** → FFmpeg-based processing
-- **Knowledge Base Agent** → Qdrant vector search
-- **Web Search Agent** → Multi-provider search
-- **Web Scraper Agent** → Proxy-enabled scraping
-- **Code Executor Agent** → Docker-based execution
+- **🎛️ ModeratorAgent** → Intelligent routing and orchestration
+- **🎬 YouTube Download Agent** → Video/audio downloads with pytubefix
+- **🎥 Media Editor Agent** → FFmpeg-based processing
+- **📚 Knowledge Base Agent** → Qdrant vector search
+- **🔍 Web Search Agent** → Multi-provider search
+- **🕷️ Web Scraper Agent** → Proxy-enabled scraping
+- **💻 Code Executor Agent** → Docker-based execution
 
 ### Memory System
 - **Redis-based persistence** with compression and caching
@@ -594,36 +914,46 @@ The agents automatically handle volume mounting for:
 
 ### Common Issues
 
-1. **Redis Connection Failed**
+1. **ModeratorAgent Routing Issues**
+   ```python
+   # Check available agents
+   status = await moderator.get_agent_status()
+   print(f"Available: {list(status['active_agents'].keys())}")
+   
+   # Check configuration
+   print(f"Enabled: {moderator.enabled_agents}")
+   ```
+
+2. **Redis Connection Failed**
    ```bash
    # For cloud Redis: Check connection details in agent_config.yaml
    # For local Redis: Check if running
    redis-cli ping  # Should return "PONG"
    ```
 
-2. **Docker Not Available**
+3. **Docker Not Available**
    ```bash
    # Check Docker is running
    docker ps
    # Install if missing: https://docs.docker.com/get-docker/
    ```
 
-3. **Agent Creation Errors**
+4. **Agent Creation Errors**
    ```python
-   # Check agent can be created
-   from ambivo_agents import YouTubeDownloadAgent
+   # Check moderator can be created
+   from ambivo_agents import ModeratorAgent
    try:
-       agent, context = YouTubeDownloadAgent.create(user_id="test")
+       moderator, context = ModeratorAgent.create(user_id="test")
        print(f"✅ Success: {context.session_id}")
-       await agent.cleanup_session()
+       await moderator.cleanup_session()
    except Exception as e:
        print(f"❌ Error: {e}")
    ```
 
-4. **Import Errors**
+5. **Import Errors**
    ```bash
    # Ensure clean imports work
-   python -c "from ambivo_agents import YouTubeDownloadAgent; print('✅ Import success')"
+   python -c "from ambivo_agents import ModeratorAgent; print('✅ Import success')"
    ```
 
 ### Debug Mode
@@ -656,8 +986,19 @@ cd ambivo-agents
 # Install in development mode
 pip install -e .
 
-# Run examples
-python examples/<example.py>
+# Test ModeratorAgent
+python -c "
+from ambivo_agents import ModeratorAgent
+import asyncio
+
+async def test():
+    moderator, context = ModeratorAgent.create(user_id='test')
+    response = await moderator.chat('Hello!')
+    print(f'Response: {response}')
+    await moderator.cleanup_session()
+
+asyncio.run(test())
+"
 ```
 
 ## License
@@ -683,4 +1024,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-*Developed by the Ambivo team.*
+*Developed by the Ambivo team  for the AI automation community.*

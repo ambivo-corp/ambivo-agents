@@ -1,7 +1,7 @@
 # ambivo_agents/agents/moderator.py
 """
 ModeratorAgent: Complete intelligent orchestrator that routes queries to specialized agents
-FIXED VERSION - All methods implemented
+FIXED VERSION - All methods implemented correctly
 """
 
 import asyncio
@@ -73,7 +73,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     def _get_default_enabled_agents(self) -> List[str]:
         """Get default enabled agents from configuration"""
-
         # Check moderator config first
         if 'default_enabled_agents' in self.moderator_config:
             return self.moderator_config['default_enabled_agents']
@@ -126,8 +125,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     def _get_agent_config(self, agent_type: str) -> Dict[str, Any]:
         """Get configuration for specific agent type"""
-
-        # Get agent-specific config section
         agent_config = {}
 
         if agent_type == 'knowledge_base':
@@ -147,7 +144,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     def _initialize_specialized_agents(self):
         """Initialize all enabled specialized agents"""
-
         # Import agents dynamically to avoid circular imports
         try:
             from . import (
@@ -222,7 +218,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     def _setup_routing_patterns(self):
         """Setup intelligent routing patterns for different query types"""
-
         self.agent_routing_patterns = {
             'knowledge_base': {
                 'keywords': ['search knowledge', 'query kb', 'knowledge base', 'find in documents',
@@ -288,7 +283,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     async def _analyze_query_intent(self, user_message: str) -> Dict[str, Any]:
         """Analyze user query to determine which agent(s) should handle it"""
-
         message_lower = user_message.lower()
 
         # Extract context from conversation history
@@ -354,7 +348,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     async def _route_to_agent(self, agent_type: str, user_message: str,
                               context: ExecutionContext = None) -> AgentResponse:
         """Route query to specific agent and get response"""
-
         if agent_type not in self.specialized_agents:
             return AgentResponse(
                 agent_type=agent_type,
@@ -402,7 +395,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     async def _coordinate_multiple_agents(self, agents: List[str], user_message: str,
                                           context: ExecutionContext = None) -> str:
         """Coordinate multiple agents for complex queries"""
-
         responses = []
 
         # Execute agents concurrently
@@ -448,7 +440,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
         """Main processing method - routes to appropriate agents"""
-
         self.memory.store_message(message)
 
         try:
@@ -515,8 +506,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             return error_response
 
     async def get_agent_status(self) -> Dict[str, Any]:
-        """Get status of all managed agents"""
-
+        """Get status of all managed agents - FIXED METHOD"""
         status = {
             'moderator_id': self.agent_id,
             'enabled_agents': self.enabled_agents,
@@ -531,7 +521,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 status['active_agents'][agent_type] = {
                     'agent_id': agent.agent_id,
                     'status': 'active',
-                    'session_id': agent.context.session_id
+                    'session_id': agent.context.session_id if hasattr(agent, 'context') else 'unknown'
                 }
             except Exception as e:
                 status['active_agents'][agent_type] = {
@@ -544,7 +534,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     async def cleanup_session(self) -> bool:
         """Cleanup all managed agents"""
-
         success = True
 
         # Cleanup all specialized agents
@@ -583,7 +572,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         Returns:
             Tuple of (ModeratorAgent, AgentContext)
         """
-
         if agent_id is None:
             agent_id = f"moderator_{str(uuid.uuid4())[:8]}"
 
@@ -617,7 +605,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         Returns:
             ModeratorAgent instance
         """
-
         agent_id = f"moderator_{str(uuid.uuid4())[:8]}"
 
         return cls(
