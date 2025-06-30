@@ -1,182 +1,390 @@
-# Ambivo Agents CLI Configuration - Version 1.0
-# Preferred filename: agent_config.yaml
-# Alternative locations: ~/.ambivo/agent_config.yaml, or specify with --config
+# Enhanced Agent Configuration with Knowledge Base and Web Search
+# agent_config_sample.yaml
+#
+# INSTRUCTIONS:
+# 1. Copy this file to agent_config.yaml
+# 2. Replace ALL placeholder values with your actual credentials
+# 3. Remove or comment out sections for services you don't plan to use
 
-# CLI Settings
-cli:
-  version: '1.0.0'
-  default_mode: 'shell'        # 'shell' or 'help' - what happens when no command given
-  auto_session: true           # Automatically create session if none exists
-  session_prefix: 'ambivo'     # Prefix for auto-generated session names
-  verbose: false               # Enable verbose output by default
-  theme: 'default'             # 'default', 'minimal', 'colorful'
+docker:
+  images:
+  - sgosain/amb-ubuntu-python-public-pod
+  memory_limit: 512m
+  timeout: 60
+  work_dir: /opt/ambivo/work_dir
 
-# Agent-specific configurations
-agents:
-  # YouTube Download Agent
-  youtube:
-    default_audio_only: true           # Default to audio-only downloads
-    output_directory: './downloads'    # Where to save downloads
-    max_concurrent_downloads: 3        # Maximum simultaneous downloads
-    quality: 'best'                    # 'best', 'worst', 'bestvideo', 'bestaudio'
-    format: 'mp4'                      # Preferred video format
-    audio_format: 'mp3'                # Preferred audio format
+llm:
+  # Replace with your actual API keys
+  anthropic_api_key: "your-anthropic-api-key-here"
+  openai_api_key: "your-openai-api-key-here"
 
-  # Media Editor Agent
-  media:
-    temp_directory: './temp'           # Temporary files location
-    output_directory: './processed'    # Processed files location
-    supported_formats:                 # Supported file formats
-      - 'mp4'
-      - 'avi'
-      - 'mov'
-      - 'mkv'
-      - 'mp3'
-      - 'wav'
-      - 'flac'
-    ffmpeg_path: 'ffmpeg'              # Path to FFmpeg executable
-    default_video_codec: 'h264'        # Default video codec
-    default_audio_codec: 'aac'         # Default audio codec
-    max_file_size_mb: 1000             # Maximum file size to process
+  # AWS Credentials (optional - for Bedrock)
+  aws_access_key_id: "your-aws-access-key-id"
+  aws_secret_access_key: "your-aws-secret-access-key"
+  aws_region: "us-east-1"
 
-  # Knowledge Base Agent
-  knowledge_base:
-    default_embedding_model: 'sentence-transformers/all-MiniLM-L6-v2'
-    chunk_size: 1000                   # Text chunk size for processing
-    chunk_overlap: 200                 # Overlap between chunks
-    max_documents: 10000              # Maximum documents per knowledge base
-    vector_dimensions: 384             # Vector embedding dimensions
-    similarity_threshold: 0.7          # Minimum similarity for search results
+  # Embedding API (optional - for advanced knowledge base features)
+  voyage_api_key: "your-voyage-api-key"
 
-  # Web Search Agent
-  web_search:
-    default_max_results: 5             # Default number of search results
-    timeout: 30                        # Request timeout in seconds
-    providers:                         # Available search providers
-      - 'brave'
-      - 'duckduckgo'
-      - 'google'
-    default_provider: 'brave'          # Primary search provider
-    safe_search: true                  # Enable safe search
-    region: 'US'                       # Search region
-    language: 'en'                     # Search language
+  # LLM Settings
+  preferred_provider: openai
+  temperature: 0.5
+  max_tokens: 4000
 
-  # Web Scraper Agent
-  web_scraper:
-    user_agent: 'Ambivo-Agent/1.0.0 (Educational Purpose)'
-    timeout: 30                        # Request timeout
-    max_retries: 3                     # Maximum retry attempts
-    delay_between_requests: 1          # Delay in seconds between requests
-    respect_robots_txt: true           # Follow robots.txt rules
-    max_pages_per_domain: 100          # Limit pages per domain
-    allowed_domains: []                # Whitelist of allowed domains (empty = all)
-    blocked_domains:                   # Blacklist of blocked domains
-      - 'example-blocked.com'
+# Memory management settings
+memory_management:
+  compression:
+    enabled: true
+    algorithm: "lz4"
+    compression_level: 1
+  cache:
+    enabled: true
+    max_size: 1000
+    ttl_seconds: 300
+  backup:
+    enabled: true
+    interval_minutes: 60
+    backup_directory: "./backups"
 
-  # Code Executor Agent
-  code_executor:
-    docker_enabled: false              # Enable Docker for code execution
-    allowed_languages:                 # Supported programming languages
-      - 'python'
-      - 'javascript'
-      - 'bash'
-      - 'sql'
-    timeout: 300                       # Execution timeout in seconds
-    memory_limit: '512m'               # Memory limit for containers
-    cpu_limit: '1'                     # CPU limit for containers
-    network_access: false              # Allow network access in containers
-    max_output_size: 10000             # Maximum output size in characters
+redis:
+  # Replace with your Redis connection details
+  host: "your-redis-host.redis.cloud"
+  port: 6379
+  db: 0
+  password: "your-redis-password"
 
-# Session Management
-session:
-  auto_cleanup: true                   # Automatically cleanup old sessions
-  session_timeout: 3600                # Session timeout in seconds (1 hour)
-  max_sessions: 10                     # Maximum concurrent sessions
-  save_history: true                   # Save session history
-  history_file: '~/.ambivo/history'    # History file location
+service:
+  enable_metrics: true
+  log_level: INFO
+  log_to_file: true
+  max_sessions: 100
+  session_timeout: 3600
 
-# Logging Configuration
-logging:
-  level: 'INFO'                        # Log level: DEBUG, INFO, WARNING, ERROR
-  file: './logs/ambivo-agents.log'     # Log file location
-  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-  max_file_size: '10MB'                # Maximum log file size
-  backup_count: 5                      # Number of backup log files
-  console_output: true                 # Also log to console
+# Knowledge Base Configuration (Qdrant Cloud)
+knowledge_base:
+  # Replace with your Qdrant Cloud credentials
+  qdrant_url: "https://your-cluster-id.us-east4-0.gcp.cloud.qdrant.io:6333"
+  qdrant_api_key: "your-qdrant-api-key"
 
-# Performance Settings
-performance:
-  max_concurrent_agents: 5             # Maximum concurrent agent instances
-  memory_threshold: 0.8                # Memory usage threshold (80%)
-  cpu_threshold: 0.9                   # CPU usage threshold (90%)
-  cache_enabled: true                  # Enable response caching
-  cache_ttl: 300                       # Cache time-to-live in seconds
+  # Feature Settings
+  enable_file_processing: true
+  enable_web_ingestion: true
+  enable_api_calls: true
+  enable_database_queries: false
 
-# Security Settings
-security:
-  api_key_file: '~/.ambivo/api_keys'   # File containing API keys
-  encrypt_sessions: false              # Encrypt session data
-  rate_limiting: true                  # Enable rate limiting
-  max_requests_per_minute: 60          # Maximum requests per minute
-  allowed_hosts: []                    # Whitelist of allowed hosts (empty = all)
+  # File Processing Limits
+  max_file_size_mb: 50
+  supported_file_types:
+    - ".pdf"
+    - ".txt"
+    - ".docx"
+    - ".md"
+    - ".html"
+    - ".csv"
+    - ".json"
 
-# Integration Settings
-integrations:
-  # OpenAI API
-  openai:
-    api_key: ''                        # OpenAI API key (leave empty to use env var)
-    model: 'gpt-3.5-turbo'            # Default model
-    max_tokens: 2000                   # Maximum tokens per request
-    temperature: 0.7                   # Response randomness
+  # Collection Settings
+  default_collection_prefix: "kb"
+  vector_size: 1536  # OpenAI embeddings dimension
+  distance_metric: "cosine"
 
-  # Anthropic Claude API
-  anthropic:
-    api_key: ''                        # Anthropic API key
-    model: 'claude-3-sonnet-20240229'  # Default model
-    max_tokens: 2000                   # Maximum tokens per request
+  # Performance Settings
+  similarity_top_k: 5
+  chunk_size: 1024
+  chunk_overlap: 20
 
-  # Google Services
-  google:
-    credentials_file: ''               # Path to Google credentials JSON
-    drive_folder_id: ''                # Default Google Drive folder
+  # Security Settings
+  max_api_calls_per_session: 100
+  allowed_domains:
+    - "*.com"
+    - "*.org"
+    - "*.edu"
+  blocked_domains:
+    - "*.exe"
+    - "*.zip"
 
-  # Database
-  database:
-    type: 'sqlite'                     # Database type: sqlite, postgresql, mysql
-    url: 'sqlite:///./ambivo_agents.db' # Database connection URL
-    pool_size: 5                       # Connection pool size
+web_search:
+  # Replace with your search API keys
+  brave_api_key: "your-brave-search-api-key"
+  avesapi_api_key: "your-aves-api-key"
 
-# Custom Commands
-custom_commands:
-  # Define custom shell commands
-  shortcuts:
-    'dl': 'youtube download'           # 'dl <url>' becomes 'youtube download <url>'
-    'search': 'chat search for'        # 'search <query>' becomes 'chat search for <query>'
-    'extract': 'chat extract audio from' # 'extract <file>' becomes 'chat extract audio from <file>'
+  # Search Settings
+  default_max_results: 10
+  max_results_limit: 50
+  search_timeout_seconds: 10
+  enable_caching: true
+  cache_ttl_minutes: 30
 
-# Environment-specific Settings
-environments:
-  development:
-    cli:
-      verbose: true
-    logging:
-      level: 'DEBUG'
-      console_output: true
+  # Provider Priorities (lower number = higher priority)
+  provider_priorities:
+    brave: 2
+    aves: 1
 
-  production:
-    cli:
-      verbose: false
-    logging:
-      level: 'WARNING'
-      console_output: false
-    security:
-      rate_limiting: true
-      encrypt_sessions: true
+  # Search Features
+  enable_news_search: true
+  enable_academic_search: true
+  enable_image_search: false
+  enable_video_search: false
 
-# User Preferences
-user:
-  name: ''                             # User display name
-  email: ''                            # User email
-  timezone: 'UTC'                      # User timezone
-  language: 'en'                       # Preferred language
-  date_format: '%Y-%m-%d %H:%M:%S'     # Date format preference
+  # Geographic Settings
+  default_country: "US"
+  default_language: "en"
+  supported_countries:
+    - "US"
+    - "GB"
+    - "CA"
+    - "AU"
+
+  # Content Filtering
+  safe_search: "moderate"
+  filter_adult_content: true
+  blocked_domains:
+    - "spam-site.com"
+    - "malware-site.com"
+
+  # Rate Limiting
+  requests_per_minute: 60
+  requests_per_hour: 1000
+  cooldown_on_error_minutes: 5
+
+  # News Search Specific Settings
+  news_search:
+    default_days_back: 7
+    max_days_back: 30
+    preferred_sources:
+      - "reuters.com"
+      - "bbc.com"
+      - "apnews.com"
+
+  # Academic Search Specific Settings
+  academic_search:
+    preferred_sources:
+      - "scholar.google.com"
+      - "arxiv.org"
+      - "pubmed.ncbi.nlm.nih.gov"
+      - "researchgate.net"
+
+  # Performance Settings
+  connection_pool_size: 10
+  retry_attempts: 3
+  retry_delay_seconds: 1
+
+  # Security Settings
+  max_searches_per_session: 100
+  require_user_agent: true
+  custom_user_agent: "EnhancedAgentSystem/1.0"
+
+# Agent Capabilities Configuration
+agent_capabilities:
+  # Enable/disable agent types
+  enable_knowledge_base: true
+  enable_web_search: true
+  enable_code_execution: true
+  enable_file_processing: true
+  enable_web_ingestion: true
+  enable_api_calls: true
+  enable_web_scraping: true
+  enable_proxy_mode: true
+  enable_media_editor: true
+  enable_youtube_download: true
+
+  # Cross-agent features
+  enable_agent_collaboration: true
+  enable_result_synthesis: true
+  enable_multi_source_validation: true
+
+  # Performance limits
+  max_concurrent_operations: 5
+  operation_timeout_seconds: 30
+  max_memory_usage_mb: 500
+
+youtube_download:
+  docker_image: "sgosain/amb-ubuntu-python-public-pod"
+  download_dir: "./youtube_downloads"
+  timeout: 600
+  memory_limit: "1g"
+  default_audio_only: true
+
+# Media Processing Configuration
+media_editor:
+  # Docker Configuration
+  docker_image: "sgosain/amb-ubuntu-python-public-pod"
+  work_dir: "/opt/ambivo/work_dir"
+
+  # File Handling
+  input_dir: "./examples/media_input"
+  output_dir: "./examples/media_output"
+  temp_dir: "/tmp/media_editor"
+
+  # Processing Limits
+  timeout: 300
+  max_file_size_gb: 5
+  max_concurrent_jobs: 3
+
+  # FFmpeg Configuration
+  ffmpeg_threads: 4
+  enable_gpu_acceleration: false
+  gpu_codec: "h264_nvenc"
+  memory_limit: "2g"
+
+  # Quality Presets
+  quality_presets:
+    ultra:
+      crf: 15
+      preset: "veryslow"
+      description: "Ultra high quality (very slow)"
+    high:
+      crf: 18
+      preset: "slow"
+      description: "High quality (slow)"
+    medium:
+      crf: 23
+      preset: "medium"
+      description: "Balanced quality and speed"
+    low:
+      crf: 28
+      preset: "fast"
+      description: "Lower quality (fast)"
+    web:
+      crf: 25
+      preset: "fast"
+      description: "Web optimized"
+    mobile:
+      crf: 30
+      preset: "veryfast"
+      description: "Mobile optimized"
+
+  # Supported Formats
+  supported_video_formats:
+    - ".mp4"
+    - ".avi"
+    - ".mov"
+    - ".mkv"
+    - ".webm"
+    - ".flv"
+    - ".wmv"
+    - ".m4v"
+    - ".3gp"
+
+  supported_audio_formats:
+    - ".mp3"
+    - ".wav"
+    - ".aac"
+    - ".flac"
+    - ".ogg"
+    - ".m4a"
+    - ".wma"
+    - ".opus"
+
+  supported_image_formats:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".bmp"
+    - ".tiff"
+    - ".webp"
+
+  # Default Settings
+  default_video_codec: "h264"
+  default_audio_codec: "aac"
+  default_audio_bitrate: "192k"
+  default_audio_sample_rate: 44100
+  default_thumbnail_width: 320
+  default_thumbnail_format: "jpg"
+
+  # Advanced Options
+  enable_hardware_acceleration: false
+  enable_streaming_processing: false
+  enable_batch_processing: true
+  preserve_metadata: true
+  auto_cleanup_temp: true
+
+  # Error Handling
+  max_retries: 3
+  retry_delay: 5
+  continue_on_error: false
+
+  # Monitoring
+  enable_progress_tracking: true
+  log_ffmpeg_output: true
+  performance_logging: true
+
+# Enhanced Web Scraping Configuration - Docker + Proxy Mode
+web_scraping:
+  # Docker Configuration
+  docker_image: "sgosain/amb-ubuntu-python-public-pod"
+  proxy_enabled: true
+
+  # Replace with your proxy credentials (ScraperAPI format)
+  proxy_config:
+    http_proxy: "http://scraperapi:your-scraperapi-key@proxy-server.scraperapi.com:8001"
+
+  # Performance and Limits
+  timeout: 120
+  rate_limit_seconds: 2.0
+  max_concurrent_requests: 2
+
+  # Content Extraction
+  max_content_size_mb: 5
+  max_links_per_page: 50
+  max_images_per_page: 25
+
+  # Docker-specific settings
+  docker_memory_limit: "2g"
+  docker_timeout: 120
+  docker_cleanup: true
+
+  # Proxy settings for Docker
+  proxy_timeout: 30
+  proxy_retries: 2
+  ssl_verify: false
+
+  # Browser Configuration for Docker
+  browser_config:
+    headless: true
+    viewport_width: 1920
+    viewport_height: 1080
+    disable_images: false
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+  # Output Configuration
+  default_output_format: "json"
+  compress_output: true
+  max_response_size: "10MB"
+
+moderator:
+  # Default enabled agents (used when enabled_agents not specified)
+  default_enabled_agents:
+    - knowledge_base
+    - web_search
+    - assistant
+    - media_editor
+    - youtube_download
+    - code_executor
+    - web_scraper
+
+  # Routing Intelligence Settings
+  routing:
+    confidence_threshold: 0.6
+    enable_multi_agent: true
+    fallback_agent: "assistant"
+    max_routing_attempts: 3
+
+  # Agent Coordination Settings
+  coordination:
+    max_concurrent_agents: 3
+    timeout_seconds: 30
+    retry_failed_agents: true
+    enable_response_synthesis: true
+
+  # Performance Settings
+  performance:
+    cache_agent_instances: true
+    cleanup_interval_minutes: 30
+    max_session_duration_hours: 2
+
+  # Security Settings
+  security:
+    restrict_code_execution: true
+    sanitize_inputs: true
+    log_all_routing: true
