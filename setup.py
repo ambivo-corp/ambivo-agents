@@ -69,7 +69,7 @@ def read_requirements():
 
 setup(
     name="ambivo-agents",
-    version="1.0.0",
+    version="1.0.1",
     author="Hemant Gosain 'Sunny'",
     author_email="sgosain@ambivo.com",
     description="Multi-Agent AI System for automation including YouTube downloads, media processing, knowledge base operations, and more",

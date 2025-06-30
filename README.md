@@ -104,27 +104,7 @@ ambivo-agents -q "Extract audio from video.mp4"
 
 ## Simple ModeratorAgent Example
 
-### Why Use ModeratorAgent?
 
-Instead of managing multiple agents yourself, the **ModeratorAgent** is your single point of contact:
-
-```python
-# ❌ Complex: Managing multiple agents
-youtube_agent = YouTubeDownloadAgent.create(user_id="john")[0]
-search_agent = WebSearchAgent.create(user_id="john")[0] 
-media_agent = MediaEditorAgent.create(user_id="john")[0]
-
-# Figure out which agent to use...
-if "youtube.com" in message:
-    response = await youtube_agent.chat(message)
-elif "search" in message:
-    response = await search_agent.chat(message)
-# ... etc
-
-# ✅ Simple: One moderator handles everything
-moderator, context = ModeratorAgent.create(user_id="john")
-response = await moderator.chat(message)  # Auto-routes!
-```
 
 ### Basic ModeratorAgent Usage
 
@@ -184,7 +164,7 @@ async def context_example():
     await moderator.cleanup_session()
 ```
 
-### Custom Agent Configuration
+### Custom Agent Configuration using enabled_agents
 
 ```python
 async def custom_moderator():
@@ -232,9 +212,9 @@ await bot.end_session()
 
 ## Agent Creation
 
-### ModeratorAgent (Recommended for Most Users)
+### ModeratorAgent 
 
-Use the **ModeratorAgent** for intelligent multi-agent orchestration:
+
 
 ```python
 from ambivo_agents import ModeratorAgent
@@ -301,7 +281,7 @@ result = await service.process_message(
 ```
 
 **When to use Service:**
-- ✅ **Production systems** with multiple users
+- ✅ **Production systems** with multiple users - manage sessions
 - ✅ **Session management** across users
 - ✅ **Scalable architectures** with load balancing
 - ✅ **Advanced monitoring** and analytics
@@ -319,7 +299,7 @@ result = await service.process_message(
 
 ## Available Agents
 
-### 🎛️ **ModeratorAgent** (Recommended)
+### 🎛️ **ModeratorAgent** 
 - **Intelligent orchestrator** that routes to specialized agents
 - **Context-aware** multi-turn conversations
 - **Automatic agent selection** based on query analysis
@@ -386,25 +366,8 @@ result = await service.process_message(
 
 ### 1. Install Dependencies
 ```bash
-# Core dependencies
-pip install redis python-dotenv pyyaml click
 
-# LLM providers (choose based on your needs)
-pip install openai anthropic boto3 langchain-openai langchain-anthropic langchain-aws
-
-# Knowledge base (if using)
-pip install qdrant-client llama-index langchain-unstructured
-
-# Web capabilities (if using)
-pip install requests beautifulsoup4 playwright
-
-# Media processing (if using) 
-pip install docker
-
-# YouTube downloads (if using)
-pip install pytubefix pydantic
-
-# Optional: Install all at once
+# Install requirements
 pip install -r requirements.txt
 ```
 
@@ -474,6 +437,18 @@ agent_capabilities:
   enable_proxy_mode: true
   enable_media_editor: true
   enable_youtube_download: true
+
+# used by the ModeratorAgent to determine which agents to enable if not explicitly specified in code
+# by default all agents are enabled
+moderator:
+  default_enabled_agents:
+    - knowledge_base
+    - web_search
+    - assistant
+    - media_editor
+    - youtube_download
+    - code_executor  # Enable only if needed for security
+    - web_scraper    # Enable only if needed
 
 # Web Search Configuration (if enabled)
 web_search:
@@ -780,7 +755,8 @@ asyncio.run(main())
 
 ## Command Line Interface
 
-The CLI provides full access to the ModeratorAgent:
+The CLI provides full command line access to all agent capabilities, 
+allowing you to interact with the system without writing code. reads from the `agent_config.yaml` file for configuration.:
 
 ```bash
 # Install the CLI
@@ -1024,4 +1000,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-*Developed by the Ambivo team  for the AI automation community.*
+*Developed by the Ambivo team.*
