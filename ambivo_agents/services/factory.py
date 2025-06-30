@@ -63,7 +63,7 @@ class ProxyAgent(BaseAgent):
             return True
         return False
 
-    async def process_message(self, message, context):
+    async def process_message(self, message, context=None):
         """Route messages to appropriate agents based on content analysis - UPDATED WITH YOUTUBE"""
         self.memory.store_message(message)
 

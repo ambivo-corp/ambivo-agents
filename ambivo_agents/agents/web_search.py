@@ -1,6 +1,6 @@
-# ambivo_agents/agents/web_search.py
+# ambivo_agents/agents/web_search.py - Complete and Corrected LLM-Aware Web Search Agent
 """
-Web Search Agent with Multiple Search Provider Support
+LLM-Aware Web Search Agent with conversation history and intelligent intent detection
 """
 
 import asyncio
@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
 from ..config.loader import load_config, get_config_section
+from ..core.history import WebAgentHistoryMixin, ContextType
 
 
 @dataclass
@@ -334,21 +335,25 @@ class WebSearchServiceAdapter:
         return await self.search_web(academic_query, max_results)
 
 
-class WebSearchAgent(BaseAgent):
-    """Web Search Agent that provides web search capabilities"""
+class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
+    """LLM-Aware Web Search Agent with conversation context and intelligent routing"""
 
-    def __init__(self, agent_id: str=None, memory_manager=None, llm_service=None, **kwargs):
+    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, **kwargs):
         if agent_id is None:
             agent_id = f"search_{str(uuid.uuid4())[:8]}"
+
         super().__init__(
             agent_id=agent_id,
             role=AgentRole.RESEARCHER,
             memory_manager=memory_manager,
             llm_service=llm_service,
             name="Web Search Agent",
-            description="Agent for web search operations and information retrieval",
+            description="LLM-aware web search agent with conversation history",
             **kwargs
         )
+
+        # Initialize history mixin
+        self.setup_history_mixin()
 
         # Initialize search service
         try:
@@ -359,6 +364,424 @@ class WebSearchAgent(BaseAgent):
         # Add web search tools
         self._add_search_tools()
 
+    async def _llm_analyze_intent(self, user_message: str, conversation_context: str = "") -> Dict[str, Any]:
+        """Use LLM to analyze user intent and extract relevant information"""
+        if not self.llm_service:
+            # Fallback to keyword-based analysis
+            return self._keyword_based_analysis(user_message)
+
+        prompt = f"""
+        Analyze this user message in the context of a web search conversation and extract:
+        1. Primary intent (search_general, search_news, search_academic, refine_search, help_request)
+        2. Search query/terms (clean and optimized for search)
+        3. Search type preferences (web, news, academic, images)
+        4. Context references (referring to previous searches, "this", "that", "more about")
+        5. Specific requirements (time range, source type, country, etc.)
+
+        Conversation Context:
+        {conversation_context}
+
+        Current User Message: {user_message}
+
+        Respond in JSON format:
+        {{
+            "primary_intent": "search_general|search_news|search_academic|refine_search|help_request",
+            "search_query": "optimized search terms",
+            "search_type": "web|news|academic",
+            "uses_context_reference": true/false,
+            "context_type": "previous_search|previous_result|general",
+            "requirements": {{
+                "time_range": "recent|specific_date|any",
+                "max_results": number,
+                "country": "country_code",
+                "language": "language_code"
+            }},
+            "confidence": 0.0-1.0
+        }}
+        """
+
+        try:
+            response = await self.llm_service.generate_response(prompt)
+            # Try to parse JSON response
+            import re
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                # If LLM doesn't return JSON, extract key information
+                return self._extract_intent_from_llm_response(response, user_message)
+        except Exception as e:
+            # Fallback to keyword analysis
+            return self._keyword_based_analysis(user_message)
+
+    def _keyword_based_analysis(self, user_message: str) -> Dict[str, Any]:
+        """Fallback keyword-based intent analysis"""
+        content_lower = user_message.lower()
+
+        # Determine intent
+        if any(word in content_lower for word in ['news', 'latest', 'recent', 'breaking']):
+            intent = 'search_news'
+            search_type = 'news'
+        elif any(word in content_lower for word in ['research', 'academic', 'paper', 'study', 'journal']):
+            intent = 'search_academic'
+            search_type = 'academic'
+        elif any(word in content_lower for word in ['search', 'find', 'look up', 'google']):
+            intent = 'search_general'
+            search_type = 'web'
+        elif any(word in content_lower for word in ['help', 'how to', 'what can']):
+            intent = 'help_request'
+            search_type = 'web'
+        else:
+            intent = 'search_general'
+            search_type = 'web'
+
+        # Extract query
+        query = self._extract_query_from_message(user_message)
+
+        # Check for context references
+        context_words = ['this', 'that', 'it', 'them', 'more', 'similar', 'related']
+        uses_context = any(word in content_lower for word in context_words)
+
+        return {
+            "primary_intent": intent,
+            "search_query": query,
+            "search_type": search_type,
+            "uses_context_reference": uses_context,
+            "context_type": "previous_search" if uses_context else "none",
+            "requirements": {
+                "time_range": "recent" if 'recent' in content_lower else "any",
+                "max_results": 5,
+                "country": "US",
+                "language": "en"
+            },
+            "confidence": 0.7
+        }
+
+    def _extract_intent_from_llm_response(self, llm_response: str, user_message: str) -> Dict[str, Any]:
+        """Extract intent from LLM response that isn't JSON"""
+        # Simple extraction from LLM text response
+        content_lower = llm_response.lower()
+
+        if 'news' in content_lower:
+            intent = 'search_news'
+            search_type = 'news'
+        elif 'academic' in content_lower or 'research' in content_lower:
+            intent = 'search_academic'
+            search_type = 'academic'
+        else:
+            intent = 'search_general'
+            search_type = 'web'
+
+        return {
+            "primary_intent": intent,
+            "search_query": self._extract_query_from_message(user_message),
+            "search_type": search_type,
+            "uses_context_reference": False,
+            "context_type": "none",
+            "requirements": {"max_results": 5, "country": "US", "language": "en"},
+            "confidence": 0.6
+        }
+
+    async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
+        """Process message with LLM-based intent detection and history context"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+
+            # Update conversation state
+            self.update_conversation_state(user_message)
+
+            # Get conversation context for LLM analysis
+            conversation_context = self._get_conversation_context_summary()
+
+            # Use LLM to analyze intent
+            intent_analysis = await self._llm_analyze_intent(user_message, conversation_context)
+
+            # Route request based on LLM analysis
+            response_content = await self._route_with_llm_analysis(intent_analysis, user_message, context)
+
+            response = self.create_response(
+                content=response_content,
+                recipient_id=message.sender_id,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id
+            )
+
+            self.memory.store_message(response)
+            return response
+
+        except Exception as e:
+            error_response = self.create_response(
+                content=f"Web Search Agent error: {str(e)}",
+                recipient_id=message.sender_id,
+                message_type=MessageType.ERROR,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id
+            )
+            return error_response
+
+    def _get_conversation_context_summary(self) -> str:
+        """Get a summary of recent conversation for LLM context"""
+        try:
+            recent_history = self.get_conversation_history_with_context(limit=3,
+                                                                        context_types=[ContextType.SEARCH_TERM])
+
+            context_summary = []
+            for msg in recent_history:
+                if msg.get('message_type') == 'user_input':
+                    content = msg.get('content', '')
+                    extracted_context = msg.get('extracted_context', {})
+                    search_terms = extracted_context.get('search_term', [])
+
+                    if search_terms:
+                        context_summary.append(f"Previous search: {search_terms[0]}")
+                    else:
+                        context_summary.append(f"Previous message: {content[:50]}...")
+
+            return "\n".join(context_summary) if context_summary else "No previous context"
+        except:
+            return "No previous context"
+
+    async def _route_with_llm_analysis(self, intent_analysis: Dict[str, Any], user_message: str,
+                                       context: ExecutionContext) -> str:
+        """Route request based on LLM intent analysis"""
+
+        primary_intent = intent_analysis.get("primary_intent", "search_general")
+        search_query = intent_analysis.get("search_query", "")
+        search_type = intent_analysis.get("search_type", "web")
+        uses_context = intent_analysis.get("uses_context_reference", False)
+        requirements = intent_analysis.get("requirements", {})
+
+        # Handle context references
+        if uses_context and not search_query:
+            search_query = self._resolve_contextual_query(user_message)
+
+        # Route based on intent
+        if primary_intent == "help_request":
+            return await self._handle_help_request(user_message)
+        elif primary_intent == "search_news":
+            return await self._handle_news_search(search_query, requirements)
+        elif primary_intent == "search_academic":
+            return await self._handle_academic_search(search_query, requirements)
+        elif primary_intent == "refine_search":
+            return await self._handle_search_refinement(search_query, user_message)
+        else:  # search_general
+            return await self._handle_general_search(search_query, requirements)
+
+    def _resolve_contextual_query(self, user_message: str) -> str:
+        """Resolve contextual references to create a search query"""
+        recent_search = self.get_recent_search_term()
+
+        if recent_search:
+            # Check for refinement patterns
+            refinement_words = ['more', 'additional', 'other', 'similar', 'related', 'about this']
+            if any(word in user_message.lower() for word in refinement_words):
+                return f"{recent_search} {user_message.replace('this', '').replace('that', '').strip()}"
+            else:
+                return recent_search
+
+        return self._extract_query_from_message(user_message)
+
+    async def _handle_general_search_old(self, query: str, requirements: Dict[str, Any]) -> str:
+        """Handle general web search"""
+        if not query:
+            return self._get_search_help_message()
+
+        try:
+            max_results = requirements.get("max_results", 5)
+            result = await self._search_web(query, max_results=max_results)
+
+            if result['success']:
+                return self._format_search_results(result, "General Search")
+            else:
+                return f"❌ **Search failed:** {result['error']}"
+
+        except Exception as e:
+            return f"❌ **Error during search:** {str(e)}"
+
+    async def _handle_news_search(self, query: str, requirements: Dict[str, Any]) -> str:
+        """Handle news search"""
+        if not query:
+            return "I can search for news articles. What news topic are you interested in?"
+
+        try:
+            max_results = requirements.get("max_results", 5)
+            result = await self._search_news(query, max_results=max_results)
+
+            if result['success']:
+                return self._format_search_results(result, "News Search")
+            else:
+                return f"❌ **News search failed:** {result['error']}"
+
+        except Exception as e:
+            return f"❌ **Error during news search:** {str(e)}"
+
+    async def _handle_academic_search(self, query: str, requirements: Dict[str, Any]) -> str:
+        """Handle academic search"""
+        if not query:
+            return "I can search for academic papers and research. What research topic are you looking for?"
+
+        try:
+            max_results = requirements.get("max_results", 5)
+            result = await self._search_academic(query, max_results=max_results)
+
+            if result['success']:
+                return self._format_search_results(result, "Academic Search")
+            else:
+                return f"❌ **Academic search failed:** {result['error']}"
+
+        except Exception as e:
+            return f"❌ **Error during academic search:** {str(e)}"
+
+    async def _handle_search_refinement(self, query: str, user_message: str) -> str:
+        """Handle search refinement requests"""
+        recent_search = self.get_recent_search_term()
+
+        if recent_search:
+            refined_query = f"{recent_search} {query}".strip()
+            result = await self._search_web(refined_query, max_results=5)
+
+            if result['success']:
+                return f"🔍 **Refined Search Results**\n\n" \
+                       f"**Original:** {recent_search}\n" \
+                       f"**Refined:** {refined_query}\n\n" + \
+                    self._format_search_results(result, "Refined Search", show_header=False)
+            else:
+                return f"❌ **Refined search failed:** {result['error']}"
+        else:
+            return await self._handle_general_search(query, {"max_results": 5})
+
+    async def _handle_help_request(self, user_message: str) -> str:
+        """Handle help requests"""
+        return self._get_search_help_message()
+
+    def _format_search_results_old(self, result: Dict[str, Any], search_type: str, show_header: bool = True) -> str:
+        """Format search results consistently"""
+        results = result.get('results', [])
+        query = result.get('query', '')
+
+        if show_header:
+            response = f"🔍 **{search_type} Results for:** {query}\n\n"
+        else:
+            response = ""
+
+        if results:
+            response += f"📊 **Found {len(results)} results:**\n\n"
+            for i, res in enumerate(results[:3], 1):
+                response += f"**{i}. {res['title']}**\n"
+                response += f"🔗 {res['url']}\n"
+                response += f"📝 {res['snippet'][:150]}...\n\n"
+
+            provider = result.get('provider', 'search engine')
+            search_time = result.get('search_time', 0)
+            response += f"⏱️ **Search completed in {search_time:.2f}s using {provider}**"
+        else:
+            response += "No results found. Try a different search term."
+
+        return response
+
+    def _format_search_results(self, result: Dict[str, Any], search_type: str, show_header: bool = True) -> str:
+        """Format search results consistently - FIXED VERSION"""
+        results = result.get('results', [])
+        query = result.get('query', '')
+
+        if show_header:
+            response = f"🔍 **{search_type} Results for:** {query}\n\n"
+        else:
+            response = ""
+
+        if results:
+            response += f"📊 **Found {len(results)} results:**\n\n"
+
+            # FIXED: Safe iteration over results
+            for i, res in enumerate(results):
+                if i >= 3:  # Limit to 3 results
+                    break
+
+                # FIXED: Safe access to result properties
+                title = res.get('title', 'No title') or 'No title'
+                url = res.get('url', 'No URL') or 'No URL'
+                snippet = res.get('snippet', 'No description') or 'No description'
+
+                # FIXED: Safe string slicing
+                snippet_preview = str(snippet)[:150]
+                if len(str(snippet)) > 150:
+                    snippet_preview += "..."
+
+                response += f"**{i + 1}. {title}**\n"
+                response += f"🔗 {url}\n"
+                response += f"📝 {snippet_preview}\n\n"
+
+            # FIXED: Safe access to result metadata
+            provider = result.get('provider', 'search engine')
+            search_time = result.get('search_time', 0)
+
+            # FIXED: Ensure search_time is a number
+            if not isinstance(search_time, (int, float)):
+                search_time = 0
+
+            response += f"⏱️ **Search completed in {search_time:.2f}s using {provider}**"
+        else:
+            response += "No results found. Try a different search term."
+
+        return response
+
+    async def _handle_general_search(self, query: str, requirements: Dict[str, Any]) -> str:
+        """Handle general web search - FIXED VERSION"""
+        if not query:
+            return self._get_search_help_message()
+
+        try:
+            # FIXED: Safe access to requirements
+            max_results = requirements.get("max_results", 5)
+            if not isinstance(max_results, int) or max_results is None:
+                max_results = 5
+
+            result = await self._search_web(query, max_results=max_results)
+
+            if result['success']:
+                return self._format_search_results(result, "General Search")
+            else:
+                error_msg = result.get('error', 'Unknown error')
+                return f"❌ **Search failed:** {error_msg}"
+
+        except Exception as e:
+            return f"❌ **Error during search:** {str(e)}"
+    def _get_search_help_message(self) -> str:
+        """Get contextual help message"""
+        recent_search = self.get_recent_search_term()
+
+        base_message = ("I'm your Web Search Agent! I can help you with:\n\n"
+                        "🔍 **Web Search** - General information search\n"
+                        "📰 **News Search** - Latest news and current events  \n"
+                        "🎓 **Academic Search** - Research papers and studies\n\n"
+                        "💡 **Examples:**\n"
+                        "• 'Search for AI trends in 2025'\n"
+                        "• 'Find latest news about quantum computing'\n"
+                        "• 'Look up machine learning research papers'\n")
+
+        if recent_search:
+            base_message += f"\n🎯 **Your last search:** {recent_search}\n"
+            base_message += "You can say things like 'more about this' or 'find similar topics'"
+
+        return base_message
+
+    def _extract_query_from_message(self, message: str) -> str:
+        """Extract clean search query from message"""
+        # Remove common search prefixes
+        prefixes = ['search for', 'find', 'look up', 'search', 'find me', 'look for',
+                    'google', 'search about', 'tell me about']
+
+        query = message.strip()
+        for prefix in prefixes:
+            if query.lower().startswith(prefix):
+                query = query[len(prefix):].strip()
+                break
+
+        return query
+
+    # Tool implementations
     def _add_search_tools(self):
         """Add web search related tools"""
 
@@ -477,7 +900,7 @@ class WebSearchAgent(BaseAgent):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _format_search_response(self, search_response: SearchResponse, search_type: str) -> Dict[str, Any]:
+    async def _format_search_response(self, search_response, search_type: str) -> Dict[str, Any]:
         """Format search response for consistent output"""
         if search_response.status == "success":
             results_data = []
@@ -508,153 +931,3 @@ class WebSearchAgent(BaseAgent):
                 "provider": search_response.provider
             }
 
-    async def process_message(self, message: AgentMessage, context: ExecutionContext) -> AgentMessage:
-        """Process incoming message and route to appropriate search operations"""
-        self.memory.store_message(message)
-
-        try:
-            content = message.content.lower()
-            user_message = message.content
-
-            # Determine the appropriate action based on message content
-            if any(keyword in content for keyword in ['search', 'find', 'look up', 'what is', 'who is']):
-                response_content = await self._handle_search_request(user_message, context)
-            elif any(keyword in content for keyword in ['news', 'latest', 'recent', 'current']):
-                response_content = await self._handle_news_search_request(user_message, context)
-            elif any(keyword in content for keyword in ['research', 'academic', 'paper', 'study']):
-                response_content = await self._handle_academic_search_request(user_message, context)
-            else:
-                response_content = await self._handle_general_search_request(user_message, context)
-
-            response = self.create_response(
-                content=response_content,
-                recipient_id=message.sender_id,
-                session_id=message.session_id,
-                conversation_id=message.conversation_id
-            )
-
-            self.memory.store_message(response)
-            return response
-
-        except Exception as e:
-            error_response = self.create_response(
-                content=f"Web Search Agent error: {str(e)}",
-                recipient_id=message.sender_id,
-                message_type=MessageType.ERROR,
-                session_id=message.session_id,
-                conversation_id=message.conversation_id
-            )
-            return error_response
-
-    async def _handle_search_request(self, user_message: str, context: ExecutionContext) -> str:
-        """Handle general search requests"""
-        # Extract search query from message
-        query = user_message.replace("search for", "").replace("find", "").replace("look up", "").strip()
-
-        if len(query) < 3:
-            return "Please provide a more specific search query. What would you like me to search for?"
-
-        # Perform search
-        search_result = await self._search_web(query, max_results=5)
-
-        if search_result['success']:
-            results = search_result['results']
-            if results:
-                response = f"🔍 **Search Results for: {query}**\n\n"
-
-                for i, result in enumerate(results[:3], 1):
-                    response += f"**{i}. {result['title']}**\n"
-                    response += f"🔗 {result['url']}\n"
-                    response += f"📝 {result['snippet'][:200]}...\n\n"
-
-                response += f"Found {search_result['total_results']} results in {search_result['search_time']:.2f}s using {search_result['provider']}"
-                return response
-            else:
-                return f"No results found for '{query}'. Try rephrasing your search query."
-        else:
-            return f"Search failed: {search_result['error']}"
-
-    async def _handle_news_search_request(self, user_message: str, context: ExecutionContext) -> str:
-        """Handle news search requests"""
-        query = user_message.replace("news", "").replace("latest", "").replace("recent", "").strip()
-
-        if len(query) < 3:
-            return "What news topic would you like me to search for?"
-
-        search_result = await self._search_news(query, max_results=5)
-
-        if search_result['success']:
-            results = search_result['results']
-            if results:
-                response = f"📰 **Latest News for: {query}**\n\n"
-
-                for i, result in enumerate(results[:3], 1):
-                    response += f"**{i}. {result['title']}**\n"
-                    response += f"🔗 {result['url']}\n"
-                    response += f"📝 {result['snippet'][:200]}...\n\n"
-
-                return response
-            else:
-                return f"No recent news found for '{query}'."
-        else:
-            return f"News search failed: {search_result['error']}"
-
-    async def _handle_academic_search_request(self, user_message: str, context: ExecutionContext) -> str:
-        """Handle academic search requests"""
-        query = user_message.replace("research", "").replace("academic", "").replace("paper", "").strip()
-
-        if len(query) < 3:
-            return "What academic topic would you like me to research?"
-
-        search_result = await self._search_academic(query, max_results=5)
-
-        if search_result['success']:
-            results = search_result['results']
-            if results:
-                response = f"🎓 **Academic Results for: {query}**\n\n"
-
-                for i, result in enumerate(results[:3], 1):
-                    response += f"**{i}. {result['title']}**\n"
-                    response += f"🔗 {result['url']}\n"
-                    response += f"📝 {result['snippet'][:200]}...\n\n"
-
-                return response
-            else:
-                return f"No academic results found for '{query}'."
-        else:
-            return f"Academic search failed: {search_result['error']}"
-
-    async def _handle_general_search_request(self, user_message: str, context: ExecutionContext) -> str:
-        """Handle general search assistance"""
-        if self.llm_service:
-            prompt = f"""
-            You are a Web Search Agent that helps users find information on the internet.
-
-            Your capabilities include:
-            - General web search across multiple search engines
-            - News search for current events and recent articles
-            - Academic search for research papers and scholarly content
-            - Search result summarization and analysis
-
-            User message: {user_message}
-
-            Provide a helpful response about how you can assist with their search needs.
-            """
-
-            response = await self.llm_service.generate_response(prompt, context.metadata)
-            return response
-        else:
-            return ("I'm your Web Search Agent! I can help you with:\n\n"
-                    "🔍 **Web Search**\n"
-                    "- Search the internet for information\n"
-                    "- Find websites, articles, and resources\n"
-                    "- Multiple search engine support\n\n"
-                    "📰 **News Search**\n"
-                    "- Find latest news and current events\n"
-                    "- Search across news sources\n"
-                    "- Filter by recency\n\n"
-                    "🎓 **Academic Search**\n"
-                    "- Find research papers and studies\n"
-                    "- Search academic databases\n"
-                    "- Scholarly content retrieval\n\n"
-                    "What would you like me to search for?")

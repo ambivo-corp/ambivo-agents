@@ -43,6 +43,7 @@ from .agents.web_search import WebSearchAgent
 from .agents.web_scraper import WebScraperAgent
 from .agents.media_editor import MediaEditorAgent
 from .agents.youtube_download import YouTubeDownloadAgent
+from .agents.moderator import ModeratorAgent
 
 # Configuration
 from .config.loader import load_config, ConfigurationError
@@ -82,6 +83,7 @@ __all__ = [
     "WebScraperAgent",
     "MediaEditorAgent",
     "YouTubeDownloadAgent",
+    "ModeratorAgent",
 
     # Configuration
     "load_config",

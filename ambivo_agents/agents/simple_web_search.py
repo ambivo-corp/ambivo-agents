@@ -315,7 +315,7 @@ Please try again in a few moments."""
 
         return response
 
-    async def process_message(self, message: AgentMessage, context: ExecutionContext) -> AgentMessage:
+    async def process_message(self, message: AgentMessage, context: ExecutionContext=None) -> AgentMessage:
         """Process web search requests"""
 
         self.memory.store_message(message)

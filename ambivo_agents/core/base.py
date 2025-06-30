@@ -1,7 +1,6 @@
-# ambivo_agents/core/base.py
+# ambivo_agents/core/base.py - ENHANCED with chat() method
 """
-Enhanced BaseAgent with built-in auto-context session management
-No need for separate AutoContextAgent - context is built right into BaseAgent
+Enhanced BaseAgent with built-in auto-context session management and simplified chat interface
 """
 
 import asyncio
@@ -14,7 +13,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Any, Optional, Callable, Tuple
+from typing import Dict, List, Any, Optional, Callable, Tuple, Union
 from concurrent.futures import ThreadPoolExecutor
 import logging
 
@@ -155,6 +154,19 @@ class ProviderConfig:
     last_error_time: Optional[datetime] = None
     is_available: bool = True
 
+    def __post_init__(self):
+        """Ensure no None values for numeric fields"""
+        if self.max_requests_per_minute is None:
+            self.max_requests_per_minute = 60
+        if self.max_requests_per_hour is None:
+            self.max_requests_per_hour = 3600
+        if self.request_count is None:
+            self.request_count = 0
+        if self.error_count is None:
+            self.error_count = 0
+        if self.priority is None:
+            self.priority = 999
+
 
 class ProviderTracker:
     """Tracks provider usage and availability"""
@@ -198,14 +210,16 @@ class ProviderTracker:
                 return False
 
         now = datetime.now()
-        if provider.last_request_time:
+        # FIXED: Check for None before arithmetic operations
+        if provider.last_request_time is not None:
             time_since_last = (now - provider.last_request_time).total_seconds()
-
             if time_since_last > 3600:
                 provider.request_count = 0
 
-            if provider.request_count >= provider.max_requests_per_hour:
-                return False
+        # FIXED: Ensure max_requests_per_hour is not None
+        max_requests = provider.max_requests_per_hour or 3600
+        if provider.request_count >= max_requests:
+            return False
 
         return True
 
@@ -218,6 +232,12 @@ class ProviderTracker:
 
         if not available_providers:
             return None
+
+        def sort_key(provider_tuple):
+            name, config = provider_tuple
+            priority = config.priority or 999
+            error_count = config.error_count or 0
+            return (priority, error_count)
 
         available_providers.sort(key=lambda x: (x[1].priority, x[1].error_count))
         return available_providers[0][0]
@@ -314,7 +334,7 @@ class DockerCodeExecutor:
 
 class BaseAgent(ABC):
     """
-    Enhanced BaseAgent with built-in auto-context session management
+    Enhanced BaseAgent with built-in auto-context session management and simplified chat interface
     Every agent automatically gets a context with session_id, user_id, etc.
     """
 
@@ -426,8 +446,6 @@ class BaseAgent(ABC):
             metadata=session_metadata or {}
         )
 
-
-
     @classmethod
     def create(cls,
                agent_id: str = None,
@@ -517,6 +535,100 @@ class BaseAgent(ABC):
             auto_configure=False,  # Disable auto-config when using advanced mode
             **kwargs
         )
+
+    # 🎯 NEW: SIMPLIFIED CHAT INTERFACE
+
+    async def chat(self, message: str, **kwargs) -> str:
+        """
+        🌟 NEW: Simplified chat interface that converts string to full AgentMessage
+
+        This is the easiest way to interact with agents created via .create()
+        since they already have auto-context (session_id, user_id, etc.)
+
+        Args:
+            message: User message as string
+            **kwargs: Optional metadata to add to the message
+
+        Returns:
+            Agent response as string
+
+        Usage:
+            agent, context = YouTubeDownloadAgent.create(user_id="john")
+            response = await agent.chat("Download https://youtube.com/watch?v=abc123")
+            print(response)
+        """
+        try:
+            # Create AgentMessage from string using auto-context
+            user_message = AgentMessage(
+                id=str(uuid.uuid4()),
+                sender_id=self.context.user_id,  # 🎯 Use auto-context user_id
+                recipient_id=self.agent_id,
+                content=message,
+                message_type=MessageType.USER_INPUT,
+                session_id=self.context.session_id,  # 🎯 Use auto-context session_id
+                conversation_id=self.context.conversation_id,  # 🎯 Use auto-context conversation_id
+                metadata={
+                    'chat_interface': True,
+                    'simplified_call': True,
+                    **kwargs  # Allow additional metadata
+                }
+            )
+
+            # Get execution context from auto-context
+            execution_context = self.context.to_execution_context()
+
+            # Add any additional metadata passed via kwargs
+            execution_context.metadata.update(kwargs)
+
+            # Call the full process_message method
+            agent_response = await self.process_message(user_message, execution_context)
+
+            # Return just the content string (simplified interface)
+            return agent_response.content
+
+        except Exception as e:
+            # Handle errors gracefully
+            error_msg = f"Chat error: {str(e)}"
+            logging.error(f"Agent {self.agent_id} chat error: {e}")
+            return error_msg
+
+    def chat_sync(self, message: str, **kwargs) -> str:
+        """
+        🌟 NEW: Synchronous version of chat() for easier use in non-async contexts
+
+        Args:
+            message: User message as string
+            **kwargs: Optional metadata to add to the message
+
+        Returns:
+            Agent response as string
+
+        Usage:
+            agent, context = YouTubeDownloadAgent.create(user_id="john")
+            response = agent.chat_sync("Download https://youtube.com/watch?v=abc123")
+            print(response)
+        """
+        try:
+            # Get or create event loop
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If loop is already running, we need to use run_in_executor
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.chat(message, **kwargs))
+                        return future.result()
+                else:
+                    # Loop exists but not running
+                    return loop.run_until_complete(self.chat(message, **kwargs))
+            except RuntimeError:
+                # No event loop exists, create one
+                return asyncio.run(self.chat(message, **kwargs))
+
+        except Exception as e:
+            error_msg = f"Sync chat error: {str(e)}"
+            logging.error(f"Agent {self.agent_id} sync chat error: {e}")
+            return error_msg
 
     # 🔧 CONTEXT MANAGEMENT METHODS
 
@@ -731,11 +843,10 @@ class BaseAgent(ABC):
             session_id = self.context.session_id
 
             # Clear memory for this session
-
             if hasattr(self, 'memory') and self.memory:
                 try:
-                    # Hack temporraily commented memmort
-                    #self.memory.clear_memory(self.context.conversation_id)
+                    # Commented out temporarily as noted in original
+                    # self.memory.clear_memory(self.context.conversation_id)
                     logging.info(f"🧹 Cleared memory for session {session_id}")
                 except Exception as e:
                     logging.warning(f"⚠️  Could not clear memory: {e}")
@@ -846,7 +957,7 @@ class AgentSession:
 
     Usage:
         async with AgentSession(KnowledgeBaseAgent, user_id="john") as agent:
-            result = await agent.get_answer("kb", "query")
+            result = await agent.chat("What is machine learning?")
             print(f"Session: {agent.context.session_id}")
         # Agent automatically cleaned up
     """
@@ -878,3 +989,36 @@ class AgentSession:
         """Cleanup agent when exiting context"""
         if self.agent:
             await self.agent.cleanup_session()
+
+
+# 🚀 CONVENIENCE FUNCTIONS FOR QUICK AGENT USAGE
+
+async def quick_chat(agent_class, message: str, user_id: str = None, **kwargs) -> str:
+    """
+    🌟 ULTRA-SIMPLIFIED: One-liner agent chat
+
+    Usage:
+        response = await quick_chat(YouTubeDownloadAgent, "Download https://youtube.com/watch?v=abc")
+        print(response)
+    """
+    try:
+        agent = agent_class.create_simple(user_id=user_id, **kwargs)
+        response = await agent.chat(message)
+        await agent.cleanup_session()
+        return response
+    except Exception as e:
+        return f"Quick chat error: {str(e)}"
+
+
+def quick_chat_sync(agent_class, message: str, user_id: str = None, **kwargs) -> str:
+    """
+    🌟 ULTRA-SIMPLIFIED: One-liner synchronous agent chat
+
+    Usage:
+        response = quick_chat_sync(YouTubeDownloadAgent, "Download https://youtube.com/watch?v=abc")
+        print(response)
+    """
+    try:
+        return asyncio.run(quick_chat(agent_class, message, user_id, **kwargs))
+    except Exception as e:
+        return f"Quick sync chat error: {str(e)}"

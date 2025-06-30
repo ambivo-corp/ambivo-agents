@@ -1,6 +1,7 @@
 # ambivo_agents/agents/knowledge_base.py
 """
-Knowledge Base Agent with Qdrant integration.
+LLM-Aware Knowledge Base Agent with conversation history and intelligent intent detection
+Updated for consistency with other agents
 """
 
 import asyncio
@@ -13,9 +14,9 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-
 from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
 from ..config.loader import load_config, get_config_section
+from ..core.history import KnowledgeBaseAgentHistoryMixin, ContextType
 
 
 class QdrantServiceAdapter:
@@ -79,12 +80,9 @@ class QdrantServiceAdapter:
 
             if not documents and doc_path:
                 # Load document from file
-                #from langchain_community.document_loaders import UnstructuredFileLoader
                 from langchain_unstructured import UnstructuredLoader
-
                 from llama_index.core.readers import Document as LIDoc
 
-                #loader = UnstructuredFileLoader(doc_path)
                 loader = UnstructuredLoader(doc_path)
                 lang_docs = loader.load()
                 documents = [LIDoc.from_langchain_format(doc) for doc in lang_docs]
@@ -180,10 +178,10 @@ class QdrantServiceAdapter:
             return error_msg, [{"answer": error_msg, "source": "", "source_list": []}]
 
 
-class KnowledgeBaseAgent(BaseAgent):
-    """Knowledge Base Agent that integrates with Qdrant infrastructure"""
+class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
+    """LLM-Aware Knowledge Base Agent with conversation context and intelligent routing"""
 
-    def __init__(self, agent_id: str|None=None, memory_manager=None, llm_service=None, **kwargs):
+    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, **kwargs):
         if agent_id is None:
             agent_id = f"kb_{str(uuid.uuid4())[:8]}"
 
@@ -193,9 +191,12 @@ class KnowledgeBaseAgent(BaseAgent):
             memory_manager=memory_manager,
             llm_service=llm_service,
             name="Knowledge Base Agent",
-            description="Agent for knowledge base operations, document processing, and intelligent retrieval",
+            description="LLM-aware knowledge base agent with conversation history",
             **kwargs
         )
+
+        # Initialize history mixin
+        self.setup_history_mixin()
 
         # Initialize Qdrant service
         try:
@@ -206,6 +207,449 @@ class KnowledgeBaseAgent(BaseAgent):
         # Add knowledge base tools
         self._add_knowledge_base_tools()
 
+    async def _llm_analyze_kb_intent(self, user_message: str, conversation_context: str = "") -> Dict[str, Any]:
+        """Use LLM to analyze knowledge base related intent"""
+        if not self.llm_service:
+            return self._keyword_based_kb_analysis(user_message)
+
+        prompt = f"""
+        Analyze this user message in the context of a knowledge base conversation and extract:
+        1. Primary intent (ingest_document, ingest_text, query_kb, create_kb, manage_kb, help_request)
+        2. Knowledge base name (if mentioned or inferrable)
+        3. Document/file references (file paths, document names)
+        4. Query content (if querying)
+        5. Context references (referring to previous KB operations)
+        6. Operation specifics (metadata, query type, etc.)
+
+        Conversation Context:
+        {conversation_context}
+
+        Current User Message: {user_message}
+
+        Respond in JSON format:
+        {{
+            "primary_intent": "ingest_document|ingest_text|query_kb|create_kb|manage_kb|help_request",
+            "kb_name": "knowledge_base_name or null",
+            "document_references": ["file1.pdf", "doc2.txt"],
+            "query_content": "the actual question to ask" or null,
+            "uses_context_reference": true/false,
+            "context_type": "previous_kb|previous_document|previous_query",
+            "operation_details": {{
+                "query_type": "free-text|multi-select|single-select|yes-no",
+                "custom_metadata": {{}},
+                "source_type": "file|url|text"
+            }},
+            "confidence": 0.0-1.0
+        }}
+        """
+
+        try:
+            response = await self.llm_service.generate_response(prompt)
+            import re
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                return self._extract_kb_intent_from_llm_response(response, user_message)
+        except Exception as e:
+            return self._keyword_based_kb_analysis(user_message)
+
+    def _keyword_based_kb_analysis(self, user_message: str) -> Dict[str, Any]:
+        """Fallback keyword-based KB intent analysis"""
+        content_lower = user_message.lower()
+
+        # Determine intent
+        if any(word in content_lower for word in ['ingest', 'upload', 'add document', 'import', 'load']):
+            intent = 'ingest_document'
+        elif any(word in content_lower for word in ['add text', 'ingest text', 'text to']):
+            intent = 'ingest_text'
+        elif any(word in content_lower for word in ['query', 'search', 'find', 'ask', 'what', 'how', 'where']):
+            intent = 'query_kb'
+        elif any(word in content_lower for word in ['create', 'new kb', 'make kb', 'setup']):
+            intent = 'create_kb'
+        elif any(word in content_lower for word in ['help', 'what can', 'how to']):
+            intent = 'help_request'
+        else:
+            intent = 'help_request'
+
+        # Extract KB names and documents
+        kb_names = self.extract_context_from_text(user_message, ContextType.KNOWLEDGE_BASE)
+        documents = self.extract_context_from_text(user_message, ContextType.DOCUMENT_NAME)
+        file_paths = self.extract_context_from_text(user_message, ContextType.FILE_PATH)
+        all_documents = documents + file_paths
+
+        # Extract query content
+        query_content = self._extract_query_from_kb_message(user_message) if intent == 'query_kb' else None
+
+        return {
+            "primary_intent": intent,
+            "kb_name": kb_names[0] if kb_names else None,
+            "document_references": all_documents,
+            "query_content": query_content,
+            "uses_context_reference": any(word in content_lower for word in ['this', 'that', 'it']),
+            "context_type": "previous_kb",
+            "operation_details": {
+                "query_type": "free-text",
+                "custom_metadata": {},
+                "source_type": "file"
+            },
+            "confidence": 0.7
+        }
+
+    async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
+        """Process message with LLM-based KB intent detection and history context"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+
+            # Update conversation state
+            self.update_conversation_state(user_message)
+
+            # Get conversation context for LLM analysis
+            conversation_context = self._get_kb_conversation_context_summary()
+
+            # Use LLM to analyze intent
+            intent_analysis = await self._llm_analyze_kb_intent(user_message, conversation_context)
+
+            # Route request based on LLM analysis
+            response_content = await self._route_kb_with_llm_analysis(intent_analysis, user_message, context)
+
+            response = self.create_response(
+                content=response_content,
+                recipient_id=message.sender_id,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id
+            )
+
+            self.memory.store_message(response)
+            return response
+
+        except Exception as e:
+            error_response = self.create_response(
+                content=f"Knowledge Base Agent error: {str(e)}",
+                recipient_id=message.sender_id,
+                message_type=MessageType.ERROR,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id
+            )
+            return error_response
+
+    def _get_kb_conversation_context_summary(self) -> str:
+        """Get KB conversation context summary"""
+        try:
+            recent_history = self.get_conversation_history_with_context(
+                limit=3,
+                context_types=[ContextType.KNOWLEDGE_BASE, ContextType.DOCUMENT_NAME]
+            )
+
+            context_summary = []
+            for msg in recent_history:
+                if msg.get('message_type') == 'user_input':
+                    extracted_context = msg.get('extracted_context', {})
+                    kb_names = extracted_context.get('knowledge_base', [])
+                    docs = extracted_context.get('document_name', [])
+
+                    if kb_names:
+                        context_summary.append(f"Previous KB: {kb_names[0]}")
+                    if docs:
+                        context_summary.append(f"Previous document: {docs[0]}")
+
+            # Add current state
+            current_kb = self.get_current_knowledge_base()
+            if current_kb:
+                context_summary.append(f"Current KB: {current_kb}")
+
+            return "\n".join(context_summary) if context_summary else "No previous KB context"
+        except:
+            return "No previous KB context"
+
+    async def _route_kb_with_llm_analysis(self, intent_analysis: Dict[str, Any], user_message: str,
+                                          context: ExecutionContext) -> str:
+        """Route KB request based on LLM intent analysis"""
+
+        primary_intent = intent_analysis.get("primary_intent", "help_request")
+        kb_name = intent_analysis.get("kb_name")
+        documents = intent_analysis.get("document_references", [])
+        query_content = intent_analysis.get("query_content")
+        uses_context = intent_analysis.get("uses_context_reference", False)
+        operation_details = intent_analysis.get("operation_details", {})
+
+        # Resolve context references if needed
+        if uses_context:
+            kb_name = kb_name or self.get_current_knowledge_base()
+            if not documents:
+                recent_doc = self.get_recent_document()
+                if recent_doc:
+                    documents = [recent_doc]
+
+        # Route based on intent
+        if primary_intent == "help_request":
+            return await self._handle_kb_help_request(user_message)
+        elif primary_intent == "ingest_document":
+            return await self._handle_document_ingestion(kb_name, documents, operation_details, user_message)
+        elif primary_intent == "ingest_text":
+            return await self._handle_text_ingestion(kb_name, user_message, operation_details)
+        elif primary_intent == "query_kb":
+            return await self._handle_kb_query(kb_name, query_content, operation_details)
+        elif primary_intent == "create_kb":
+            return await self._handle_kb_creation(kb_name, user_message)
+        elif primary_intent == "manage_kb":
+            return await self._handle_kb_management(kb_name, user_message)
+        else:
+            return await self._handle_kb_help_request(user_message)
+
+    async def _handle_document_ingestion(self, kb_name: str, documents: List[str], operation_details: Dict[str, Any],
+                                         user_message: str) -> str:
+        """Handle document ingestion with LLM analysis"""
+
+        # Resolve missing parameters
+        if not kb_name:
+            available_kbs = self.conversation_state.knowledge_bases
+            if available_kbs:
+                return f"I can ingest documents! Which knowledge base?\n\n" \
+                       f"**Available KBs:**\n" + "\n".join([f"• {kb}" for kb in available_kbs]) + \
+                    f"\n\nOr specify a new KB name."
+            else:
+                return "I can ingest documents into knowledge bases. Please specify:\n\n" \
+                       "1. **Knowledge base name** (I'll create it if it doesn't exist)\n" \
+                       "2. **Document path** or just tell me which document\n\n" \
+                       "Example: 'Ingest research.pdf into ai_papers'"
+
+        if not documents:
+            return f"I'll ingest into the **{kb_name}** knowledge base. Which document would you like to add?\n\n" \
+                   f"Please provide the document path or tell me the filename."
+
+        # Perform ingestion
+        document_path = documents[0]
+
+        try:
+            # Check if it's a URL or file path
+            if document_path.startswith('http'):
+                result = await self._ingest_web_content(kb_name, document_path)
+                operation_type = "Web content"
+            else:
+                result = await self._ingest_document(kb_name, document_path)
+                operation_type = "Document"
+
+            if result['success']:
+                return f"✅ **{operation_type} Ingestion Completed**\n\n" \
+                       f"📄 **Source:** {document_path}\n" \
+                       f"🗃️ **Knowledge Base:** {kb_name}\n" \
+                       f"⏱️ **Status:** Successfully processed and indexed\n\n" \
+                       f"You can now query this knowledge base! 🎉"
+            else:
+                return f"❌ **Ingestion failed:** {result['error']}"
+
+        except Exception as e:
+            return f"❌ **Error during ingestion:** {str(e)}"
+
+    async def _handle_text_ingestion(self, kb_name: str, user_message: str, operation_details: Dict[str, Any]) -> str:
+        """Handle text ingestion with LLM analysis"""
+
+        if not kb_name:
+            return "I can ingest text into knowledge bases. Please specify which knowledge base to use."
+
+        # Extract text content from message (after removing command parts)
+        text_content = self._extract_text_for_ingestion(user_message)
+
+        if not text_content:
+            return f"I'll add text to the **{kb_name}** knowledge base. What text would you like me to ingest?"
+
+        try:
+            result = await self._ingest_text(kb_name, text_content)
+
+            if result['success']:
+                preview = text_content[:100] + "..." if len(text_content) > 100 else text_content
+                return f"✅ **Text Ingestion Completed**\n\n" \
+                       f"📝 **Text Preview:** {preview}\n" \
+                       f"🗃️ **Knowledge Base:** {kb_name}\n" \
+                       f"📊 **Length:** {len(text_content)} characters\n\n" \
+                       f"Text successfully indexed! 🎉"
+            else:
+                return f"❌ **Text ingestion failed:** {result['error']}"
+
+        except Exception as e:
+            return f"❌ **Error during text ingestion:** {str(e)}"
+
+    async def _handle_kb_query(self, kb_name: str, query_content: str, operation_details: Dict[str, Any]) -> str:
+        """Handle KB queries with LLM analysis"""
+
+        # Resolve missing parameters
+        if not kb_name:
+            available_kbs = self.conversation_state.knowledge_bases
+            if available_kbs:
+                return f"I can query knowledge bases! Which one?\n\n" \
+                       f"**Available KBs from our conversation:**\n" + \
+                    "\n".join([f"• {kb}" for kb in available_kbs]) + \
+                    f"\n\nExample: 'Query {available_kbs[0]}: {query_content or 'your question'}'"
+            else:
+                return "I can query knowledge bases, but I need to know which one to search.\n\n" \
+                       "Please specify: `Query [kb_name]: [your question]`"
+
+        if not query_content:
+            return f"I'll search the **{kb_name}** knowledge base. What would you like me to find?"
+
+        try:
+            query_type = operation_details.get("query_type", "free-text")
+            result = await self._query_knowledge_base(kb_name, query_content, question_type=query_type)
+
+            if result['success']:
+                answer = result['answer']
+                source_count = len(result.get('source_details', []))
+
+                return f"🔍 **Query Results from {kb_name}**\n\n" \
+                       f"**Question:** {query_content}\n\n" \
+                       f"**Answer:**\n{answer}\n\n" \
+                       f"📊 **Sources:** {source_count} relevant documents found"
+            else:
+                return f"❌ **Query failed:** {result['error']}"
+
+        except Exception as e:
+            return f"❌ **Error during query:** {str(e)}"
+
+    async def _handle_kb_creation(self, kb_name: str, user_message: str) -> str:
+        """Handle KB creation requests"""
+
+        if not kb_name:
+            return "I can create knowledge bases! What would you like to name the new knowledge base?\n\n" \
+                   "Example: 'Create a knowledge base called research_papers'"
+
+        # KB creation is implicit when first document is ingested
+        return f"Great! I'll create the **{kb_name}** knowledge base when you add the first document.\n\n" \
+               f"To get started:\n" \
+               f"• `Ingest document.pdf into {kb_name}`\n" \
+               f"• `Add text to {kb_name}: [your text content]`\n" \
+               f"• `Ingest https://example.com into {kb_name}`"
+
+    async def _handle_kb_management(self, kb_name: str, user_message: str) -> str:
+        """Handle KB management requests"""
+
+        available_kbs = self.conversation_state.knowledge_bases
+
+        if not available_kbs:
+            return "No knowledge bases found in our conversation. Create one by ingesting your first document!"
+
+        response = f"📚 **Knowledge Base Management**\n\n"
+        response += f"**Available Knowledge Bases:**\n"
+        for kb in available_kbs:
+            response += f"• {kb}\n"
+
+        response += f"\n**Management Options:**\n"
+        response += f"• Query: `Query {available_kbs[0]}: your question`\n"
+        response += f"• Add docs: `Ingest file.pdf into {available_kbs[0]}`\n"
+        response += f"• Add text: `Add text to {available_kbs[0]}: content`\n"
+
+        return response
+
+    async def _handle_kb_help_request(self, user_message: str) -> str:
+        """Handle KB help requests with conversation context"""
+
+        state = self.get_conversation_state()
+
+        response = ("I'm your Knowledge Base Agent! I can help you with:\n\n"
+                    "📄 **Document Management**\n"
+                    "- Ingest PDFs, DOCX, TXT, MD files\n"
+                    "- Process web content from URLs\n"
+                    "- Add text content directly\n\n"
+                    "🔍 **Intelligent Search**\n"
+                    "- Natural language queries\n"
+                    "- Semantic similarity search\n"
+                    "- Source attribution\n\n"
+                    "🧠 **Smart Context Features**\n"
+                    "- Remembers knowledge bases from conversation\n"
+                    "- Understands 'that KB' and 'this document'\n"
+                    "- Maintains working context\n\n")
+
+        # Add current context information
+        if state.knowledge_bases:
+            response += f"🗃️ **Your Knowledge Bases:**\n"
+            for kb in state.knowledge_bases[-3:]:  # Show last 3
+                response += f"   • {kb}\n"
+
+        if state.working_files:
+            response += f"\n📁 **Recent Documents:** {len(state.working_files)} files\n"
+
+        response += "\n💡 **Examples:**\n"
+        response += "• 'Ingest research.pdf into ai_papers'\n"
+        response += "• 'Query ai_papers: What are the main findings?'\n"
+        response += "• 'Add this text to the knowledge base: [content]'\n"
+        response += "\nI understand context from our conversation! 🚀"
+
+        return response
+
+    def _extract_query_from_kb_message(self, message: str) -> str:
+        """Extract query content from KB message"""
+        # Look for colon pattern first
+        import re
+        colon_match = re.search(r':\s*(.+)', message)
+        if colon_match:
+            return colon_match.group(1).strip()
+
+        # Remove KB operation keywords
+        query_keywords = ['query', 'search', 'find', 'ask', 'what', 'how', 'where', 'when', 'why']
+        words = message.split()
+        filtered_words = []
+
+        for word in words:
+            if word.lower() not in query_keywords and not word.lower().endswith('_kb'):
+                filtered_words.append(word)
+
+        return ' '.join(filtered_words).strip()
+
+    def _extract_text_for_ingestion(self, message: str) -> str:
+        """Extract text content for ingestion from message"""
+        # Look for colon pattern
+        import re
+        colon_match = re.search(r':\s*(.+)', message)
+        if colon_match:
+            return colon_match.group(1).strip()
+
+        # Remove ingestion keywords
+        ingest_keywords = ['ingest', 'add', 'upload', 'text', 'into', 'to']
+        words = message.split()
+        filtered_words = []
+        skip_next = False
+
+        for word in words:
+            if skip_next:
+                skip_next = False
+                continue
+
+            if word.lower() in ingest_keywords:
+                continue
+            elif word.lower().endswith('_kb') or word.lower().endswith('_base'):
+                continue
+            else:
+                filtered_words.append(word)
+
+        return ' '.join(filtered_words).strip()
+
+    def _extract_kb_intent_from_llm_response(self, llm_response: str, user_message: str) -> Dict[str, Any]:
+        """Extract KB intent from non-JSON LLM response"""
+        content_lower = llm_response.lower()
+
+        if 'ingest' in content_lower or 'upload' in content_lower:
+            intent = 'ingest_document'
+        elif 'query' in content_lower or 'search' in content_lower:
+            intent = 'query_kb'
+        elif 'create' in content_lower:
+            intent = 'create_kb'
+        else:
+            intent = 'help_request'
+
+        return {
+            "primary_intent": intent,
+            "kb_name": None,
+            "document_references": [],
+            "query_content": None,
+            "uses_context_reference": False,
+            "context_type": "none",
+            "operation_details": {"query_type": "free-text"},
+            "confidence": 0.6
+        }
+
+    # Tool implementations
     def _add_knowledge_base_tools(self):
         """Add all knowledge base related tools"""
 
@@ -385,14 +829,11 @@ class KnowledgeBaseAgent(BaseAgent):
             return {
                 "success": True,
                 "answer": answer,
-                # "source_details": ans_dict_list,
-                # "kb_name": kb_name,
-                # "query": query,
-                # "question_type": question_type
             }
 
         except Exception as e:
             return {"success": False, "error": str(e)}
+
     async def _query_knowledge_base(self, kb_name: str, query: str, question_type: str = "free-text",
                                     option_list: List[str] = None, additional_prompt: str = None) -> Dict[str, Any]:
         """Query the knowledge base"""
@@ -492,104 +933,3 @@ class KnowledgeBaseAgent(BaseAgent):
 
         except Exception as e:
             return {"success": False, "error": str(e)}
-
-    async def process_message(self, message: AgentMessage, context: ExecutionContext) -> AgentMessage:
-        """Process incoming message and route to appropriate knowledge base operations"""
-        self.memory.store_message(message)
-
-        try:
-            content = message.content.lower()
-            user_message = message.content
-
-            # Determine the appropriate action based on message content
-            if any(keyword in content for keyword in ['ingest', 'upload', 'add document', 'add file']):
-                response_content = await self._handle_ingestion_request(user_message, context)
-            elif any(keyword in content for keyword in ['query', 'search', 'find', 'what', 'how', 'where', 'when']):
-                response_content = await self._handle_query_request(user_message, context)
-            else:
-                response_content = await self._handle_general_request(user_message, context)
-
-            response = self.create_response(
-                content=response_content,
-                recipient_id=message.sender_id,
-                session_id=message.session_id,
-                conversation_id=message.conversation_id
-            )
-
-            self.memory.store_message(response)
-            return response
-
-        except Exception as e:
-            error_response = self.create_response(
-                content=f"Knowledge Base Agent error: {str(e)}",
-                recipient_id=message.sender_id,
-                message_type=MessageType.ERROR,
-                session_id=message.session_id,
-                conversation_id=message.conversation_id
-            )
-            return error_response
-
-    async def _handle_ingestion_request(self, user_message: str, context: ExecutionContext) -> str:
-        """Handle document ingestion requests"""
-        return ("I can help you ingest documents into your knowledge base. Please provide:\n\n"
-                "1. Knowledge base name\n"
-                "2. Document path or URL\n"
-                "3. Any custom metadata (optional)\n\n"
-                "I support PDF, DOCX, TXT files and web URLs. Would you like to proceed?")
-
-    async def _handle_query_request(self, user_message: str, context: ExecutionContext) -> str:
-        """Handle knowledge base query requests"""
-        if self.llm_service:
-            prompt = f"""
-            The user wants to query a knowledge base. Based on their message, help determine:
-            1. What knowledge base they want to query (if mentioned)
-            2. What their actual question is
-
-            User message: {user_message}
-
-            Please provide a helpful response about how to query the knowledge base.
-            """
-
-            response = await self.llm_service.generate_response(prompt, context.metadata)
-            return response
-        else:
-            return ("I can help you query knowledge bases. Please specify:\n\n"
-                    "1. Knowledge base name\n"
-                    "2. Your question\n"
-                    "3. Question type (free-text, multiple choice, yes/no)\n\n"
-                    "Example: 'Query the company_docs knowledge base: What is our return policy?'")
-
-    async def _handle_general_request(self, user_message: str, context: ExecutionContext) -> str:
-        """Handle general knowledge base requests"""
-        if self.llm_service:
-            prompt = f"""
-            You are a Knowledge Base Agent that helps with document management and retrieval.
-
-            Your capabilities include:
-            - Ingesting documents (PDF, DOCX, TXT, web URLs)
-            - Querying knowledge bases with intelligent retrieval
-            - Managing document lifecycle (add, update, delete)
-            - Processing various file types
-            - Making API calls and database queries
-
-            User message: {user_message}
-
-            Provide a helpful response about how you can assist with their knowledge base needs.
-            """
-
-            response = await self.llm_service.generate_response(prompt, context.metadata)
-            return response
-        else:
-            return ("I'm your Knowledge Base Agent! I can help you with:\n\n"
-                    "📄 **Document Management**\n"
-                    "- Ingest PDFs, DOCX, TXT files\n"
-                    "- Process web content from URLs\n"
-                    "- Delete documents and manage collections\n\n"
-                    "🔍 **Intelligent Search**\n"
-                    "- Query knowledge bases with natural language\n"
-                    "- Support for different question types\n"
-                    "- Source attribution and relevance scoring\n\n"
-                    "🔧 **Integration Tools**\n"
-                    "- API calls to external services\n"
-                    "- Status monitoring and analytics\n\n"
-                    "How can I help you today?")

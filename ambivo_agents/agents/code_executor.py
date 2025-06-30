@@ -77,7 +77,7 @@ class CodeExecutorAgent(BaseAgent):
         """Execute bash commands safely"""
         return self.docker_executor.execute_code(code, "bash", files)
 
-    async def process_message(self, message: AgentMessage, context: ExecutionContext) -> AgentMessage:
+    async def process_message(self, message: AgentMessage, context: ExecutionContext=None) -> AgentMessage:
         """Process code execution requests"""
         self.memory.store_message(message)
 
