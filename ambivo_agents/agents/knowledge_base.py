@@ -99,7 +99,9 @@ class QdrantServiceAdapter:
 
             # Create collection name with prefix from config
             collection_prefix = kb_config.get('default_collection_prefix', '')
-            collection_name = f"{collection_prefix}_{kb_name}"
+            collection_name = kb_name
+            if collection_prefix:
+                collection_name = f"{collection_prefix}_{kb_name}"
 
             # Create vector store and index
             from llama_index.core import VectorStoreIndex, StorageContext
@@ -127,7 +129,9 @@ class QdrantServiceAdapter:
             kb_config = get_config_section('knowledge_base', config)
 
             collection_prefix = kb_config.get('default_collection_prefix', '')
-            collection_name = f"{collection_prefix}_{kb_name}"
+            collection_name = kb_name
+            if collection_prefix:
+                collection_name = f"{collection_prefix}_{kb_name}"
 
             similarity_top_k = kb_config.get('similarity_top_k', 5)
 
