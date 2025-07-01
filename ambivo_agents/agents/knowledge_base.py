@@ -11,7 +11,7 @@ import time
 import tempfile
 import requests
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Coroutine
 from datetime import datetime
 
 from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
@@ -318,9 +318,14 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             # Route request based on LLM analysis
             response_content = await self._route_kb_with_llm_analysis(intent_analysis, user_message, context)
+            if isinstance(response_content, tuple):
+                response_content, sources_dict = response_content
+            else:
+                sources_dict = {}
 
             response = self.create_response(
                 content=response_content,
+                metadata={"sources_dict": sources_dict},
                 recipient_id=message.sender_id,
                 session_id=message.session_id,
                 conversation_id=message.conversation_id
@@ -369,7 +374,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             return "No previous KB context"
 
     async def _route_kb_with_llm_analysis(self, intent_analysis: Dict[str, Any], user_message: str,
-                                          context: ExecutionContext) -> str:
+                                          context: ExecutionContext) ->  str | tuple[Any, dict]:
         """Route KB request based on LLM intent analysis"""
 
         primary_intent = intent_analysis.get("primary_intent", "help_request")
@@ -476,7 +481,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except Exception as e:
             return f"❌ **Error during text ingestion:** {str(e)}"
 
-    async def _handle_kb_query(self, kb_name: str, query_content: str, operation_details: Dict[str, Any]) -> str:
+    async def _handle_kb_query(self, kb_name: str, query_content: str, operation_details: Dict[str, Any]) -> str | \
+                                                                                                             tuple[
+                                                                                                                 Any, dict]:
         """Handle KB queries with LLM analysis"""
 
         # Resolve missing parameters
@@ -497,15 +504,17 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         try:
             query_type = operation_details.get("query_type", "free-text")
             result = await self._query_knowledge_base(kb_name, query_content, question_type=query_type)
-
+            sources_dict = {}
             if result['success']:
                 answer = result['answer']
                 source_count = len(result.get('source_details', []))
+                sources_dict:dict = result.get('source_details', {})
 
-                return f"🔍 **Query Results from {kb_name}**\n\n" \
-                       f"**Question:** {query_content}\n\n" \
-                       f"**Answer:**\n{answer}\n\n" \
-                       f"📊 **Sources:** {source_count} relevant documents found"
+                # return f"🔍 **Query Results from {kb_name}**\n\n" \
+                #        f"**Question:** {query_content}\n\n" \
+                #        f"**Answer:**\n{answer}\n\n" \
+                #        f"📊 **Sources:** {source_count} relevant documents found"
+                return answer, sources_dict
             else:
                 return f"❌ **Query failed:** {result['error']}"
 
