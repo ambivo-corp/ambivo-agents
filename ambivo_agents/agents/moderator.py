@@ -482,10 +482,11 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
             # Add routing metadata to response
             agent_name = intent_analysis['primary_agent'].replace('_', ' ').title()
-            response_content += f"\n\n*Processed by: {agent_name} (confidence: {intent_analysis['confidence']:.2f})*"
+            processed_by = f"\n\n*Processed by: {agent_name} (confidence: {intent_analysis['confidence']:.2f})*"
 
             response = self.create_response(
                 content=response_content,
+                metadata = {"processed_by": processed_by},
                 recipient_id=message.sender_id,
                 session_id=message.session_id,
                 conversation_id=message.conversation_id

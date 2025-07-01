@@ -419,7 +419,7 @@ Deployment Recommendations:
             print(f"  Documents Directory: {self.docs_dir}")
             print(f"  Chunk Size: {self.kb_config.get('chunk_size', 1024)}")
             print(f"  Similarity Top K: {self.kb_config.get('similarity_top_k', 5)}")
-            print(f"  Collection Prefix: {self.kb_config.get('default_collection_prefix', 'kb')}")
+            print(f"  Collection Prefix: {self.kb_config.get('default_collection_prefix', '')}")
 
             # 4. Create sample documents in configured directory
             print("\n--- Creating Sample Documents ---")

@@ -88,6 +88,7 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}KB_CHUNK_SIZE": ("knowledge_base", "chunk_size"),  # Alternative
     f"{ENV_PREFIX}KNOWLEDGE_BASE_SIMILARITY_TOP_K": ("knowledge_base", "similarity_top_k"),
     f"{ENV_PREFIX}KB_SIMILARITY_TOP_K": ("knowledge_base", "similarity_top_k"),  # Alternative
+    f"{ENV_PREFIX}DEFAULT_COLLECTION_PREFIX": ("knowledge_base", "default_collection_prefix"),
 
     # Web Scraping Configuration
     f"{ENV_PREFIX}WEB_SCRAPING_PROXY_CONFIG_HTTP_PROXY": ("web_scraping", "proxy_config", "http_proxy"),
@@ -453,7 +454,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         kb.setdefault('similarity_top_k', 5)
         kb.setdefault('vector_size', 1536)
         kb.setdefault('distance_metric', 'cosine')
-        kb.setdefault('default_collection_prefix', 'kb')
+        kb.setdefault('default_collection_prefix', '')
         kb.setdefault('max_file_size_mb', 50)
 
     # Set web scraping defaults

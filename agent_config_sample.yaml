@@ -84,7 +84,7 @@ knowledge_base:
     - ".json"
 
   # Collection Settings
-  default_collection_prefix: "kb"
+  default_collection_prefix: ""
   vector_size: 1536  # OpenAI embeddings dimension
   distance_metric: "cosine"
 

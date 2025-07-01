@@ -98,7 +98,7 @@ class QdrantServiceAdapter:
                     doc.metadata.update(custom_meta)
 
             # Create collection name with prefix from config
-            collection_prefix = kb_config.get('default_collection_prefix', 'kb')
+            collection_prefix = kb_config.get('default_collection_prefix', '')
             collection_name = f"{collection_prefix}_{kb_name}"
 
             # Create vector store and index
@@ -126,7 +126,7 @@ class QdrantServiceAdapter:
             config = load_config()
             kb_config = get_config_section('knowledge_base', config)
 
-            collection_prefix = kb_config.get('default_collection_prefix', 'kb')
+            collection_prefix = kb_config.get('default_collection_prefix', '')
             collection_name = f"{collection_prefix}_{kb_name}"
 
             similarity_top_k = kb_config.get('similarity_top_k', 5)
