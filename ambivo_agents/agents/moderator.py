@@ -219,24 +219,22 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     def _setup_routing_patterns(self):
         """Setup intelligent routing patterns for different query types"""
         self.agent_routing_patterns = {
-            'knowledge_base': {
-                'keywords': ['search knowledge', 'query kb', 'knowledge base', 'find in documents',
-                             'search documents', 'what do you know about', 'from my files'],
-                'patterns': [r'search\s+(?:in\s+)?(?:kb|knowledge|documents?)',
-                             r'query\s+(?:the\s+)?(?:kb|knowledge|database)',
-                             r'find\s+(?:in\s+)?(?:my\s+)?(?:files|documents?)'],
-                'indicators': ['kb_name', 'collection_table', 'document', 'file'],
+            'code_executor': {
+                'keywords': ['run code', 'execute python', 'run script', 'code execution',
+                             'write code', 'create code', 'python code', 'bash script',
+                             'write a script', 'code to', 'program to',
+                             # ADDED: Context reference keywords
+                             'show code', 'that code', 'the code', 'previous code',
+                             'code again', 'show me that', 'display code', 'see code'],
+                'patterns': [r'(?:run|execute|write|create|show)\s+(?:code|script|python|program)',
+                             r'code\s+to\s+\w+', r'write.*(?:function|script|program)',
+                             r'```(?:python|bash)', r'can\s+you\s+(?:write|create).*code',
+                             # ADDED: Context reference patterns
+                             r'(?:show|display|see)\s+(?:me\s+)?(?:that\s+|the\s+)?code',
+                             r'code\s+again', r'(?:previous|last|that)\s+code',
+                             r'show\s+me\s+that'],
+                'indicators': ['```', 'def ', 'import ', 'python', 'bash', 'function', 'script', 'code'],
                 'priority': 1
-            },
-
-            'web_search': {
-                'keywords': ['search web', 'google', 'find online', 'search for', 'look up',
-                             'search internet', 'web search', 'find information'],
-                'patterns': [r'search\s+(?:the\s+)?(?:web|internet|online)',
-                             r'(?:google|look\s+up|find)\s+(?:information\s+)?(?:about|on)',
-                             r'what\'s\s+happening\s+with', r'latest\s+news'],
-                'indicators': ['search', 'web', 'online', 'internet', 'news'],
-                'priority': 2
             },
 
             'youtube_download': {
@@ -256,28 +254,39 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 'priority': 1
             },
 
+            'knowledge_base': {
+                'keywords': ['search knowledge', 'query kb', 'knowledge base', 'find in documents',
+                             'search documents', 'ingest document', 'add to kb'],
+                'patterns': [r'(?:search|query|ingest|add)\s+(?:in\s+)?(?:kb|knowledge|documents?)',
+                             r'find\s+(?:in\s+)?(?:my\s+)?(?:files|documents?)'],
+                'indicators': ['kb_name', 'collection_table', 'document', 'file', 'ingest', 'query'],
+                'priority': 2
+            },
+
+            'web_search': {
+                'keywords': ['search web', 'google', 'find online', 'search for', 'look up',
+                             'search internet', 'web search', 'find information'],
+                'patterns': [r'search\s+(?:the\s+)?(?:web|internet|online)',
+                             r'(?:google|look\s+up|find)\s+(?:information\s+)?(?:about|on)',
+                             r'what\'s\s+happening\s+with', r'latest\s+news'],
+                'indicators': ['search', 'web', 'online', 'internet', 'news'],
+                'priority': 2
+            },
+
             'web_scraper': {
                 'keywords': ['scrape website', 'extract from site', 'crawl web', 'scrape data'],
                 'patterns': [r'scrape\s+(?:website|site|web)', r'extract\s+(?:data\s+)?from\s+(?:website|site)',
                              r'crawl\s+(?:website|web)'],
                 'indicators': ['scrape', 'crawl', 'extract data', 'website'],
-                'priority': 1
-            },
-
-            'code_executor': {
-                'keywords': ['run code', 'execute python', 'run script', 'code execution'],
-                'patterns': [r'run\s+(?:this\s+)?(?:code|script|python)', r'execute\s+(?:code|script)',
-                             r'```(?:python|bash)'],
-                'indicators': ['```', 'def ', 'import ', 'python', 'bash'],
-                'priority': 1
+                'priority': 2
             },
 
             'assistant': {
-                'keywords': ['help', 'explain', 'how to', 'what is', 'tell me'],
+                'keywords': ['help', 'explain', 'how to', 'what is', 'tell me', 'can you', 'please'],
                 'patterns': [r'(?:help|explain|tell)\s+me', r'what\s+is', r'how\s+(?:do\s+)?(?:I|to)',
-                             r'can\s+you\s+(?:help|explain)'],
-                'indicators': ['help', 'explain', 'question', 'general'],
-                'priority': 3  # Lowest priority - fallback
+                             r'can\s+you\s+(?:help|explain|tell|show)', r'please\s+(?:help|explain)'],
+                'indicators': ['help', 'explain', 'question', 'general', 'can you', 'please'],
+                'priority': 3  # Lower priority but should catch general requests
             }
         }
 
@@ -301,18 +310,18 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             # Keyword matching
             keyword_matches = sum(1 for keyword in patterns['keywords']
                                   if keyword in message_lower)
-            score += keyword_matches * 2
+            score += keyword_matches * 3  # Increased weight for keywords
 
             # Pattern matching
             import re
             pattern_matches = sum(1 for pattern in patterns['patterns']
                                   if re.search(pattern, message_lower))
-            score += pattern_matches * 3
+            score += pattern_matches * 5  # Increased weight for patterns
 
             # Indicator matching
             indicator_matches = sum(1 for indicator in patterns['indicators']
                                     if indicator in message_lower)
-            score += indicator_matches * 1
+            score += indicator_matches * 2
 
             # Context matching from conversation history
             if conversation_context and agent_type in conversation_context.lower():
@@ -325,16 +334,23 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             agent_scores[agent_type] = score
 
         # Determine primary agent (highest score)
-        if agent_scores:
+        if agent_scores and max(agent_scores.values()) > 0:
             primary_agent = max(agent_scores.items(), key=lambda x: x[1])[0]
             confidence = agent_scores[primary_agent] / sum(agent_scores.values()) if sum(
                 agent_scores.values()) > 0 else 0
         else:
-            primary_agent = 'assistant'  # fallback
-            confidence = 0.5
+            # If no good matches, default to assistant for general conversation
+            primary_agent = 'assistant'
+            confidence = 0.8
+            agent_scores['assistant'] = confidence
+
+        # Ensure minimum confidence for assistant fallback
+        if confidence < 0.3 and primary_agent != 'assistant':
+            primary_agent = 'assistant'
+            confidence = 0.8
 
         # Determine if multiple agents needed
-        high_scoring_agents = [agent for agent, score in agent_scores.items() if score > 3]
+        high_scoring_agents = [agent for agent, score in agent_scores.items() if score > 5]
         requires_multiple = len(high_scoring_agents) > 1
 
         return {

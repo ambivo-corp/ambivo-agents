@@ -94,7 +94,7 @@ class ModeratorCLI:
 
         try:
             self.config = load_config(self.config_path)
-            print(f"✅ Configuration loaded from {self.config_path}")
+            #print(f"✅ Configuration loaded from {self.config_path}")
         except ConfigurationError as e:
             print(f"❌ Configuration error: {e}")
             sys.exit(1)
@@ -213,7 +213,7 @@ class ModeratorCLI:
         print("=" * 70)
         print("🤖 AI Agent Orchestrator - Route queries to specialized agents")
         print("📖 Type 'help' for commands, 'quit' to exit")
-        print("🔧 Configuration loaded from:", self.config_path)
+        #print("🔧 Configuration loaded from:", self.config_path)
         print("=" * 70)
 
     def _print_help(self):
@@ -694,6 +694,9 @@ Examples:
             traceback.print_exc()
         sys.exit(1)
 
+def cli():
+    """Entry point function for console script"""
+    main()
 
 if __name__ == "__main__":
     main()

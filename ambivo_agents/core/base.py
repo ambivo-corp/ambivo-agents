@@ -387,7 +387,7 @@ class BaseAgent(ABC):
                     agent_id=agent_id,
                     redis_config=None  # Will load from config automatically
                 )
-                logging.info(f"Auto-configured memory for agent {agent_id}")
+                #logging.info(f"Auto-configured memory for agent {agent_id}")
             except Exception as e:
                 logging.error(f"Failed to auto-configure memory for {agent_id}: {e}")
                 self.memory = None
@@ -412,10 +412,10 @@ class BaseAgent(ABC):
         # Initialize executor
         self.executor = ThreadPoolExecutor(max_workers=4)
 
-        logging.info(f"🚀 BaseAgent created with auto-context:")
-        logging.info(f"   🤖 Agent: {self.agent_id}")
-        logging.info(f"   📋 Session: {self.context.session_id}")
-        logging.info(f"   👤 User: {self.context.user_id}")
+        # logging.info(f"🚀 BaseAgent created with auto-context:")
+        # logging.info(f"   🤖 Agent: {self.agent_id}")
+        # logging.info(f"   📋 Session: {self.context.session_id}")
+        # logging.info(f"   👤 User: {self.context.user_id}")
 
     def _create_agent_context(self,
                               user_id: str = None,

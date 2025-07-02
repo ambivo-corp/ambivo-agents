@@ -187,7 +187,7 @@ def load_config(config_path: str = None, use_env_vars: bool = None) -> Dict[str,
         try:
             config = _load_config_from_env()
             config_source = "environment variables"
-            logging.info("✅ Configuration loaded from environment variables")
+            #logging.info("✅ Configuration loaded from environment variables")
 
             # Validate env config
             _validate_config(config)
@@ -217,7 +217,7 @@ def load_config(config_path: str = None, use_env_vars: bool = None) -> Dict[str,
                 config = yaml_config
                 config_source = "YAML file"
 
-            logging.info(f"✅ Configuration loaded from {config_source}")
+            #logging.info(f"✅ Configuration loaded from {config_source}")
 
         except ConfigurationError as e:
             if config:
