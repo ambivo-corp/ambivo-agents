@@ -6,9 +6,10 @@ LLM service with multiple provider support and automatic rotation.
 import os
 import asyncio
 import logging
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, AsyncIterator
 
 from .base import ProviderConfig, ProviderTracker
 from ..config.loader import load_config, get_config_section
@@ -44,6 +45,34 @@ class LLMServiceInterface(ABC):
         str, List[Dict]]:
         """Query a knowledge base"""
         pass
+
+    @abstractmethod
+    async def generate_response_stream(self, prompt: str, context: Dict[str, Any] = None) -> AsyncIterator[str]:
+        """Generate a streaming response using the LLM"""
+        pass
+
+
+def _clean_chunk_content(chunk: str) -> str:
+    """Clean chunk content to remove unwanted text while preserving formatting"""
+    if not chunk or not isinstance(chunk, str):
+        return ""
+
+    # Remove common unwanted patterns
+    unwanted_patterns = [
+        r'<bound method.*?>',
+        r'AIMessageChunk\(.*?\)',
+        r'content=\'\'',
+        r'additional_kwargs=\{\}',
+        r'response_metadata=.*?',
+        r'id=\'run--.*?\''
+    ]
+
+    cleaned = chunk
+    for pattern in unwanted_patterns:
+        cleaned = re.sub(pattern, '', cleaned)
+
+    # Only strip if the entire chunk is whitespace, preserve internal formatting
+    return cleaned if cleaned.strip() else ""
 
 
 class MultiProviderLLMService(LLMServiceInterface):
@@ -316,6 +345,156 @@ class MultiProviderLLMService(LLMServiceInterface):
                 'last_error_time': config.last_error_time.isoformat() if config.last_error_time else None
             }
         return stats
+
+    async def generate_response_stream(self, prompt: str, context: Dict[str, Any] = None) -> AsyncIterator[str]:
+        """Generate a streaming response using the current LLM provider"""
+        if not self.current_llm:
+            raise RuntimeError("No LLM provider available")
+
+        async def _generate_stream():
+            try:
+                if self.current_provider == "anthropic":
+                    async for chunk in self._stream_anthropic(prompt):
+                        yield chunk
+                elif self.current_provider == "openai":
+                    async for chunk in self._stream_openai(prompt):
+                        yield chunk
+                elif self.current_provider == "bedrock":
+                    async for chunk in self._stream_bedrock(prompt):
+                        yield chunk
+                else:
+                    # Fallback to non-streaming
+                    response = await self.generate_response(prompt, context)
+                    yield response
+
+            except Exception as e:
+                logging.error(f"LLM streaming error: {e}")
+                raise e
+
+        try:
+            async for chunk in self._execute_with_retry_stream(_generate_stream):
+                self.provider_tracker.record_request(self.current_provider)
+                yield chunk
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate streaming response: {str(e)}")
+
+    async def _stream_anthropic(self, prompt: str) -> AsyncIterator[str]:
+        """Stream from Anthropic Claude"""
+        try:
+            # Use Anthropic's streaming API
+            async for chunk in self.current_llm.astream(prompt):
+                if hasattr(chunk, 'content') and chunk.content:
+                    yield chunk.content
+                elif hasattr(chunk, 'text') and chunk.text:
+                    yield chunk.text
+                else:
+                    # For AIMessageChunk objects, extract content properly
+                    content = str(chunk)
+                    if content and content != 'None' and not content.startswith('<bound method'):
+                        yield content
+        except Exception as e:
+            # Fallback for older Anthropic client versions
+            try:
+                async for chunk in self.current_llm.astream(prompt):
+                    if hasattr(chunk, 'content') and chunk.content:
+                        yield chunk.content
+            except:
+                # Non-streaming fallback
+                response = await self.current_llm.ainvoke(prompt)
+                yield response.content if hasattr(response, 'content') else str(response)
+
+    async def _stream_openai(self, prompt: str) -> AsyncIterator[str]:
+        """Stream from OpenAI GPT"""
+        try:
+            # Use OpenAI's streaming API
+            async for chunk in self.current_llm.astream(prompt):
+                # Handle different chunk types properly
+                if hasattr(chunk, 'content'):
+                    if isinstance(chunk.content, str) and chunk.content:
+                        yield chunk.content
+                    elif hasattr(chunk.content, 'text') and chunk.content.text:
+                        yield chunk.content.text
+                elif hasattr(chunk, 'text') and chunk.text:
+                    yield chunk.text
+                else:
+                    # Extract content from AIMessageChunk properly
+                    content_str = str(chunk)
+                    if (content_str and
+                            content_str != 'None' and
+                            not content_str.startswith('<bound method') and
+                            not content_str.startswith('AIMessageChunk')):
+                        yield content_str
+        except Exception as e:
+            # Fallback for older OpenAI client versions
+            try:
+                response = await self.current_llm.ainvoke(prompt)
+                yield response.content if hasattr(response, 'content') else str(response)
+            except Exception as e2:
+                yield f"OpenAI streaming error: {str(e2)}"
+
+    async def _stream_bedrock(self, prompt: str) -> AsyncIterator[str]:
+        """Stream from AWS Bedrock"""
+        try:
+            # Bedrock streaming might not be available in all versions
+            if hasattr(self.current_llm, 'astream'):
+                async for chunk in self.current_llm.astream(prompt):
+                    if hasattr(chunk, 'content') and chunk.content:
+                        yield chunk.content
+                    elif hasattr(chunk, 'text') and chunk.text:
+                        yield chunk.text
+                    else:
+                        content = str(chunk)
+                        if content and content != 'None' and not content.startswith('<bound method'):
+                            yield content
+            else:
+                # Non-streaming fallback for Bedrock
+                response = await self.current_llm.ainvoke(prompt)
+                yield response.content if hasattr(response, 'content') else str(response)
+        except Exception as e:
+            # Bedrock fallback
+            try:
+                response = await self.generate_response(prompt)
+                yield response
+            except:
+                yield f"Bedrock streaming error: {str(e)}"
+
+    async def _execute_with_retry_stream(self, stream_func) -> AsyncIterator[str]:
+        """Execute streaming function with provider rotation on failure"""
+        max_retries = len(self.provider_tracker.providers)
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                async for chunk in stream_func():
+                    yield chunk
+                return  # Success, exit retry loop
+
+            except Exception as e:
+                error_str = str(e).lower()
+                logging.error(f"Streaming error with {self.current_provider}: {e}")
+
+                self.provider_tracker.record_error(self.current_provider, str(e))
+
+                # Check for rate limiting
+                if any(keyword in error_str for keyword in ['429', 'rate limit', 'quota', 'too many requests']):
+                    logging.warning(f"Rate limit hit for {self.current_provider}, rotating...")
+                    try:
+                        self._try_fallback_provider()
+                        retry_count += 1
+                        continue
+                    except Exception:
+                        raise e
+                else:
+                    if retry_count < max_retries - 1:
+                        try:
+                            self._try_fallback_provider()
+                            retry_count += 1
+                            continue
+                        except Exception:
+                            pass
+                    raise e
+
+        raise RuntimeError("All providers exhausted for streaming")
 
 
 def create_multi_provider_llm_service(config_data: Dict[str, Any] = None,

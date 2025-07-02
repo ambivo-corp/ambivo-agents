@@ -11,7 +11,7 @@ import uuid
 import time
 import re
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, AsyncIterator
 from datetime import datetime
 import logging
 
@@ -198,6 +198,58 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
                 conversation_id=message.conversation_id
             )
             return error_response
+
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
+        str]:
+        """Stream processing for YouTube operations"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+            self.update_conversation_state(user_message)
+
+            # Get conversation context
+            conversation_context = self._get_youtube_conversation_context_summary()
+
+            # Use LLM to analyze intent
+            yield "🎬 Analyzing YouTube request...\n\n"
+            intent_analysis = await self._llm_analyze_youtube_intent(user_message, conversation_context)
+
+            # Route and stream response based on intent
+            primary_intent = intent_analysis.get("primary_intent", "help_request")
+
+            if primary_intent == "download_audio":
+                yield "🎵 **Preparing Audio Download**\n\n"
+                response_content = await self._handle_audio_download(
+                    intent_analysis.get("youtube_urls", []),
+                    intent_analysis.get("output_preferences", {}),
+                    user_message
+                )
+                yield response_content
+
+            elif primary_intent == "download_video":
+                yield "🎬 **Preparing Video Download**\n\n"
+                response_content = await self._handle_video_download(
+                    intent_analysis.get("youtube_urls", []),
+                    intent_analysis.get("output_preferences", {}),
+                    user_message
+                )
+                yield response_content
+
+            else:
+                # For other intents, stream LLM response if available
+                if self.llm_service:
+                    async for chunk in self.llm_service.generate_response_stream(
+                            f"As a YouTube download assistant, help with: {user_message}"
+                    ):
+                        yield chunk
+                else:
+                    response_content = await self._route_youtube_with_llm_analysis(intent_analysis, user_message,
+                                                                                   context)
+                    yield response_content
+
+        except Exception as e:
+            yield f"YouTube agent error: {str(e)}"
 
     def _get_youtube_conversation_context_summary(self) -> str:
         """Get YouTube conversation context summary"""

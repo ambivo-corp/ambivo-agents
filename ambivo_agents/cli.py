@@ -554,7 +554,7 @@ class ModeratorCLI:
         test_queries = [
             "Hello, I need help with something",
             "Search for latest AI trends in 2025",
-            "Download https://youtube.com/watch?v=dQw4w9WgXcQ",
+            "Download https://youtube.com/watch?v=C0DPdy98e4c",
             "Extract audio from video.mp4 as MP3",
             "What is machine learning and how does it work?",
             "Scrape https://example.com for content"

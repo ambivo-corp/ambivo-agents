@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Any, Optional, Callable, Tuple, Union
+from typing import Dict, List, Any, Optional, Callable, Tuple, Union, AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 import logging
 
@@ -630,7 +630,70 @@ class BaseAgent(ABC):
             logging.error(f"Agent {self.agent_id} sync chat error: {e}")
             return error_msg
 
-    # 🔧 CONTEXT MANAGEMENT METHODS
+    async def chat_stream(self, message: str, **kwargs) -> AsyncIterator[str]:
+        """
+        🌟 NEW: Streaming chat interface that yields response chunks
+
+        Args:
+            message: User message as string
+            **kwargs: Optional metadata to add to the message
+
+        Yields:
+            Response chunks as strings
+
+        Usage:
+            agent, context = YouTubeDownloadAgent.create(user_id="john")
+            async for chunk in agent.chat_stream("Download https://youtube.com/watch?v=abc123"):
+                print(chunk, end='', flush=True)
+        """
+        try:
+            # Create AgentMessage from string using auto-context
+            user_message = AgentMessage(
+                id=str(uuid.uuid4()),
+                sender_id=self.context.user_id,
+                recipient_id=self.agent_id,
+                content=message,
+                message_type=MessageType.USER_INPUT,
+                session_id=self.context.session_id,
+                conversation_id=self.context.conversation_id,
+                metadata={
+                    'chat_interface': True,
+                    'streaming_call': True,
+                    **kwargs
+                }
+            )
+
+            # Get execution context from auto-context
+            execution_context = self.context.to_execution_context()
+            execution_context.metadata.update(kwargs)
+
+            # Stream the response
+            async for chunk in self.process_message_stream(user_message, execution_context):
+                yield chunk
+
+        except Exception as e:
+            error_msg = f"Streaming chat error: {str(e)}"
+            logging.error(f"Agent {self.agent_id} streaming chat error: {e}")
+            yield error_msg
+
+    @abstractmethod
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
+        str]:
+        """
+        🌟 NEW: Stream processing method - must be implemented by subclasses
+
+        Args:
+            message: The user message to process
+            context: Execution context (uses auto-context if None)
+
+        Yields:
+            Response chunks as strings
+        """
+        if context is None:
+            context = self.get_execution_context()
+
+        # Subclasses must implement this
+        raise NotImplementedError("Subclasses must implement process_message_stream")
 
     def get_context(self) -> AgentContext:
         """Get the agent's auto-generated context"""

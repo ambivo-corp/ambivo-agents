@@ -5,7 +5,7 @@ Code Executor Agent for running code in secure Docker containers.
 
 import logging
 import uuid
-from typing import Dict, Any
+from typing import Dict, Any, AsyncIterator
 
 from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool, DockerCodeExecutor
 from ..config.loader import load_config, get_config_section
@@ -131,3 +131,64 @@ class CodeExecutorAgent(BaseAgent):
                 conversation_id=message.conversation_id
             )
             return error_response
+
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
+        str]:
+        """Stream processing for CodeExecutorAgent"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+
+            yield "💻 **Code Executor Agent**\n\n"
+
+            if "```python" in user_message:
+                yield "🐍 **Python Code Detected**\n\n"
+
+                code_start = user_message.find("```python") + 9
+                code_end = user_message.find("```", code_start)
+                code = user_message[code_start:code_end].strip()
+
+                yield f"📝 **Code to execute:**\n```python\n{code[:200]}{'...' if len(code) > 200 else ''}\n```\n\n"
+                yield "⏳ **Executing in secure Docker container...**\n\n"
+
+                result = await self._execute_python_code(code)
+
+                if result['success']:
+                    yield f"✅ **Execution completed successfully!**\n\n"
+                    yield f"📤 **Output:**\n```\n{result['output']}\n```\n\n"
+                    yield f"⏱️ **Execution time:** {result['execution_time']:.2f}s\n"
+                else:
+                    yield f"❌ **Execution failed:**\n```\n{result['error']}\n```\n"
+
+            elif "```bash" in user_message:
+                yield "🐚 **Bash Commands Detected**\n\n"
+
+                code_start = user_message.find("```bash") + 7
+                code_end = user_message.find("```", code_start)
+                code = user_message[code_start:code_end].strip()
+
+                yield f"📝 **Commands to execute:**\n```bash\n{code[:200]}{'...' if len(code) > 200 else ''}\n```\n\n"
+                yield "⏳ **Executing in secure Docker container...**\n\n"
+
+                result = await self._execute_bash_code(code)
+
+                if result['success']:
+                    yield f"✅ **Execution completed successfully!**\n\n"
+                    yield f"📤 **Output:**\n```\n{result['output']}\n```\n\n"
+                    yield f"⏱️ **Execution time:** {result['execution_time']:.2f}s\n"
+                else:
+                    yield f"❌ **Execution failed:**\n```\n{result['error']}\n```\n"
+
+            else:
+                yield "⚠️ **No code blocks detected**\n\n"
+                yield "Please provide code wrapped in ```python or ```bash code blocks for execution.\n\n"
+                yield "**Example:**\n"
+                yield "```python\n"
+                yield "print('Hello, world!')\n"
+                yield "x = 2 + 2\n"
+                yield "print(f'2 + 2 = {x}')\n"
+                yield "```"
+
+        except Exception as e:
+            yield f"❌ **Code Executor Error:** {str(e)}"

@@ -125,7 +125,7 @@ class SimpleModeratorTest:
                 "description": "Web search query (should route to WebSearchAgent)"
             },
             {
-                "message": "Download https://youtube.com/watch?v=dQw4w9WgXcQ",
+                "message": "Download https://youtube.com/watch?v=C0DPdy98e4c",
                 "description": "YouTube download (should route to YouTubeDownloadAgent)"
             },
             {

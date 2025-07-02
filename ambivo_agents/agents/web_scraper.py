@@ -14,7 +14,7 @@ import logging
 import ssl
 import urllib3
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, AsyncIterator
 from urllib.parse import urlparse, urljoin
 from dataclasses import dataclass
 from pathlib import Path
@@ -1025,3 +1025,174 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         """Extract URLs from text"""
         url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
         return re.findall(url_pattern, text)
+
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
+        str]:
+        """Stream web scraping operations with detailed progress"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+            self.update_conversation_state(user_message)
+
+            yield "🕷️ **Web Scraper Agent**\n\n"
+            conversation_context = self._get_scraping_conversation_context_summary()
+
+            yield "🧠 Analyzing scraping request...\n"
+            intent_analysis = await self._llm_analyze_scraping_intent(user_message, conversation_context)
+
+            primary_intent = intent_analysis.get("primary_intent", "help_request")
+            urls = intent_analysis.get("urls", [])
+
+            if primary_intent == "scrape_single":
+                yield "🌐 **Single URL Scraping**\n\n"
+                async for chunk in self._stream_single_scrape(urls, intent_analysis, user_message):
+                    yield chunk
+
+            elif primary_intent == "scrape_batch":
+                yield "📦 **Batch URL Scraping**\n\n"
+                async for chunk in self._stream_batch_scrape(urls, intent_analysis, user_message):
+                    yield chunk
+
+            elif primary_intent == "check_accessibility":
+                yield "🔍 **Accessibility Check**\n\n"
+                async for chunk in self._stream_accessibility_check(urls, user_message):
+                    yield chunk
+
+            else:
+                # Stream help response
+                if self.llm_service:
+                    async for chunk in self.llm_service.generate_response_stream(
+                            f"As a web scraping assistant, help with: {user_message}"
+                    ):
+                        yield chunk
+                else:
+                    response_content = await self._route_scraping_with_llm_analysis(intent_analysis, user_message,
+                                                                                    context)
+                    yield response_content
+
+        except Exception as e:
+            yield f"❌ **Web Scraper Error:** {str(e)}"
+
+    async def _stream_single_scrape(self, urls: list, intent_analysis: dict, user_message: str) -> AsyncIterator[str]:
+        """Stream single URL scraping with detailed progress"""
+        try:
+            if not urls:
+                yield "⚠️ No URL provided. Please specify a website to scrape.\n"
+                return
+
+            url = urls[0]
+            extraction_prefs = intent_analysis.get("extraction_preferences", {})
+
+            yield f"🌐 **Target URL:** {url}\n"
+            yield f"🔧 **Method:** {self.execution_mode.upper()}\n"
+            yield f"📡 **Proxy:** {'✅ Enabled' if self.proxy_config else '❌ Disabled'}\n\n"
+
+            yield "⏳ Initializing scraper...\n"
+            await asyncio.sleep(0.2)
+
+            yield "🌐 Connecting to website...\n"
+            await asyncio.sleep(0.3)
+
+            yield "📄 Downloading content...\n"
+            await asyncio.sleep(0.5)
+
+            # Perform actual scraping
+            result = await self._scrape_url(
+                url=url,
+                extract_links=extraction_prefs.get("extract_links", True),
+                extract_images=extraction_prefs.get("extract_images", True),
+                take_screenshot=extraction_prefs.get("take_screenshot", False)
+            )
+
+            if result['success']:
+                yield "✅ **Scraping Completed Successfully!**\n\n"
+                yield f"📊 **Results Summary:**\n"
+                yield f"• **URL:** {result['url']}\n"
+                yield f"• **Title:** {result.get('title', 'No title')}\n"
+                yield f"• **Content:** {result['content_length']:,} characters\n"
+                yield f"• **Links:** {len(result.get('links', []))} found\n"
+                yield f"• **Images:** {len(result.get('images', []))} found\n"
+                yield f"• **Method:** {result.get('method', 'unknown')}\n"
+                yield f"• **Time:** {result['response_time']:.2f}s\n\n"
+
+                # Show content preview
+                content_preview = result.get('content', '')[:300]
+                if content_preview:
+                    yield f"📄 **Content Preview:**\n{content_preview}{'...' if len(result.get('content', '')) > 300 else ''}\n"
+
+            else:
+                yield f"❌ **Scraping failed:** {result['error']}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during scraping:** {str(e)}"
+
+    async def _stream_batch_scrape(self, urls: list, intent_analysis: dict, user_message: str) -> AsyncIterator[str]:
+        """Stream batch scraping with per-URL progress"""
+        try:
+            if not urls:
+                yield "⚠️ No URLs provided. Please specify websites to scrape.\n"
+                return
+
+            yield f"📦 **Batch Scraping {len(urls)} URLs**\n\n"
+
+            successful = 0
+            failed = 0
+
+            for i, url in enumerate(urls, 1):
+                yield f"🌐 **URL {i}/{len(urls)}:** {url}\n"
+
+                try:
+                    yield f"⏳ Processing...\n"
+                    result = await self._scrape_url(url, method="auto")
+
+                    if result.get('success', False):
+                        successful += 1
+                        yield f"✅ Success - {result['content_length']:,} chars, {result['response_time']:.1f}s\n\n"
+                    else:
+                        failed += 1
+                        yield f"❌ Failed - {result.get('error', 'Unknown error')}\n\n"
+
+                except Exception as e:
+                    failed += 1
+                    yield f"❌ Error - {str(e)}\n\n"
+
+                # Brief pause between URLs
+                if i < len(urls):
+                    await asyncio.sleep(0.5)
+
+            yield f"📊 **Batch Complete:** {successful} successful, {failed} failed\n"
+
+        except Exception as e:
+            yield f"❌ **Batch scraping error:** {str(e)}"
+
+    async def _stream_accessibility_check(self, urls: list, user_message: str) -> AsyncIterator[str]:
+        """Stream accessibility checking"""
+        try:
+            if not urls:
+                yield "⚠️ No URL provided. Please specify a website to check.\n"
+                return
+
+            url = urls[0]
+            yield f"🔍 **Checking Accessibility:** {url}\n\n"
+
+            yield "⏳ Testing connection...\n"
+
+            result = await self._check_accessibility(url)
+
+            if result['success']:
+                status = "✅ Accessible" if result.get('accessible', False) else "❌ Not Accessible"
+                yield f"🚦 **Status:** {status}\n"
+                yield f"📊 **HTTP Status:** {result.get('status_code', 'Unknown')}\n"
+                yield f"⏱️ **Response Time:** {result.get('response_time', 0):.2f}s\n"
+                yield f"📅 **Checked:** {result.get('timestamp', 'Unknown')}\n\n"
+
+                if result.get('accessible', False):
+                    yield "✅ The website is accessible and responding normally.\n"
+                else:
+                    yield "❌ The website is not accessible or not responding.\n"
+            else:
+                yield f"❌ **Check failed:** {result['error']}\n"
+
+        except Exception as e:
+            yield f"❌ **Accessibility check error:** {str(e)}"

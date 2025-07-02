@@ -11,7 +11,7 @@ import time
 import tempfile
 import requests
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Coroutine
+from typing import Dict, List, Any, Optional, Coroutine, AsyncIterator
 from datetime import datetime
 
 from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
@@ -946,3 +946,186 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
+        str]:
+        """Stream processing for Knowledge Base operations with progress updates"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+            self.update_conversation_state(user_message)
+
+            # Get conversation context
+            yield "📚 **Knowledge Base Assistant**\n\n"
+            conversation_context = self._get_kb_conversation_context_summary()
+
+            # Use LLM to analyze intent
+            yield "🧠 Analyzing knowledge base request...\n"
+            intent_analysis = await self._llm_analyze_kb_intent(user_message, conversation_context)
+
+            primary_intent = intent_analysis.get("primary_intent", "help_request")
+            kb_name = intent_analysis.get("kb_name")
+            documents = intent_analysis.get("document_references", [])
+
+            # Route based on intent with streaming
+            if primary_intent == "ingest_document":
+                yield f"📄 **Document Ingestion**\n\n"
+                if not kb_name:
+                    yield "🔍 Determining knowledge base...\n"
+                if not documents:
+                    yield "📁 Identifying documents...\n"
+
+                async for chunk in self._stream_document_ingestion(kb_name, documents, user_message):
+                    yield chunk
+
+            elif primary_intent == "ingest_text":
+                yield f"📝 **Text Ingestion**\n\n"
+                async for chunk in self._stream_text_ingestion(kb_name, user_message):
+                    yield chunk
+
+            elif primary_intent == "query_kb":
+                yield f"🔍 **Knowledge Base Query**\n\n"
+                async for chunk in self._stream_kb_query(kb_name, intent_analysis.get("query_content"), user_message):
+                    yield chunk
+
+            else:
+                # Stream help or other responses
+                if self.llm_service:
+                    async for chunk in self.llm_service.generate_response_stream(
+                            f"As a knowledge base assistant, help with: {user_message}"
+                    ):
+                        yield chunk
+                else:
+                    response_content = await self._route_kb_with_llm_analysis(intent_analysis, user_message, context)
+                    yield response_content
+
+        except Exception as e:
+            yield f"❌ **Knowledge Base Error:** {str(e)}"
+
+    async def _stream_document_ingestion(self, kb_name: str, documents: list, user_message: str) -> AsyncIterator[str]:
+        """Stream document ingestion with progress updates"""
+        try:
+            if not kb_name or not documents:
+                # Resolve missing parameters with streaming feedback
+                if not kb_name:
+                    yield "⚠️ No knowledge base specified. "
+                    if self.llm_service:
+                        async for chunk in self.llm_service.generate_response_stream(
+                                f"User wants to ingest documents but didn't specify KB. Help them: {user_message}"
+                        ):
+                            yield chunk
+                    return
+
+            document_path = documents[0]
+            yield f"📁 **Processing:** {document_path}\n"
+            yield f"🗃️ **Target KB:** {kb_name}\n\n"
+
+            yield "⏳ Starting ingestion process...\n"
+
+            # Simulate progress updates during ingestion
+            start_time = time.time()
+
+            # Call the actual ingestion method
+            result = await self._ingest_document(kb_name, document_path)
+
+            processing_time = time.time() - start_time
+
+            if result['success']:
+                yield f"✅ **Ingestion Completed Successfully!**\n\n"
+                yield f"📊 **Summary:**\n"
+                yield f"• Document: {document_path}\n"
+                yield f"• Knowledge Base: {kb_name}\n"
+                yield f"• Processing Time: {processing_time:.2f}s\n"
+                yield f"• Status: Ready for queries! 🎉\n"
+            else:
+                yield f"❌ **Ingestion Failed:** {result['error']}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during document ingestion:** {str(e)}"
+
+    async def _stream_text_ingestion(self, kb_name: str, user_message: str) -> AsyncIterator[str]:
+        """Stream text ingestion with progress"""
+        try:
+            if not kb_name:
+                yield "⚠️ Please specify which knowledge base to use.\n"
+                return
+
+            # Extract text content
+            text_content = self._extract_text_for_ingestion(user_message)
+
+            if not text_content:
+                yield f"📝 Ready to add text to **{kb_name}**. What text would you like me to ingest?\n"
+                return
+
+            yield f"📝 **Processing text for {kb_name}**\n"
+            yield f"📊 **Text length:** {len(text_content)} characters\n\n"
+
+            yield "⏳ Processing and indexing text...\n"
+
+            result = await self._ingest_text(kb_name, text_content)
+
+            if result['success']:
+                preview = text_content[:100] + "..." if len(text_content) > 100 else text_content
+                yield f"✅ **Text Ingestion Completed**\n\n"
+                yield f"📄 **Preview:** {preview}\n"
+                yield f"🗃️ **Knowledge Base:** {kb_name}\n"
+                yield f"📊 **Length:** {len(text_content)} characters\n"
+                yield f"🎉 **Status:** Text successfully indexed!\n"
+            else:
+                yield f"❌ **Text ingestion failed:** {result['error']}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during text ingestion:** {str(e)}"
+
+    async def _stream_kb_query(self, kb_name: str, query_content: str, user_message: str) -> AsyncIterator[str]:
+        """Stream knowledge base queries with progress and results"""
+        try:
+            if not kb_name:
+                yield "🔍 **Knowledge Base Query**\n\n"
+                available_kbs = self.conversation_state.knowledge_bases
+                if available_kbs:
+                    yield "**Available Knowledge Bases:**\n"
+                    for kb in available_kbs:
+                        yield f"• {kb}\n"
+                    yield f"\nWhich knowledge base would you like to search?\n"
+                else:
+                    yield "No knowledge bases found. Please create one first.\n"
+                return
+
+            if not query_content:
+                yield f"🔍 **Searching {kb_name}**\n\nWhat would you like me to find?\n"
+                return
+
+            yield f"🔍 **Searching Knowledge Base:** {kb_name}\n"
+            yield f"❓ **Query:** {query_content}\n\n"
+
+            yield "⏳ Performing semantic search...\n"
+
+            # Perform the actual query
+            result = await self._query_knowledge_base(kb_name, query_content)
+
+            if result['success']:
+                answer = result['answer']
+                source_count = len(result.get('source_details', []))
+
+                yield f"📋 **Search Results:**\n\n"
+
+                # Stream the answer progressively if it's long
+                if len(answer) > 200:
+                    words = answer.split()
+                    chunk_size = 20
+                    for i in range(0, len(words), chunk_size):
+                        chunk = ' '.join(words[i:i + chunk_size])
+                        yield f"{chunk} "
+                        await asyncio.sleep(0.05)  # Small delay for streaming effect
+                else:
+                    yield answer
+
+                yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
+                yield f"✅ **Query completed successfully!**\n"
+            else:
+                yield f"❌ **Query failed:** {result['error']}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during query:** {str(e)}"

@@ -13,7 +13,7 @@ import tempfile
 import shutil
 import os
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional, Union, AsyncIterator
 from datetime import datetime, timedelta
 
 from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
@@ -990,3 +990,89 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             "opus": "libopus"
         }
         return codec_map.get(format, "aac")
+
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
+        str]:
+        """Stream processing for MediaEditorAgent"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+            self.update_conversation_state(user_message)
+
+            yield "🎬 **Media Editor Agent**\n\n"
+
+            # Get conversation context
+            conversation_context = self._get_media_conversation_context_summary()
+
+            yield "🧠 Analyzing media processing request...\n"
+            intent_analysis = await self._llm_analyze_media_intent(user_message, conversation_context)
+
+            primary_intent = intent_analysis.get("primary_intent", "help_request")
+
+            if primary_intent == "extract_audio":
+                yield "🎵 **Audio Extraction**\n\n"
+                response_content = await self._handle_audio_extraction(
+                    intent_analysis.get("media_files", []),
+                    intent_analysis.get("output_preferences", {}),
+                    user_message
+                )
+                yield response_content
+
+            elif primary_intent == "convert_video":
+                yield "🎬 **Video Conversion**\n\n"
+                response_content = await self._handle_video_conversion(
+                    intent_analysis.get("media_files", []),
+                    intent_analysis.get("output_preferences", {}),
+                    user_message
+                )
+                yield response_content
+
+            elif primary_intent == "resize_video":
+                yield "📏 **Video Resize**\n\n"
+                response_content = await self._handle_video_resize(
+                    intent_analysis.get("media_files", []),
+                    intent_analysis.get("output_preferences", {}),
+                    user_message
+                )
+                yield response_content
+
+            elif primary_intent == "trim_media":
+                yield "✂️ **Media Trim**\n\n"
+                response_content = await self._handle_media_trim(
+                    intent_analysis.get("media_files", []),
+                    intent_analysis.get("output_preferences", {}),
+                    user_message
+                )
+                yield response_content
+
+            elif primary_intent == "create_thumbnail":
+                yield "🖼️ **Thumbnail Creation**\n\n"
+                response_content = await self._handle_thumbnail_creation(
+                    intent_analysis.get("media_files", []),
+                    intent_analysis.get("output_preferences", {}),
+                    user_message
+                )
+                yield response_content
+
+            elif primary_intent == "get_info":
+                yield "📊 **Media Information**\n\n"
+                response_content = await self._handle_media_info(
+                    intent_analysis.get("media_files", []),
+                    user_message
+                )
+                yield response_content
+
+            else:
+                # Help request or other
+                if self.llm_service:
+                    async for chunk in self.llm_service.generate_response_stream(
+                            f"As a media processing assistant, help with: {user_message}"
+                    ):
+                        yield chunk
+                else:
+                    response_content = await self._route_media_with_llm_analysis(intent_analysis, user_message, context)
+                    yield response_content
+
+        except Exception as e:
+            yield f"❌ **Media Editor Error:** {str(e)}"

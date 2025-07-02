@@ -53,7 +53,7 @@ async def main():
     print(f"Session: {context.session_id}")
     
     # Auto-routing examples
-    response1 = await moderator.chat("Download audio from https://youtube.com/watch?v=dQw4w9WgXcQ")
+    response1 = await moderator.chat("Download audio from https://youtube.com/watch?v=example")
     response2 = await moderator.chat("Search for latest AI trends")
     response3 = await moderator.chat("Extract audio from video.mp4 as MP3")
     response4 = await moderator.chat("What is machine learning?")
@@ -486,7 +486,7 @@ async def basic_moderator():
     
     # Auto-routing examples
     examples = [
-        "Download audio from https://youtube.com/watch?v=dQw4w9WgXcQ",
+        "Download audio from https://youtube.com/watch?v=example",
         "Search for latest artificial intelligence news",  
         "Extract audio from video.mp4 as high quality MP3",
         "What is machine learning and how does it work?",

@@ -8,7 +8,7 @@ import json
 import uuid
 import time
 import requests
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, AsyncIterator
 from datetime import datetime
 from dataclasses import dataclass
 
@@ -930,4 +930,158 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 "error": search_response.error,
                 "provider": search_response.provider
             }
+
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
+        str]:
+        """Stream web search operations with progress and incremental results"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+            self.update_conversation_state(user_message)
+
+            yield "🔍 **Web Search Agent**\n\n"
+            conversation_context = self._get_conversation_context_summary()
+
+            yield "🧠 Analyzing search request...\n"
+            intent_analysis = await self._llm_analyze_intent(user_message, conversation_context)
+
+            primary_intent = intent_analysis.get("primary_intent", "search_general")
+            search_query = intent_analysis.get("search_query", "")
+            search_type = intent_analysis.get("search_type", "web")
+
+            if primary_intent == "search_news":
+                yield "📰 **News Search**\n\n"
+                async for chunk in self._stream_news_search(search_query, intent_analysis.get("requirements", {})):
+                    yield chunk
+
+            elif primary_intent == "search_academic":
+                yield "🎓 **Academic Search**\n\n"
+                async for chunk in self._stream_academic_search(search_query, intent_analysis.get("requirements", {})):
+                    yield chunk
+
+            else:
+                yield "🌐 **Web Search**\n\n"
+                async for chunk in self._stream_general_search(search_query, intent_analysis.get("requirements", {})):
+                    yield chunk
+
+        except Exception as e:
+            yield f"❌ **Web Search Error:** {str(e)}"
+
+    async def _stream_general_search(self, query: str, requirements: dict) -> AsyncIterator[str]:
+        """Stream general web search with incremental results"""
+        try:
+            if not query:
+                yield "⚠️ Please provide a search query.\n"
+                return
+
+            yield f"🔍 **Searching for:** {query}\n\n"
+            yield "⏳ Contacting search providers...\n"
+
+            max_results = requirements.get("max_results", 5)
+
+            # Show which provider we're using
+            provider_info = self.search_service.providers.get(self.search_service.current_provider, {})
+            provider_name = provider_info.get('name', self.search_service.current_provider)
+            yield f"📡 **Using:** {provider_name}\n"
+
+            yield "🔄 Executing search...\n\n"
+
+            # Perform the search
+            result = await self._search_web(query, max_results=max_results)
+
+            if result['success']:
+                results = result.get('results', [])
+                search_time = result.get('search_time', 0)
+
+                yield f"📊 **Found {len(results)} results in {search_time:.2f}s**\n\n"
+
+                # Stream results one by one
+                for i, res in enumerate(results, 1):
+                    yield f"**{i}. {res.get('title', 'No title')}**\n"
+                    yield f"🔗 {res.get('url', 'No URL')}\n"
+
+                    snippet = res.get('snippet', 'No description')
+                    if len(snippet) > 150:
+                        snippet = snippet[:150] + "..."
+                    yield f"📝 {snippet}\n\n"
+
+                    # Small delay between results for streaming effect
+                    if i < len(results):
+                        await asyncio.sleep(0.2)
+
+                yield f"✅ **Search completed using {provider_name}**\n"
+            else:
+                yield f"❌ **Search failed:** {result.get('error', 'Unknown error')}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during search:** {str(e)}"
+
+    async def _stream_news_search(self, query: str, requirements: dict) -> AsyncIterator[str]:
+        """Stream news search with progress"""
+        try:
+            if not query:
+                yield "⚠️ Please provide a news topic to search for.\n"
+                return
+
+            yield f"📰 **Searching news for:** {query}\n\n"
+            yield "⏳ Finding latest news articles...\n"
+
+            max_results = requirements.get("max_results", 5)
+
+            result = await self._search_news(query, max_results=max_results)
+
+            if result['success']:
+                results = result.get('results', [])
+                yield f"📊 **Found {len(results)} news articles**\n\n"
+
+                # Stream news results
+                for i, res in enumerate(results, 1):
+                    yield f"📰 **{i}. {res.get('title', 'No title')}**\n"
+                    yield f"🔗 {res.get('url', 'No URL')}\n"
+                    yield f"📝 {res.get('snippet', 'No description')[:150]}...\n\n"
+
+                    if i < len(results):
+                        await asyncio.sleep(0.3)
+
+                yield f"✅ **News search completed**\n"
+            else:
+                yield f"❌ **News search failed:** {result.get('error', 'Unknown error')}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during news search:** {str(e)}"
+
+    async def _stream_academic_search(self, query: str, requirements: dict) -> AsyncIterator[str]:
+        """Stream academic search with progress"""
+        try:
+            if not query:
+                yield "⚠️ Please provide an academic topic to search for.\n"
+                return
+
+            yield f"🎓 **Searching academic content for:** {query}\n\n"
+            yield "⏳ Finding research papers and studies...\n"
+
+            max_results = requirements.get("max_results", 5)
+
+            result = await self._search_academic(query, max_results=max_results)
+
+            if result['success']:
+                results = result.get('results', [])
+                yield f"📊 **Found {len(results)} academic sources**\n\n"
+
+                # Stream academic results
+                for i, res in enumerate(results, 1):
+                    yield f"🎓 **{i}. {res.get('title', 'No title')}**\n"
+                    yield f"🔗 {res.get('url', 'No URL')}\n"
+                    yield f"📝 {res.get('snippet', 'No description')[:150]}...\n\n"
+
+                    if i < len(results):
+                        await asyncio.sleep(0.3)
+
+                yield f"✅ **Academic search completed**\n"
+            else:
+                yield f"❌ **Academic search failed:** {result.get('error', 'Unknown error')}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during academic search:** {str(e)}"
 

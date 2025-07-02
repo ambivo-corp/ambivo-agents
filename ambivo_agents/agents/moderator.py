@@ -9,7 +9,7 @@ import json
 import uuid
 import time
 import logging
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional, Union, AsyncIterator
 from datetime import datetime
 from dataclasses import dataclass
 
@@ -281,12 +281,13 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             }
         }
 
-    async def _analyze_query_intent(self, user_message: str) -> Dict[str, Any]:
+    async def _analyze_query_intent(self, user_message: str, conversation_context: str = "") -> Dict[str, Any]:
         """Analyze user query to determine which agent(s) should handle it"""
         message_lower = user_message.lower()
 
-        # Extract context from conversation history
-        conversation_context = self._get_conversation_context_summary()
+        # Extract context from conversation history if not provided
+        if not conversation_context:
+            conversation_context = self._get_conversation_context_summary()
 
         # Score each agent type
         agent_scores = {}
@@ -550,6 +551,121 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         moderator_cleanup = await super().cleanup_session()
 
         return success and moderator_cleanup
+
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[str]:
+        """Stream processing with progress updates for ModeratorAgent"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+
+            # 🔍 PHASE 1: Analysis Phase with Progress
+            yield "🔍 **Analyzing your request...**\n\n"
+
+            # Update conversation state
+            self.update_conversation_state(user_message)
+
+            # Get conversation context for LLM analysis
+            yield "🧠 Checking conversation context...\n"
+            conversation_context = self._get_conversation_context_summary()
+
+            # Use LLM to analyze intent
+            yield "🎯 Determining the best approach...\n\n"
+            intent_analysis = await self._analyze_query_intent(user_message, conversation_context)
+
+            # 📋 PHASE 2: Routing Phase with Agent Selection
+            agent_name = intent_analysis['primary_agent'].replace('_', ' ').title()
+            confidence = intent_analysis.get('confidence', 0)
+
+            yield f"📋 **Routing to {agent_name}** (confidence: {confidence:.1f})\n\n"
+
+            # Add brief delay for visual effect
+            await asyncio.sleep(0.1)
+
+            # 🚀 PHASE 3: Stream Actual Processing
+            if intent_analysis.get('requires_multiple_agents', False) and len(
+                    intent_analysis.get('high_scoring_agents', [])) > 1:
+                yield "🔄 **Coordinating multiple agents...**\n\n"
+                async for chunk in self._coordinate_multiple_agents_stream(
+                        intent_analysis['high_scoring_agents'],
+                        user_message,
+                        context
+                ):
+                    yield chunk
+            else:
+                # Single agent processing
+                async for chunk in self._route_to_agent_stream(
+                        intent_analysis['primary_agent'],
+                        user_message,
+                        context
+                ):
+                    yield chunk
+
+            # 📊 PHASE 4: Completion Summary
+            yield f"\n\n*✅ Completed by: {agent_name}*"
+
+        except Exception as e:
+            logging.error(f"ModeratorAgent streaming error: {e}")
+            yield f"\n\n❌ **Error:** {str(e)}"
+
+    async def _route_to_agent_stream(self, agent_type: str, user_message: str, context: ExecutionContext = None) -> \
+    AsyncIterator[str]:
+        """Stream routing to a specific agent"""
+        if agent_type not in self.specialized_agents:
+            yield f"❌ Agent {agent_type} not available"
+            return
+
+        try:
+            agent = self.specialized_agents[agent_type]
+
+            # Check if agent supports streaming
+            if hasattr(agent, 'process_message_stream'):
+                # Create message for the agent
+                agent_message = AgentMessage(
+                    id=str(uuid.uuid4()),
+                    sender_id=f"moderator_{self.agent_id}",
+                    recipient_id=agent.agent_id,
+                    content=user_message,
+                    message_type=MessageType.USER_INPUT,
+                    session_id=context.session_id if context else None,
+                    conversation_id=context.conversation_id if context else None
+                )
+
+                # Stream from the agent
+                async for chunk in agent.process_message_stream(agent_message, context):
+                    yield chunk
+            else:
+                # Fallback to non-streaming
+                yield f"⚠️ {agent_type} doesn't support streaming, using standard processing...\n\n"
+                response = await agent.chat(user_message)
+                yield response
+
+        except Exception as e:
+            yield f"❌ Error routing to {agent_type}: {str(e)}"
+
+    async def _coordinate_multiple_agents_stream(self, agents: List[str], user_message: str,
+                                                 context: ExecutionContext = None) -> AsyncIterator[str]:
+        """Stream coordination of multiple agents"""
+        successful_responses = 0
+
+        for i, agent_type in enumerate(agents, 1):
+            try:
+                yield f"**🤖 Agent {i}: {agent_type.replace('_', ' ').title()}**\n"
+                yield "─" * 50 + "\n"
+
+                async for chunk in self._route_to_agent_stream(agent_type, user_message, context):
+                    yield chunk
+
+                yield "\n" + "─" * 50 + "\n\n"
+                successful_responses += 1
+
+                # Brief pause between agents
+                await asyncio.sleep(0.1)
+
+            except Exception as e:
+                yield f"❌ Error with {agent_type}: {str(e)}\n\n"
+
+        yield f"{successful_responses}/{len(agents)}"
 
     @classmethod
     def create(cls,

@@ -1,7 +1,7 @@
 # AssistantAgent with BaseAgentHistoryMixin
 import json
 import uuid
-from typing import Dict, Any
+from typing import Dict, Any, AsyncIterator
 
 from ambivo_agents import BaseAgent, AgentRole, ExecutionContext, AgentMessage, MessageType
 from ambivo_agents.core.history import BaseAgentHistoryMixin
@@ -199,5 +199,39 @@ Please provide a helpful, accurate, and contextual response."""
                 conversation_id=message.conversation_id
             )
             return error_response
+
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
+        str]:
+        """Stream processing for AssistantAgent"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+            self.update_conversation_state(user_message)
+
+            conversation_context = self._get_conversation_context_summary()
+            intent_analysis = await self._analyze_intent(user_message, conversation_context)
+
+            # Route and stream response
+            if self.llm_service:
+                # Build context-aware prompt
+                if intent_analysis.get('requires_context', False):
+                    context_prompt = f"\n\nConversation context:\n{conversation_context}\n\n"
+                else:
+                    context_prompt = ""
+
+                prompt = f"""You are a helpful assistant. Respond to this user message appropriately.{context_prompt}User message: {user_message}
+
+Please provide a helpful, accurate, and contextual response."""
+
+                # Stream the LLM response
+                async for chunk in self.llm_service.generate_response_stream(prompt):
+                    yield chunk
+            else:
+                # Fallback for no LLM service
+                yield f"I understand you said: '{user_message}'. How can I help you with that?"
+
+        except Exception as e:
+            yield f"Assistant error: {str(e)}"
 
 
