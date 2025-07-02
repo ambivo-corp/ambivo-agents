@@ -412,11 +412,35 @@ class BaseAgent(ABC):
         # Initialize executor
         self.executor = ThreadPoolExecutor(max_workers=4)
 
-        # logging.info(f"🚀 BaseAgent created with auto-context:")
-        # logging.info(f"   🤖 Agent: {self.agent_id}")
-        # logging.info(f"   📋 Session: {self.context.session_id}")
-        # logging.info(f"   👤 User: {self.context.user_id}")
+    def has_mcp_capabilities(self) -> bool:
+        """Check if this agent instance has MCP capabilities"""
+        return hasattr(self, 'mcp_enabled') and getattr(self, 'mcp_enabled', False)
 
+    def get_mcp_status(self) -> dict:
+        """Get MCP status - works for both regular and MCP-enabled agents"""
+        if self.has_mcp_capabilities():
+            return {
+                'mcp_available': True,
+                'mcp_enabled': True,
+                'connected_servers': list(getattr(self, 'connected_servers', {}).keys()),
+                'has_mcp_client': hasattr(self, 'mcp_client') and getattr(self, 'mcp_client') is not None
+            }
+        else:
+            return {
+                'mcp_available': False,
+                'mcp_enabled': False,
+                'connected_servers': [],
+                'has_mcp_client': False
+            }
+
+    async def try_mcp_first(self, message: str) -> Optional[str]:
+        """Try MCP routing if available - minimal integration point"""
+        if self.has_mcp_capabilities() and hasattr(self, 'auto_route_to_mcp'):
+            try:
+                return await self.auto_route_to_mcp(message)
+            except Exception as e:
+                logging.debug(f"MCP routing failed: {e}")
+        return None
     def _create_agent_context(self,
                               user_id: str = None,
                               tenant_id: str = "default",
@@ -536,58 +560,107 @@ class BaseAgent(ABC):
             **kwargs
         )
 
-    # 🎯 NEW: SIMPLIFIED CHAT INTERFACE
+    @classmethod
+    def create_with_mcp(cls,
+                        user_id: str = None,
+                        mcp_servers: Dict[str, Dict[str, Any]] = None,
+                        auto_connect: bool = True,
+                        **kwargs) -> 'BaseAgent':
+        """
+        Factory method to create MCP-enabled version of any agent
+        This allows any agent type to have MCP capabilities without changing BaseAgent
+        """
+        try:
+            from ambivo_agents.mcp.agent_integration import MCPIntegratedAgent
+
+            # Create hybrid class dynamically
+            class MCPEnabledAgent(cls, MCPIntegratedAgent):
+                def __init__(self, *args, **kwargs):
+                    cls.__init__(self, *args, **kwargs)
+                    MCPIntegratedAgent.__init__(self, *args, **kwargs)
+
+            # Create agent instance
+            agent = MCPEnabledAgent(
+                user_id=user_id,
+                auto_configure=True,
+                **kwargs
+            )
+
+            # Store async MCP setup
+            async def setup_mcp():
+                if agent.is_mcp_enabled() and auto_connect:
+                    # Auto-connect from config
+                    config = getattr(agent, 'config', {})
+                    mcp_config = config.get('mcp', {})
+
+                    if mcp_config.get('client', {}).get('enabled', False):
+                        external_servers = mcp_config.get('external_servers', {})
+                        auto_connect_list = mcp_config.get('client', {}).get('auto_connect_servers', [])
+
+                        for server_name in auto_connect_list:
+                            if server_name in external_servers:
+                                server_config = external_servers[server_name]
+                                try:
+                                    await agent.connect_mcp_server(
+                                        server_name,
+                                        server_config['command'],
+                                        server_config.get('args', [])
+                                    )
+                                    logging.info(f"MCP auto-connected: {server_name}")
+                                except Exception as e:
+                                    logging.error(f"MCP auto-connect failed for {server_name}: {e}")
+
+                    # Connect additional servers
+                    if mcp_servers:
+                        for server_name, config in mcp_servers.items():
+                            try:
+                                await agent.connect_mcp_server(
+                                    server_name,
+                                    config['command'],
+                                    config.get('args', [])
+                                )
+                                logging.info(f"MCP connected: {server_name}")
+                            except Exception as e:
+                                logging.error(f"MCP connect failed for {server_name}: {e}")
+
+            # Store setup task for later execution
+            agent._mcp_setup_task = setup_mcp
+
+            return agent
+
+        except ImportError:
+            logging.warning("MCPIntegratedAgent not available, creating regular agent")
+            return cls.create_simple(user_id=user_id, **kwargs)
 
     async def chat(self, message: str, **kwargs) -> str:
         """
-        🌟 NEW: Simplified chat interface that converts string to full AgentMessage
-
-        This is the easiest way to interact with agents created via .create()
-        since they already have auto-context (session_id, user_id, etc.)
-
-        Args:
-            message: User message as string
-            **kwargs: Optional metadata to add to the message
-
-        Returns:
-            Agent response as string
-
-        Usage:
-            agent, context = YouTubeDownloadAgent.create(user_id="john")
-            response = await agent.chat("Download https://youtube.com/watch?v=abc123")
-            print(response)
+        Enhanced chat that can optionally use MCP if agent has capabilities
+        This maintains compatibility while keeping BaseAgent clean
         """
         try:
-            # Create AgentMessage from string using auto-context
+            # Try MCP first if available (non-breaking for regular agents)
+            mcp_result = await self.try_mcp_first(message)
+            if mcp_result:
+                return f"{mcp_result}\n\n*🔧 Processed via MCP*"
+
+            # Fall back to regular processing (your existing code)
             user_message = AgentMessage(
                 id=str(uuid.uuid4()),
-                sender_id=self.context.user_id,  # 🎯 Use auto-context user_id
+                sender_id=self.context.user_id,
                 recipient_id=self.agent_id,
                 content=message,
                 message_type=MessageType.USER_INPUT,
-                session_id=self.context.session_id,  # 🎯 Use auto-context session_id
-                conversation_id=self.context.conversation_id,  # 🎯 Use auto-context conversation_id
-                metadata={
-                    'chat_interface': True,
-                    'simplified_call': True,
-                    **kwargs  # Allow additional metadata
-                }
+                session_id=self.context.session_id,
+                conversation_id=self.context.conversation_id,
+                metadata={'chat_interface': True, 'simplified_call': True, **kwargs}
             )
 
-            # Get execution context from auto-context
             execution_context = self.context.to_execution_context()
-
-            # Add any additional metadata passed via kwargs
             execution_context.metadata.update(kwargs)
-
-            # Call the full process_message method
             agent_response = await self.process_message(user_message, execution_context)
-
-            # Return just the content string (simplified interface)
             return agent_response.content
 
         except Exception as e:
-            # Handle errors gracefully
             error_msg = f"Chat error: {str(e)}"
             logging.error(f"Agent {self.agent_id} chat error: {e}")
             return error_msg

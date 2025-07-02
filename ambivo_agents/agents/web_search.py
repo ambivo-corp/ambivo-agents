@@ -483,7 +483,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         }
 
     async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
-        """Process message with LLM-based intent detection and history context"""
+        """Process message with LLM-based intent detection - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
         try:
@@ -492,14 +492,30 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             # Update conversation state
             self.update_conversation_state(user_message)
 
-            # Get conversation context for LLM analysis
+            # 🔥 FIX: Get conversation context AND conversation history
             conversation_context = self._get_conversation_context_summary()
+            conversation_history = []
 
-            # Use LLM to analyze intent
-            intent_analysis = await self._llm_analyze_intent(user_message, conversation_context)
+            try:
+                conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+            except Exception as e:
+                print(f"Could not get conversation history: {e}")
 
-            # Route request based on LLM analysis
-            response_content = await self._route_with_llm_analysis(intent_analysis, user_message, context)
+            # 🔥 FIX: Build LLM context with conversation history
+            llm_context = {
+                'conversation_history': conversation_history,  # 🔥 KEY FIX
+                'conversation_id': message.conversation_id,
+                'user_id': message.sender_id,
+                'agent_type': 'web_search'
+            }
+
+            # 🔥 FIX: Use LLM to analyze intent WITH CONTEXT
+            intent_analysis = await self._llm_analyze_intent_with_context(user_message, conversation_context,
+                                                                          llm_context)
+
+            # Route request based on LLM analysis with context
+            response_content = await self._route_with_llm_analysis_with_context(intent_analysis, user_message, context,
+                                                                                llm_context)
 
             response = self.create_response(
                 content=response_content,
@@ -520,6 +536,122 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 conversation_id=message.conversation_id
             )
             return error_response
+
+    async def _llm_analyze_intent_with_context(self, user_message: str, conversation_context: str = "",
+                                               llm_context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Use LLM to analyze user intent - FIXED: With conversation context"""
+        if not self.llm_service:
+            return self._keyword_based_analysis(user_message)
+
+        prompt = f"""
+        Analyze this user message in the context of a web search conversation and extract:
+        1. Primary intent (search_general, search_news, search_academic, refine_search, help_request)
+        2. Search query/terms (clean and optimized for search)
+        3. Search type preferences (web, news, academic, images)
+        4. Context references (referring to previous searches, "this", "that", "more about")
+        5. Specific requirements (time range, source type, country, etc.)
+
+        Conversation Context:
+        {conversation_context}
+
+        Current User Message: {user_message}
+
+        Respond in JSON format:
+        {{
+            "primary_intent": "search_general|search_news|search_academic|refine_search|help_request",
+            "search_query": "optimized search terms",
+            "search_type": "web|news|academic",
+            "uses_context_reference": true/false,
+            "context_type": "previous_search|previous_result|general",
+            "requirements": {{
+                "time_range": "recent|specific_date|any",
+                "max_results": number,
+                "country": "country_code",
+                "language": "language_code"
+            }},
+            "confidence": 0.0-1.0
+        }}
+        """
+
+        try:
+            # 🔥 FIX: Pass conversation history through context
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                context=llm_context  # 🔥 KEY: Context preserves memory across provider switches
+            )
+
+            import re
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                return self._extract_intent_from_llm_response(response, user_message)
+        except Exception as e:
+            print(f"LLM intent analysis failed: {e}")
+            return self._keyword_based_analysis(user_message)
+
+    async def _route_with_llm_analysis_with_context(self, intent_analysis: Dict[str, Any], user_message: str,
+                                                    context: ExecutionContext, llm_context: Dict[str, Any]) -> str:
+        """Route request based on LLM intent analysis - FIXED: With context preservation"""
+
+        primary_intent = intent_analysis.get("primary_intent", "search_general")
+        search_query = intent_analysis.get("search_query", "")
+        search_type = intent_analysis.get("search_type", "web")
+        uses_context = intent_analysis.get("uses_context_reference", False)
+        requirements = intent_analysis.get("requirements", {})
+
+        # Handle context references
+        if uses_context and not search_query:
+            search_query = self._resolve_contextual_query(user_message)
+
+        # Route based on intent
+        if primary_intent == "help_request":
+            return await self._handle_help_request_with_context(user_message, llm_context)
+        elif primary_intent == "search_news":
+            return await self._handle_news_search(search_query, requirements)
+        elif primary_intent == "search_academic":
+            return await self._handle_academic_search(search_query, requirements)
+        elif primary_intent == "refine_search":
+            return await self._handle_search_refinement(search_query, user_message)
+        else:  # search_general
+            return await self._handle_general_search(search_query, requirements)
+
+    async def _handle_help_request_with_context(self, user_message: str, llm_context: Dict[str, Any]) -> str:
+        """Handle help requests with conversation context - FIXED: Context preserved"""
+
+        # Use LLM for more intelligent help if available
+        if self.llm_service and llm_context.get('conversation_history'):
+            help_prompt = f"""As a web search assistant, provide helpful guidance for: {user_message}
+
+    Consider the user's previous search queries and provide contextual assistance."""
+
+            try:
+                # 🔥 FIX: Use LLM with conversation context
+                intelligent_help = await self.llm_service.generate_response(
+                    prompt=help_prompt,
+                    context=llm_context  # 🔥 KEY: Context preserves memory
+                )
+                return intelligent_help
+            except Exception as e:
+                print(f"LLM help generation failed: {e}")
+
+        # Fallback to standard help message
+        recent_search = self.get_recent_search_term()
+
+        base_message = ("I'm your Web Search Agent! I can help you with:\n\n"
+                        "🔍 **Web Search** - General information search\n"
+                        "📰 **News Search** - Latest news and current events  \n"
+                        "🎓 **Academic Search** - Research papers and studies\n\n"
+                        "💡 **Examples:**\n"
+                        "• 'Search for AI trends in 2025'\n"
+                        "• 'Find latest news about quantum computing'\n"
+                        "• 'Look up machine learning research papers'\n")
+
+        if recent_search:
+            base_message += f"\n🎯 **Your last search:** {recent_search}\n"
+            base_message += "You can say things like 'more about this' or 'find similar topics'"
+
+        return base_message
 
     def _get_conversation_context_summary(self) -> str:
         """Get a summary of recent conversation for LLM context"""
@@ -933,7 +1065,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
         str]:
-        """Stream web search operations with progress and incremental results"""
+        """Stream web search operations - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
         try:
@@ -941,9 +1073,20 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             self.update_conversation_state(user_message)
 
             yield "🔍 **Web Search Agent**\n\n"
+
+            # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_conversation_context_summary()
+            conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
             yield "🧠 Analyzing search request...\n"
+
+            # 🔥 FIX: Build LLM context for streaming
+            llm_context = {
+                'conversation_history': conversation_history,  # 🔥 KEY FIX
+                'conversation_id': message.conversation_id,
+                'streaming': True
+            }
+
             intent_analysis = await self._llm_analyze_intent(user_message, conversation_context)
 
             primary_intent = intent_analysis.get("primary_intent", "search_general")
@@ -952,21 +1095,90 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
 
             if primary_intent == "search_news":
                 yield "📰 **News Search**\n\n"
-                async for chunk in self._stream_news_search(search_query, intent_analysis.get("requirements", {})):
+                async for chunk in self._stream_news_search_with_context(search_query,
+                                                                         intent_analysis.get("requirements", {}),
+                                                                         llm_context):
                     yield chunk
 
             elif primary_intent == "search_academic":
                 yield "🎓 **Academic Search**\n\n"
-                async for chunk in self._stream_academic_search(search_query, intent_analysis.get("requirements", {})):
+                async for chunk in self._stream_academic_search_with_context(search_query,
+                                                                             intent_analysis.get("requirements", {}),
+                                                                             llm_context):
                     yield chunk
 
             else:
                 yield "🌐 **Web Search**\n\n"
-                async for chunk in self._stream_general_search(search_query, intent_analysis.get("requirements", {})):
+                async for chunk in self._stream_general_search_with_context(search_query,
+                                                                            intent_analysis.get("requirements", {}),
+                                                                            llm_context):
                     yield chunk
 
         except Exception as e:
             yield f"❌ **Web Search Error:** {str(e)}"
+
+    async def _stream_general_search_with_context(self, query: str, requirements: dict, llm_context: Dict[str, Any]) -> \
+    AsyncIterator[str]:
+        """Stream general web search with context preservation"""
+        try:
+            if not query:
+                yield "⚠️ Please provide a search query.\n"
+                return
+
+            yield f"🔍 **Searching for:** {query}\n\n"
+            yield "⏳ Contacting search providers...\n"
+
+            max_results = requirements.get("max_results", 5)
+            provider_info = self.search_service.providers.get(self.search_service.current_provider, {})
+            provider_name = provider_info.get('name', self.search_service.current_provider)
+            yield f"📡 **Using:** {provider_name}\n"
+
+            yield "🔄 Executing search...\n\n"
+
+            # Perform the search
+            result = await self._search_web(query, max_results=max_results)
+
+            if result['success']:
+                results = result.get('results', [])
+                search_time = result.get('search_time', 0)
+
+                yield f"📊 **Found {len(results)} results in {search_time:.2f}s**\n\n"
+
+                # Stream results one by one
+                for i, res in enumerate(results, 1):
+                    yield f"**{i}. {res.get('title', 'No title')}**\n"
+                    yield f"🔗 {res.get('url', 'No URL')}\n"
+
+                    snippet = res.get('snippet', 'No description')
+                    if len(snippet) > 150:
+                        snippet = snippet[:150] + "..."
+                    yield f"📝 {snippet}\n\n"
+
+                    if i < len(results):
+                        await asyncio.sleep(0.2)
+
+                # 🔥 FIX: If context suggests follow-up questions, use LLM with context
+                conversation_history = llm_context.get('conversation_history', [])
+                if conversation_history and self.llm_service:
+                    yield "🤔 **Related to your search:**\n"
+
+                    context_prompt = f"""Based on the search results for "{query}" and our conversation history, suggest 2-3 helpful follow-up search queries that the user might find interesting."""
+
+                    try:
+                        suggestions = await self.llm_service.generate_response(
+                            prompt=context_prompt,
+                            context=llm_context  # 🔥 KEY: Use conversation context
+                        )
+                        yield f"{suggestions}\n\n"
+                    except:
+                        pass
+
+                yield f"✅ **Search completed using {provider_name}**\n"
+            else:
+                yield f"❌ **Search failed:** {result.get('error', 'Unknown error')}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during search:** {str(e)}"
 
     async def _stream_general_search(self, query: str, requirements: dict) -> AsyncIterator[str]:
         """Stream general web search with incremental results"""

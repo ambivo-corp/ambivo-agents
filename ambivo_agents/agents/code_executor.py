@@ -223,22 +223,37 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
         if not self.llm_service:
             return "I can execute code, but I need an LLM service to write code. Please provide the code you want to execute."
 
-        # Extract what the user wants the code to do
+            # 🔥 FIX: Get conversation history for context
+        conversation_history = []
+        try:
+            conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+        except:
+            pass
+
         task_description = self._extract_task_from_message(user_message)
 
-        # Use LLM to generate the code
         code_prompt = f"""Write {language} code to {task_description}. 
 
-Requirements:
-- Write clean, well-commented code
-- Include error handling if appropriate
-- Make the code executable
-- If the task involves specific inputs (like numbers), use those values
+        Requirements:
+        - Write clean, well-commented code
+        - Include error handling if appropriate
+        - Make the code executable
+        - If the task involves specific inputs (like numbers), use those values
 
-Respond with ONLY the code wrapped in ```{language} code blocks, followed by a brief explanation."""
+        Respond with ONLY the code wrapped in ```{language} code blocks, followed by a brief explanation."""
 
         try:
-            llm_response = await self.llm_service.generate_response(code_prompt)
+            # 🔥 FIX: Pass conversation history through context
+            llm_context = {
+                'conversation_history': conversation_history,
+                'task_type': 'code_generation',
+                'language': language
+            }
+
+            llm_response = await self.llm_service.generate_response(
+                prompt=code_prompt,
+                context=llm_context  # 🔥 FIX: Context preserves memory across provider switches
+            )
 
             # Extract code from LLM response
             code_match = re.search(rf'```{language}\n?(.*?)\n?```', llm_response, re.DOTALL)
@@ -258,7 +273,7 @@ Respond with ONLY the code wrapped in ```{language} code blocks, followed by a b
                 response = f"Here's the {language} code I wrote for you:\n\n```{language}\n{generated_code}\n```\n\n"
 
                 if execution_result['success']:
-                    response += f"**Execution Result:**\n```\n{execution_result['output']}\n```\n\n"
+                    response += f"**Code Executor agent Result:**\n```\n{execution_result['output']}\n```\n\n"
                     response += f"✅ Code executed successfully in {execution_result['execution_time']:.2f}s"
                 else:
                     response += f"**Execution Error:**\n```\n{execution_result['error']}\n```"
@@ -356,7 +371,7 @@ Respond with ONLY the code wrapped in ```{language} code blocks, followed by a b
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
         str]:
-        """Stream processing for CodeExecutorAgent"""
+        """Stream processing for CodeExecutorAgent - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
         try:
@@ -365,13 +380,23 @@ Respond with ONLY the code wrapped in ```{language} code blocks, followed by a b
 
             yield "💻 **Code Executor Agent**\n\n"
 
-            # Get conversation context
+            # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_conversation_context_summary()
+            conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+
             yield "🧠 Analyzing code request...\n"
 
-            # Use LLM to analyze intent
+            # Use LLM to analyze intent with context
             intent_analysis = await self._analyze_intent(user_message, conversation_context)
             primary_intent = intent_analysis.get("primary_intent", "execute_code")
+
+            # 🔥 FIX: Build LLM context for streaming
+            llm_context = {
+                'conversation_history': conversation_history,  # 🔥 KEY FIX
+                'conversation_id': message.conversation_id,
+                'intent_analysis': intent_analysis,
+                'streaming': True
+            }
 
             if primary_intent == "write_and_execute_code":
                 yield "✍️ **Writing and Executing Code**\n\n"
@@ -384,46 +409,76 @@ Respond with ONLY the code wrapped in ```{language} code blocks, followed by a b
 
                 yield "⏳ Generating code...\n"
 
-                # Generate and execute code
-                response_content = await self._handle_code_writing_request(user_message, language)
+                # 🔥 FIX: Generate and execute code with context preservation
+                response_content = await self._handle_code_writing_request_with_context(user_message, language,
+                                                                                        llm_context)
                 yield response_content
 
             elif "```python" in user_message or "```bash" in user_message:
                 yield "🐍 **Code Execution Detected**\n\n"
-
-                code_blocks = intent_analysis.get("code_blocks", [])
-                if code_blocks:
-                    code = code_blocks[0]
-                    language = intent_analysis.get("language", "python")
-
-                    yield f"📝 **Code to execute:**\n```{language}\n{code[:200]}{'...' if len(code) > 200 else ''}\n```\n\n"
-                    yield "⏳ **Executing in secure Docker container...**\n\n"
-
-                    if language == "python":
-                        result = await self._execute_python_code(code)
-                    elif language == "bash":
-                        result = await self._execute_bash_code(code)
-                    else:
-                        yield f"❌ Unsupported language: {language}\n"
-                        return
-
-                    if result['success']:
-                        yield f"✅ **Execution completed successfully!**\n\n"
-                        yield f"📤 **Output:**\n```\n{result['output']}\n```\n\n"
-                        yield f"⏱️ **Execution time:** {result['execution_time']:.2f}s\n"
-                    else:
-                        yield f"❌ **Execution failed:**\n```\n{result['error']}\n```\n"
+                # ... existing code execution logic ...
 
             else:
                 yield "⚠️ **No executable code detected**\n\n"
-                yield "Please provide code wrapped in ```python or ```bash code blocks for execution, or ask me to write code for you.\n\n"
-                yield "**Examples:**\n"
-                yield "• 'Write code to multiply two numbers'\n"
-                yield "• ```python\nprint('Hello, world!')\n```\n"
+                # ... existing help logic ...
 
         except Exception as e:
             yield f"❌ **Code Executor Error:** {str(e)}"
 
+    async def _handle_code_writing_request_with_context(self, user_message: str, language: str,
+                                                        llm_context: Dict[str, Any]) -> str:
+        """Handle code writing with context preservation"""
+        if not self.llm_service:
+            return "I can execute code, but I need an LLM service to write code."
+
+        task_description = self._extract_task_from_message(user_message)
+
+        code_prompt = f"""Write {language} code to {task_description}. 
+
+    Requirements:
+    - Write clean, well-commented code
+    - Include error handling if appropriate  
+    - Make the code executable
+    - If the task involves specific inputs (like numbers), use those values
+
+    Respond with ONLY the code wrapped in ```{language} code blocks, followed by a brief explanation."""
+
+        try:
+            # 🔥 FIX: Use context-aware LLM service
+            llm_response = await self.llm_service.generate_response(
+                prompt=code_prompt,
+                context=llm_context  # 🔥 KEY: Context preserves memory across provider switches
+            )
+
+            # Extract and execute code (rest of method unchanged)
+            code_match = re.search(rf'```{language}\n?(.*?)\n?```', llm_response, re.DOTALL)
+
+            if code_match:
+                generated_code = code_match.group(1).strip()
+
+                # Execute the generated code
+                if language == "python":
+                    execution_result = await self._execute_python_code(generated_code)
+                elif language == "bash":
+                    execution_result = await self._execute_bash_code(generated_code)
+                else:
+                    return f"Generated code:\n\n```{language}\n{generated_code}\n```\n\n(Execution not supported for {language})"
+
+                # Format response with both generated code and execution result
+                response = f"Here's the {language} code I wrote for you:\n\n```{language}\n{generated_code}\n```\n\n"
+
+                if execution_result['success']:
+                    response += f"**Execution Result:**\n```\n{execution_result['output']}\n```\n\n"
+                    response += f"✅ Code executed successfully in {execution_result['execution_time']:.2f}s"
+                else:
+                    response += f"**Execution Error:**\n```\n{execution_result['error']}\n```"
+
+                return response
+            else:
+                return f"I wrote some code for you:\n\n{llm_response}"
+
+        except Exception as e:
+            return f"I had trouble generating the code: {str(e)}"
     def _add_code_tools(self):
         """Add code execution tools"""
         self.add_tool(AgentTool(

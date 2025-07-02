@@ -98,7 +98,7 @@ class DirectMediaDemo:
                     }
                 )
 
-                print(f"🔧 Tool execution result:")
+
                 print(f"   Success: {result.get('success', False)}")
 
                 if result.get('success'):

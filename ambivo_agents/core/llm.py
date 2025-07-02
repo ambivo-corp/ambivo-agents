@@ -223,25 +223,105 @@ class MultiProviderLLMService(LLMServiceInterface):
             client=boto3_client
         )
 
+    # ambivo_agents/core/llm.py - FIXED LLM rotation logic
+
+    # Fix for ambivo_agents/core/llm.py
+    # Replace the _try_fallback_provider method with this corrected version:
+
+    # Fix for ambivo_agents/core/llm.py
+    # Replace the _try_fallback_provider method with this corrected version:
+
     def _try_fallback_provider(self):
-        """Try to fallback to another provider"""
-        fallback_provider = self.provider_tracker.get_best_available_provider()
+        """Try to switch to a fallback provider - FIXED VERSION"""
+        # Find available providers (excluding current one)
+        fallback_providers = []
+        for name, config in self.provider_tracker.providers.items():
+            if (name != self.current_provider and
+                    self.provider_tracker.is_provider_available(name)):
+                fallback_providers.append((name, config))
 
-        if fallback_provider and fallback_provider != self.current_provider:
-            logging.info(f"Falling back from {self.current_provider} to {fallback_provider}")
-            self.current_provider = fallback_provider
-            self.provider_tracker.current_provider = fallback_provider
+        if not fallback_providers:
+            # Check if any providers are in cooldown and can be restored
+            for name, config in self.provider_tracker.providers.items():
+                if (name != self.current_provider and
+                        not config.is_available and
+                        config.last_error_time):
+
+                    time_since_error = datetime.now() - config.last_error_time
+                    if time_since_error > timedelta(minutes=config.cooldown_minutes):
+                        config.is_available = True
+                        config.error_count = 0
+                        fallback_providers.append((name, config))
+                        logging.info(f"Restored provider {name} from cooldown")
+
+        if fallback_providers:
+            # Sort by priority and error count - ✅ FIXED: Use .priority instead of ['priority']
+            fallback_providers.sort(key=lambda x: (x[1].priority, x[1].error_count))
+            old_provider = self.current_provider
+            self.current_provider = fallback_providers[0][0]
+            self.provider_tracker.current_provider = self.current_provider
+
+            print(f"LLM provider rotated: {old_provider} → {self.current_provider}")
+
+            # Re-initialize the new provider
             self._initialize_current_provider()
+            return True
         else:
-            raise RuntimeError("No available fallback providers")
+            logging.error("No fallback providers available")
+            return False
 
-    def _execute_with_retry(self, func, *args, **kwargs):
-        """Execute a function with provider rotation on failure"""
+    async def _execute_with_retry_stream(self, stream_func) -> AsyncIterator[str]:
+        """FIXED: Execute streaming function with proper provider rotation"""
         max_retries = len(self.provider_tracker.providers)
         retry_count = 0
 
         while retry_count < max_retries:
             try:
+                # Record request for current provider
+                self.provider_tracker.record_request(self.current_provider)
+
+                async for chunk in stream_func():
+                    yield chunk
+                return  # Success, exit retry loop
+
+            except Exception as e:
+                error_str = str(e).lower()
+                logging.error(f"Streaming error with {self.current_provider}: {e}")
+
+                # Record error
+                self.provider_tracker.record_error(self.current_provider, str(e))
+
+                # Check if we should retry with different provider
+                should_retry = (
+                        any(keyword in error_str for keyword in ['429', 'rate limit', 'quota', 'insufficient_quota']) or
+                        any(keyword in error_str for keyword in ['timeout', 'connection', 'network']) or
+                        retry_count < max_retries - 1
+                )
+
+                if should_retry:
+                    logging.warning(
+                        f"Attempting fallback from {self.current_provider} (attempt {retry_count + 1}/{max_retries})")
+
+                    if self._try_fallback_provider():
+                        retry_count += 1
+                        continue
+                    else:
+                        # No fallback available, raise the error
+                        raise e
+                else:
+                    # Max retries reached
+                    raise e
+
+        raise RuntimeError(f"All {max_retries} providers exhausted for streaming")
+
+    def _execute_with_retry(self, func, *args, **kwargs):
+        """FIXED: Execute function with proper provider rotation"""
+        max_retries = len(self.provider_tracker.providers)
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                # Record request for current provider
                 self.provider_tracker.record_request(self.current_provider)
                 return func(*args, **kwargs)
 
@@ -249,39 +329,45 @@ class MultiProviderLLMService(LLMServiceInterface):
                 error_str = str(e).lower()
                 logging.error(f"Error with {self.current_provider}: {e}")
 
+                # Record error
                 self.provider_tracker.record_error(self.current_provider, str(e))
 
-                # Check for rate limiting
-                if any(keyword in error_str for keyword in ['429', 'rate limit', 'quota', 'too many requests']):
-                    logging.warning(f"Rate limit hit for {self.current_provider}, rotating...")
-                    try:
-                        self._try_fallback_provider()
+                # Check if we should retry
+                should_retry = (
+                        any(keyword in error_str for keyword in ['429', 'rate limit', 'quota', 'insufficient_quota']) or
+                        any(keyword in error_str for keyword in ['timeout', 'connection', 'network']) or
+                        retry_count < max_retries - 1
+                )
+
+                if should_retry:
+                    logging.warning(
+                        f"Attempting fallback from {self.current_provider} (attempt {retry_count + 1}/{max_retries})")
+
+                    if self._try_fallback_provider():
                         retry_count += 1
                         continue
-                    except Exception:
+                    else:
+                        # No fallback available
                         raise e
                 else:
-                    if retry_count < max_retries - 1:
-                        try:
-                            self._try_fallback_provider()
-                            retry_count += 1
-                            continue
-                        except Exception:
-                            pass
+                    # Max retries reached or non-retryable error
                     raise e
 
-        raise RuntimeError("All providers exhausted")
+        raise RuntimeError(f"All {max_retries} providers exhausted")
 
     async def generate_response(self, prompt: str, context: Dict[str, Any] = None) -> str:
-        """Generate a response using the current LLM provider"""
+        """Generate a response using the current LLM provider - FIXED: Preserves context across provider switches"""
         if not self.current_llm:
             raise RuntimeError("No LLM provider available")
+
+        # 🔥 FIX: Build context-aware prompt BEFORE provider calls
+        final_prompt = self._build_context_aware_prompt(prompt, context)
 
         def _generate():
             try:
                 if hasattr(self.current_llm, 'invoke'):
-                    # LangChain v0.2+ style
-                    response = self.current_llm.invoke(prompt)
+                    # 🔥 FIX: Use context-enhanced prompt
+                    response = self.current_llm.invoke(final_prompt)
                     if hasattr(response, 'content'):
                         return response.content
                     elif hasattr(response, 'text'):
@@ -289,11 +375,11 @@ class MultiProviderLLMService(LLMServiceInterface):
                     else:
                         return str(response)
                 elif hasattr(self.current_llm, 'predict'):
-                    # LangChain v0.1 style
-                    return self.current_llm.predict(prompt)
+                    # 🔥 FIX: Use context-enhanced prompt
+                    return self.current_llm.predict(final_prompt)
                 elif hasattr(self.current_llm, '__call__'):
-                    # Direct call style
-                    response = self.current_llm(prompt)
+                    # 🔥 FIX: Use context-enhanced prompt
+                    response = self.current_llm(final_prompt)
                     if hasattr(response, 'content'):
                         return response.content
                     elif hasattr(response, 'text'):
@@ -301,8 +387,8 @@ class MultiProviderLLMService(LLMServiceInterface):
                     else:
                         return str(response)
                 else:
-                    # Fallback
-                    return str(self.current_llm(prompt))
+                    # 🔥 FIX: Use context-enhanced prompt
+                    return str(self.current_llm(final_prompt))
             except Exception as e:
                 logging.error(f"LLM generation error: {e}")
                 raise e
@@ -311,6 +397,84 @@ class MultiProviderLLMService(LLMServiceInterface):
             return self._execute_with_retry(_generate)
         except Exception as e:
             raise RuntimeError(f"Failed to generate response after retries: {str(e)}")
+
+    def _build_context_aware_prompt(self, prompt: str, context: Dict[str, Any] = None) -> str:
+        """🔥 NEW: Build context-aware prompt that preserves conversation history across provider switches"""
+        if not context:
+            return prompt
+
+        # Extract conversation history from context
+        conversation_history = context.get('conversation_history', [])
+        conversation_id = context.get('conversation_id')
+        user_id = context.get('user_id')
+
+        if not conversation_history:
+            return prompt
+
+        # Build conversation context
+        context_lines = []
+        context_lines.append("# Previous Conversation Context:")
+
+        for msg in conversation_history[-5:]:  # Last 5 messages for context
+            msg_type = msg.get('message_type', 'unknown')
+            content = msg.get('content', '')
+            timestamp = msg.get('timestamp', '')
+
+            if msg_type == 'user_input':
+                context_lines.append(f"User: {content}")
+            elif msg_type == 'agent_response':
+                context_lines.append(f"Assistant: {content}")
+
+        context_lines.append("")
+        context_lines.append("# Current Request:")
+        context_lines.append(f"User: {prompt}")
+        context_lines.append("")
+        context_lines.append("Please respond considering the previous conversation context above.")
+
+        enhanced_prompt = "\n".join(context_lines)
+
+        # 🔥 CRITICAL: Log provider switches with context preservation
+        if hasattr(self, '_last_provider') and self._last_provider != self.current_provider:
+            logging.info(f"🔄 Provider switched: {self._last_provider} → {self.current_provider}")
+            logging.info(f"🧠 Context preserved: {len(conversation_history)} messages in history")
+
+        self._last_provider = self.current_provider
+
+        return enhanced_prompt
+
+    async def generate_response_stream(self, prompt: str, context: Dict[str, Any] = None) -> AsyncIterator[str]:
+        """Generate a streaming response - FIXED: Preserves context across provider switches"""
+        if not self.current_llm:
+            raise RuntimeError("No LLM provider available")
+
+        # 🔥 FIX: Build context-aware prompt for streaming too
+        final_prompt = self._build_context_aware_prompt(prompt, context)
+
+        async def _generate_stream():
+            try:
+                if self.current_provider == "anthropic":
+                    async for chunk in self._stream_anthropic(final_prompt):
+                        yield chunk
+                elif self.current_provider == "openai":
+                    async for chunk in self._stream_openai(final_prompt):
+                        yield chunk
+                elif self.current_provider == "bedrock":
+                    async for chunk in self._stream_bedrock(final_prompt):
+                        yield chunk
+                else:
+                    # Fallback to non-streaming
+                    response = await self.generate_response(prompt, context)  # Use original method
+                    yield response
+            except Exception as e:
+                logging.error(f"LLM streaming error: {e}")
+                raise e
+
+        try:
+            async for chunk in self._execute_with_retry_stream(_generate_stream):
+                self.provider_tracker.record_request(self.current_provider)
+                yield chunk
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate streaming response: {str(e)}")
 
     async def query_knowledge_base(self, query: str, kb_name: str, context: Dict[str, Any] = None) -> tuple[
         str, List[Dict]]:
@@ -345,38 +509,6 @@ class MultiProviderLLMService(LLMServiceInterface):
                 'last_error_time': config.last_error_time.isoformat() if config.last_error_time else None
             }
         return stats
-
-    async def generate_response_stream(self, prompt: str, context: Dict[str, Any] = None) -> AsyncIterator[str]:
-        """Generate a streaming response using the current LLM provider"""
-        if not self.current_llm:
-            raise RuntimeError("No LLM provider available")
-
-        async def _generate_stream():
-            try:
-                if self.current_provider == "anthropic":
-                    async for chunk in self._stream_anthropic(prompt):
-                        yield chunk
-                elif self.current_provider == "openai":
-                    async for chunk in self._stream_openai(prompt):
-                        yield chunk
-                elif self.current_provider == "bedrock":
-                    async for chunk in self._stream_bedrock(prompt):
-                        yield chunk
-                else:
-                    # Fallback to non-streaming
-                    response = await self.generate_response(prompt, context)
-                    yield response
-
-            except Exception as e:
-                logging.error(f"LLM streaming error: {e}")
-                raise e
-
-        try:
-            async for chunk in self._execute_with_retry_stream(_generate_stream):
-                self.provider_tracker.record_request(self.current_provider)
-                yield chunk
-        except Exception as e:
-            raise RuntimeError(f"Failed to generate streaming response: {str(e)}")
 
     async def _stream_anthropic(self, prompt: str) -> AsyncIterator[str]:
         """Stream from Anthropic Claude"""
@@ -457,44 +589,6 @@ class MultiProviderLLMService(LLMServiceInterface):
                 yield response
             except:
                 yield f"Bedrock streaming error: {str(e)}"
-
-    async def _execute_with_retry_stream(self, stream_func) -> AsyncIterator[str]:
-        """Execute streaming function with provider rotation on failure"""
-        max_retries = len(self.provider_tracker.providers)
-        retry_count = 0
-
-        while retry_count < max_retries:
-            try:
-                async for chunk in stream_func():
-                    yield chunk
-                return  # Success, exit retry loop
-
-            except Exception as e:
-                error_str = str(e).lower()
-                logging.error(f"Streaming error with {self.current_provider}: {e}")
-
-                self.provider_tracker.record_error(self.current_provider, str(e))
-
-                # Check for rate limiting
-                if any(keyword in error_str for keyword in ['429', 'rate limit', 'quota', 'too many requests']):
-                    logging.warning(f"Rate limit hit for {self.current_provider}, rotating...")
-                    try:
-                        self._try_fallback_provider()
-                        retry_count += 1
-                        continue
-                    except Exception:
-                        raise e
-                else:
-                    if retry_count < max_retries - 1:
-                        try:
-                            self._try_fallback_provider()
-                            retry_count += 1
-                            continue
-                        except Exception:
-                            pass
-                    raise e
-
-        raise RuntimeError("All providers exhausted for streaming")
 
 
 def create_multi_provider_llm_service(config_data: Dict[str, Any] = None,

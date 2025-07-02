@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.0.7"
-description = "Multi-Agent AI System for automation"
+version = "1.0.8"
+description = "Multi-Agent AI System with MCP (Model Context Protocol) support for automation"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "sgosain@ambivo.com"}
 ]
@@ -21,6 +21,9 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Communications",
 ]
 dependencies = [
     # Core dependencies
@@ -55,8 +58,6 @@ dependencies = [
     "llama-index-readers-smart-pdf-loader",
 
     # API and web framework dependencies
-    #"fastapi>=0.115.13",
-    #"uvicorn[standard]>=0.34.3",
     "pydantic>=2.11.7",
 
     # Cloud provider SDKs
@@ -81,18 +82,48 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# MCP support as optional dependency
+mcp = [
+    "mcp>=1.0.0",
+]
+
+# Web capabilities
+web = [
+    "beautifulsoup4>=4.13.4",
+    "playwright>=1.40.0",
+]
+
+# Media processing
+media = [
+    "pytubefix>=6.0.0",
+]
+
+# Additional LLM providers
+anthropic = [
+    "anthropic>=0.55.0",
+]
+
+# Development tools
 test = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
     "pytest-timeout>=2.1.0",
 ]
+
 dev = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
     "black>=25.1.0",
     "isort>=6.0.1",
     "pytest-timeout>=2.1.0",
+    "pre-commit>=3.0.0",
 ]
+
+# Convenience combinations
+full = [
+    "ambivo-agents[mcp,web,media,anthropic]"
+]
+
 all = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
@@ -103,11 +134,21 @@ all = [
     "playwright>=1.40.0",
     "pytubefix>=6.0.0",
     "anthropic>=0.55.0",
+    "mcp>=1.0.0",
+    "pre-commit>=3.0.0",
 ]
 
 [project.scripts]
-ambivo-agents = "ambivo_agents.cli:cli"
-ambivo = "ambivo_agents.cli:cli"
+# Main CLI
+ambivo-agents = "ambivo_agents.cli:main"
+ambivo = "ambivo_agents.cli:main"
+
+# MCP-specific entry points
+ambivo-mcp-server = "ambivo_agents.mcp.mcp_server:main"
+
+[project.entry-points."mcp.servers"]
+# Register as MCP server for discovery
+ambivo-agents = "ambivo_agents.mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/ambivo-corp/ambivo-agents"
@@ -120,4 +161,61 @@ Company = "https://www.ambivo.com"
 include = ["ambivo_agents*"]
 
 [tool.setuptools.package-data]
-ambivo_agents = ["*.yaml", "*.yml", "*.json", "*.md"]
+ambivo_agents = [
+    "*.yaml",
+    "*.yml",
+    "*.json",
+    "*.md",
+    "mcp/*.py",
+    "mcp/*.yaml",
+    "mcp/*.yml",
+]
+
+# MCP-specific tool configuration
+[tool.mcp]
+name = "ambivo-agents"
+version = "1.0.8"
+description = "Multi-Agent AI System with MCP support"
+
+[tool.mcp.server]
+command = "ambivo-mcp-server"
+args = []
+
+# Black formatting
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+# isort configuration
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+# pytest configuration
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q --strict-markers"
+testpaths = [
+    "tests",
+]
+asyncio_mode = "auto"
+timeout = 300

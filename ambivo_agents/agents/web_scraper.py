@@ -323,7 +323,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         }
 
     async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
-        """Process message with LLM-based scraping intent detection and history context"""
+        """Process message with LLM-based scraping intent detection - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
         try:
@@ -332,14 +332,30 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             # Update conversation state
             self.update_conversation_state(user_message)
 
-            # Get conversation context for LLM analysis
+            # 🔥 FIX: Get conversation context AND conversation history
             conversation_context = self._get_scraping_conversation_context_summary()
+            conversation_history = []
 
-            # Use LLM to analyze intent
-            intent_analysis = await self._llm_analyze_scraping_intent(user_message, conversation_context)
+            try:
+                conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+            except Exception as e:
+                logging.warning(f"Could not get conversation history: {e}")
 
-            # Route request based on LLM analysis
-            response_content = await self._route_scraping_with_llm_analysis(intent_analysis, user_message, context)
+            # 🔥 FIX: Build LLM context with conversation history
+            llm_context = {
+                'conversation_history': conversation_history,  # 🔥 KEY FIX
+                'conversation_id': message.conversation_id,
+                'user_id': message.sender_id,
+                'agent_type': 'web_scraper'
+            }
+
+            # 🔥 FIX: Use LLM to analyze intent WITH CONTEXT
+            intent_analysis = await self._llm_analyze_scraping_intent_with_context(user_message, conversation_context,
+                                                                                   llm_context)
+
+            # Route request based on LLM analysis with context
+            response_content = await self._route_scraping_with_llm_analysis_with_context(intent_analysis, user_message,
+                                                                                         context, llm_context)
 
             response = self.create_response(
                 content=response_content,
@@ -361,6 +377,141 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             )
             return error_response
 
+    async def _llm_analyze_scraping_intent_with_context(self, user_message: str, conversation_context: str = "",
+                                                        llm_context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Use LLM to analyze web scraping intent - FIXED: With conversation context"""
+        if not self.llm_service:
+            return self._keyword_based_scraping_analysis(user_message)
+
+        prompt = f"""
+        Analyze this user message in the context of web scraping and extract:
+        1. Primary intent (scrape_single, scrape_batch, check_accessibility, help_request)
+        2. URLs to scrape
+        3. Extraction preferences (links, images, content)
+        4. Context references (referring to previous scraping operations)
+        5. Technical specifications (method, timeout, etc.)
+
+        Conversation Context:
+        {conversation_context}
+
+        Current User Message: {user_message}
+
+        Respond in JSON format:
+        {{
+            "primary_intent": "scrape_single|scrape_batch|check_accessibility|help_request",
+            "urls": ["http://example.com"],
+            "extraction_preferences": {{
+                "extract_links": true,
+                "extract_images": true,
+                "take_screenshot": false
+            }},
+            "uses_context_reference": true/false,
+            "context_type": "previous_url|previous_operation",
+            "technical_specs": {{
+                "method": "playwright|requests|auto",
+                "timeout": 60
+            }},
+            "confidence": 0.0-1.0
+        }}
+        """
+
+        try:
+            # 🔥 FIX: Pass conversation history through context
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                context=llm_context  # 🔥 KEY: Context preserves memory across provider switches
+            )
+
+            import re
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                return self._extract_scraping_intent_from_llm_response(response, user_message)
+        except Exception as e:
+            logging.warning(f"LLM scraping intent analysis failed: {e}")
+            return self._keyword_based_scraping_analysis(user_message)
+
+    async def _route_scraping_with_llm_analysis_with_context(self, intent_analysis: Dict[str, Any], user_message: str,
+                                                             context: ExecutionContext,
+                                                             llm_context: Dict[str, Any]) -> str:
+        """Route scraping request based on LLM intent analysis - FIXED: With context preservation"""
+
+        primary_intent = intent_analysis.get("primary_intent", "help_request")
+        urls = intent_analysis.get("urls", [])
+        extraction_prefs = intent_analysis.get("extraction_preferences", {})
+        uses_context = intent_analysis.get("uses_context_reference", False)
+
+        # Resolve context references if needed
+        if uses_context and not urls:
+            recent_url = self.get_recent_url()
+            if recent_url:
+                urls = [recent_url]
+
+        # Route based on intent
+        if primary_intent == "help_request":
+            return await self._handle_scraping_help_request_with_context(user_message, llm_context)
+        elif primary_intent == "scrape_single":
+            return await self._handle_single_scrape(urls, extraction_prefs, user_message)
+        elif primary_intent == "scrape_batch":
+            return await self._handle_batch_scrape(urls, extraction_prefs, user_message)
+        elif primary_intent == "check_accessibility":
+            return await self._handle_accessibility_check(urls, user_message)
+        else:
+            return await self._handle_scraping_help_request_with_context(user_message, llm_context)
+
+    async def _handle_scraping_help_request_with_context(self, user_message: str, llm_context: Dict[str, Any]) -> str:
+        """Handle scraping help requests with conversation context - FIXED: Context preserved"""
+
+        # Use LLM for more intelligent help if available
+        if self.llm_service and llm_context.get('conversation_history'):
+            help_prompt = f"""As a web scraping assistant, provide helpful guidance for: {user_message}
+
+    Consider the user's previous scraping operations and provide contextual assistance."""
+
+            try:
+                # 🔥 FIX: Use LLM with conversation context
+                intelligent_help = await self.llm_service.generate_response(
+                    prompt=help_prompt,
+                    context=llm_context  # 🔥 KEY: Context preserves memory
+                )
+                return intelligent_help
+            except Exception as e:
+                logging.warning(f"LLM help generation failed: {e}")
+
+        # Fallback to standard help message
+        state = self.get_conversation_state()
+
+        response = ("I'm your Web Scraper Agent! I can help you with:\n\n"
+                    "🕷️ **Web Scraping**\n"
+                    "- Extract content from web pages\n"
+                    "- Scrape multiple URLs at once\n"
+                    "- Extract links and images\n"
+                    "- Take screenshots\n\n"
+                    "🔧 **Multiple Execution Modes**\n"
+                    "- Proxy support (ScraperAPI compatible)\n"
+                    "- Docker-based secure execution\n"
+                    "- Local fallback methods\n\n"
+                    "🧠 **Smart Context Features**\n"
+                    "- Remembers URLs from previous messages\n"
+                    "- Understands 'that website' and 'this page'\n"
+                    "- Maintains conversation state\n\n")
+
+        # Add current context information
+        if state.current_resource:
+            response += f"🎯 **Current URL:** {state.current_resource}\n"
+
+        response += f"\n🔧 **Current Mode:** {self.execution_mode.upper()}\n"
+        response += f"📡 **Proxy Enabled:** {'✅' if self.proxy_config else '❌'}\n"
+        response += f"🐳 **Docker Available:** {'✅' if self.docker_executor and self.docker_executor.available else '❌'}\n"
+
+        response += "\n💡 **Examples:**\n"
+        response += "• 'scrape https://example.com'\n"
+        response += "• 'batch scrape https://site1.com https://site2.com'\n"
+        response += "• 'check if https://example.com is accessible'\n"
+        response += "\nI understand context from our conversation! 🚀"
+
+        return response
     def _get_scraping_conversation_context_summary(self) -> str:
         """Get scraping conversation context summary"""
         try:
@@ -1028,7 +1179,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
         str]:
-        """Stream web scraping operations with detailed progress"""
+        """Stream web scraping operations - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
         try:
@@ -1036,9 +1187,20 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             self.update_conversation_state(user_message)
 
             yield "🕷️ **Web Scraper Agent**\n\n"
+
+            # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_scraping_conversation_context_summary()
+            conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
             yield "🧠 Analyzing scraping request...\n"
+
+            # 🔥 FIX: Build LLM context for streaming
+            llm_context = {
+                'conversation_history': conversation_history,  # 🔥 KEY FIX
+                'conversation_id': message.conversation_id,
+                'streaming': True
+            }
+
             intent_analysis = await self._llm_analyze_scraping_intent(user_message, conversation_context)
 
             primary_intent = intent_analysis.get("primary_intent", "help_request")
@@ -1046,24 +1208,30 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
             if primary_intent == "scrape_single":
                 yield "🌐 **Single URL Scraping**\n\n"
-                async for chunk in self._stream_single_scrape(urls, intent_analysis, user_message):
+                async for chunk in self._stream_single_scrape_with_context(urls, intent_analysis, user_message,
+                                                                           llm_context):
                     yield chunk
 
             elif primary_intent == "scrape_batch":
                 yield "📦 **Batch URL Scraping**\n\n"
-                async for chunk in self._stream_batch_scrape(urls, intent_analysis, user_message):
+                async for chunk in self._stream_batch_scrape_with_context(urls, intent_analysis, user_message,
+                                                                          llm_context):
                     yield chunk
 
             elif primary_intent == "check_accessibility":
                 yield "🔍 **Accessibility Check**\n\n"
-                async for chunk in self._stream_accessibility_check(urls, user_message):
+                async for chunk in self._stream_accessibility_check_with_context(urls, user_message, llm_context):
                     yield chunk
 
             else:
-                # Stream help response
+                # Stream help response with context
                 if self.llm_service:
+                    help_prompt = f"As a web scraping assistant, help with: {user_message}"
+
+                    # 🔥 FIX: Stream with conversation context
                     async for chunk in self.llm_service.generate_response_stream(
-                            f"As a web scraping assistant, help with: {user_message}"
+                            help_prompt,
+                            context=llm_context  # 🔥 KEY: Context preserves memory
                     ):
                         yield chunk
                 else:

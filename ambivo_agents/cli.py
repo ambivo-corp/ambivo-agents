@@ -1,23 +1,9 @@
 #!/usr/bin/env python3
 """
-ModeratorAgent CLI - Command Line Interface for the Ambivo ModeratorAgent
+Enhanced Ambivo Agents CLI with Full Environment Variable Support - Version 1.1
 
-A comprehensive CLI tool for interacting with the ModeratorAgent that orchestrates
-multiple specialized agents for various tasks including web search, knowledge base
-operations, media editing, YouTube downloads, and more.
-
-Features:
-- Interactive chat interface with the ModeratorAgent
-- Configuration management and validation
-- Agent status monitoring and debugging
-- Session management with conversation history
-- Automated testing capabilities
-- Multi-mode operation (interactive, single query, test mode)
-
-Requirements:
-- agent_config.yaml must be present in the current directory
-- All required dependencies must be installed
-- Redis server running (if configured)
+This version properly integrates with your loader.py environment variable system
+and maintains session history through agent caching.
 
 Author: Hemant Gosain 'Sunny'
 Company: Ambivo
@@ -26,677 +12,1523 @@ License: MIT
 """
 
 import asyncio
-import argparse
+import click
 import json
-import os
 import sys
 import time
+import yaml
+import os
+import uuid
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional
 from datetime import datetime
-import signal
+from typing import Optional, Dict, Any, Union, Tuple
 
-# Configure logging before other imports
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+# Import agents directly using clean imports
+from ambivo_agents import (
+    AssistantAgent,
+    KnowledgeBaseAgent,
+    YouTubeDownloadAgent,
+    MediaEditorAgent,
+    WebSearchAgent,
+    WebScraperAgent,
+    CodeExecutorAgent
 )
 
-# Import ModeratorAgent and related components
+# Import AgentSession with fallback
+try:
+    from ambivo_agents import AgentSession
+
+    AGENT_SESSION_AVAILABLE = True
+except ImportError:
+    try:
+        from ambivo_agents.core.base import AgentSession
+
+        AGENT_SESSION_AVAILABLE = True
+    except ImportError:
+        AGENT_SESSION_AVAILABLE = False
+        AgentSession = None
+
+# ✅ ENHANCED: Import your loader.py for proper ENV support
+try:
+    from ambivo_agents.config.loader import load_config, ConfigurationError, get_config_section
+
+    LOADER_AVAILABLE = True
+    print("✅ Using ambivo_agents configuration loader with environment variable support")
+except ImportError:
+    LOADER_AVAILABLE = False
+    print("⚠️  ambivo_agents.config.loader not available - using fallback configuration")
+
+# Fallback to service for complex routing if needed
+try:
+    from ambivo_agents.services import create_agent_service
+
+    SERVICE_AVAILABLE = True
+except ImportError:
+    SERVICE_AVAILABLE = False
+
+# MCP imports with availability checking
+try:
+    from .mcp import MCP_AVAILABLE
+
+    if MCP_AVAILABLE:
+        from .mcp.server import MCPAgentServer
+        from .mcp.client import MCPAgentClient
+        from .services.mcp_agent_service import create_mcp_agent_service
+    else:
+        MCPAgentServer = None
+        MCPAgentClient = None
+        create_mcp_agent_service = None
+except ImportError:
+    MCP_AVAILABLE = False
+    MCPAgentServer = None
+    MCPAgentClient = None
+    create_mcp_agent_service = None
+
+# Import ModeratorAgent for enhanced routing
 try:
     from ambivo_agents.agents.moderator import ModeratorAgent
-    from ambivo_agents.config.loader import load_config, ConfigurationError
     from ambivo_agents.core.base import AgentContext
 
     MODERATOR_AVAILABLE = True
 except ImportError as e:
-    print(f"❌ ModeratorAgent not available: {e}")
-    print("💡 Make sure ambivo_agents package is installed and configured properly")
     MODERATOR_AVAILABLE = False
-    sys.exit(1)
+    ModeratorAgent = None
 
 
-class ModeratorCLI:
-    """Comprehensive CLI for ModeratorAgent interactions"""
+class EnhancedConfigManager:
+    """Enhanced configuration manager that properly uses your loader.py system"""
 
-    def __init__(self, config_path: str = "agent_config.yaml"):
-        """Initialize the CLI with configuration"""
+    def __init__(self, config_path: Optional[str] = None, use_env_vars: Optional[bool] = None):
         self.config_path = config_path
+        self.use_env_vars = use_env_vars
         self.config = None
-        self.moderator = None
-        self.context = None
-        self.session_start_time = None
-        self.message_count = 0
-        self.conversation_history = []
-        self.enabled_agents = []
+        self.config_source = "unknown"
 
-        # CLI state
-        self.running = True
-        self.debug_mode = False
-        self.quiet_mode = False
-
-        # Load configuration
         self._load_configuration()
 
-        # Setup signal handlers
-        self._setup_signal_handlers()
-
     def _load_configuration(self):
-        """Load and validate configuration from YAML file"""
-        if not Path(self.config_path).exists():
-            print(f"❌ Configuration file not found: {self.config_path}")
-            print("💡 Create a configuration file using: ambivo-agents config save-sample agent_config.yaml")
-            sys.exit(1)
+        """Load configuration using your loader.py system with full ENV support"""
+
+        if LOADER_AVAILABLE:
+            # ✅ USE YOUR LOADER.PY - Supports ENV vars + YAML + defaults
+            try:
+                self.config = load_config(
+                    config_path=self.config_path,
+                    use_env_vars=self.use_env_vars
+                )
+                self.config_source = self.config.get('_config_source', 'loader.py')
+
+                print(f"✅ Configuration loaded via loader.py from: {self.config_source}")
+
+                # Show what type of config was loaded
+                if 'environment variables' in self.config_source:
+                    print("🌍 Using environment variables (AMBIVO_AGENTS_ prefix)")
+                elif 'YAML' in self.config_source:
+                    print(f"📄 Using YAML file: {self.config_path or 'auto-detected'}")
+                elif 'defaults' in self.config_source:
+                    print("⚙️  Using minimal defaults")
+
+                return
+
+            except ConfigurationError as e:
+                print(f"❌ Configuration error: {e}")
+                print("💡 Falling back to create agent_config.yaml...")
+                self._prompt_for_config_creation()
+
+            except Exception as e:
+                print(f"⚠️  Unexpected error with loader.py: {e}")
+                print("💡 Using fallback configuration system...")
+                self._use_fallback_config()
+        else:
+            # Fallback to basic config if loader.py not available
+            self._use_fallback_config()
+
+    def _use_fallback_config(self):
+        """Fallback configuration system"""
+        self.config = self._get_default_config()
+        self.config_source = "fallback_defaults"
+
+        # Try to load agent_config.yaml if it exists
+        possible_paths = [
+            './agent_config.yaml',
+            './agent_config.yml',
+            '~/.ambivo/agent_config.yaml'
+        ]
+
+        for path_str in possible_paths:
+            path = Path(path_str).expanduser()
+            if path.exists():
+                try:
+                    with open(path, 'r') as f:
+                        file_config = yaml.safe_load(f)
+                        if file_config:
+                            self._merge_config(self.config, file_config)
+                            self.config_source = f"fallback_yaml:{path}"
+                            print(f"📄 Loaded YAML config: {path}")
+                            return
+                except Exception as e:
+                    print(f"⚠️  Warning loading {path}: {e}")
+
+        # Prompt for config creation if none found
+        if not any(Path(p).expanduser().exists() for p in possible_paths):
+            self._prompt_for_config_creation()
+
+    def _get_default_config(self) -> Dict[str, Any]:
+        """Get default configuration structure"""
+        return {
+            'cli': {
+                'version': '1.1.0',
+                'default_mode': 'shell',
+                'auto_session': True,
+                'session_prefix': 'ambivo',
+                'verbose': False,
+                'theme': 'default'
+            },
+            'agents': {
+                'youtube': {
+                    'default_audio_only': True,
+                    'output_directory': './downloads'
+                },
+                'media': {
+                    'supported_formats': ['mp4', 'avi', 'mov', 'mp3', 'wav']
+                },
+                'web_search': {
+                    'default_max_results': 5
+                },
+                'moderator': {
+                    'enabled': MODERATOR_AVAILABLE
+                }
+            },
+            'agent_capabilities': {
+                'enable_knowledge_base': True,
+                'enable_web_search': True,
+                'enable_code_execution': True,
+                'enable_media_editor': True,
+                'enable_youtube_download': True,
+                'enable_web_scraping': True,
+                'enable_proxy_mode': True
+            },
+            'session': {
+                'auto_cleanup': True,
+                'session_timeout': 3600
+            },
+            'mcp': {
+                'enabled': False,
+                'server': {
+                    'enabled': False,
+                    'name': 'ambivo-agents'
+                },
+                'client': {
+                    'enabled': False
+                }
+            },
+            '_config_source': 'defaults'
+        }
+
+    def _prompt_for_config_creation(self):
+        """Prompt user to create agent_config.yaml with environment variable info"""
+        print("\n📋 No configuration found!")
+        print("💡 You can configure Ambivo Agents in two ways:")
+        print("   1. 📄 Create agent_config.yaml file")
+        print("   2. 🌍 Set environment variables with AMBIVO_AGENTS_ prefix")
+        print()
+        print("🌍 Environment Variable Examples:")
+        print("   export AMBIVO_AGENTS_REDIS_HOST=localhost")
+        print("   export AMBIVO_AGENTS_REDIS_PORT=6379")
+        print("   export AMBIVO_AGENTS_OPENAI_API_KEY=your_key_here")
+        print("   export AMBIVO_AGENTS_ENABLE_WEB_SEARCH=true")
+        print("   export AMBIVO_AGENTS_MCP_ENABLED=true")
+        print()
+
+        if click.confirm("📄 Create sample agent_config.yaml file?"):
+            config_path = "./agent_config.yaml"
+            if self.save_sample_config(config_path):
+                print(f"✅ Created: {config_path}")
+                print("💡 Edit this file to customize settings")
+                print("🌍 Environment variables will override YAML settings")
+                self.config_path = config_path
+
+                # Reload with the new file
+                if LOADER_AVAILABLE:
+                    try:
+                        self.config = load_config(config_path)
+                        self.config_source = self.config.get('_config_source', 'created_yaml')
+                    except:
+                        pass
+            else:
+                print("❌ Failed to create config file")
+        else:
+            print("💡 Continuing with defaults")
+            print("🌍 Set environment variables to configure the system")
+
+    def _merge_config(self, base: Dict, override: Dict):
+        """Recursively merge configuration dictionaries"""
+        for key, value in override.items():
+            if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                self._merge_config(base[key], value)
+            else:
+                base[key] = value
+
+    def get(self, path: str, default=None):
+        """Get configuration value using dot notation"""
+        if not self.config:
+            return default
+
+        keys = path.split('.')
+        current = self.config
+
+        for key in keys:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                return default
+
+        return current
+
+    def save_sample_config(self, path: str):
+        """Save a sample configuration file with MCP support"""
+        sample_config = {
+            'redis': {
+                'host': 'localhost',
+                'port': 6379,
+                'db': 0,
+                'password': None
+            },
+
+            'llm': {
+                'preferred_provider': 'openai',
+                'temperature': 0.7,
+                'max_tokens': 4000,
+                'openai_api_key': 'your_openai_api_key_here',
+                'anthropic_api_key': 'your_anthropic_api_key_here'
+            },
+
+            'agent_capabilities': {
+                'enable_knowledge_base': True,
+                'enable_web_search': True,
+                'enable_code_execution': True,
+                'enable_media_editor': True,
+                'enable_youtube_download': True,
+                'enable_web_scraping': True,
+                'enable_proxy_mode': True
+            },
+
+            'web_search': {
+                'brave_api_key': 'your_brave_api_key_here',
+                'default_max_results': 10
+            },
+
+            'knowledge_base': {
+                'qdrant_url': 'your_qdrant_url_here',
+                'qdrant_api_key': 'your_qdrant_api_key_here',
+                'chunk_size': 1024,
+                'similarity_top_k': 5
+            },
+
+            'mcp': {
+                'enabled': False,
+                'server': {
+                    'enabled': False,
+                    'name': 'ambivo-agents',
+                    'version': '1.0.0',
+                    'stdio': True
+                },
+                'client': {
+                    'enabled': False,
+                    'auto_connect_servers': ['filesystem', 'github', 'sqlite']
+                },
+                'external_servers': {
+                    'filesystem': {
+                        'command': 'npx',
+                        'args': ['@modelcontextprotocol/server-filesystem', '/allowed/path'],
+                        'capabilities': ['file_read', 'file_write']
+                    },
+                    'github': {
+                        'command': 'npx',
+                        'args': ['@modelcontextprotocol/server-github'],
+                        'capabilities': ['repo_access', 'issue_management'],
+                        'env': {
+                            'GITHUB_PERSONAL_ACCESS_TOKEN': '${GITHUB_TOKEN}'
+                        }
+                    }
+                }
+            },
+
+            'service': {
+                'max_sessions': 100,
+                'log_level': 'INFO'
+            }
+        }
 
         try:
-            self.config = load_config(self.config_path)
-            #print(f"✅ Configuration loaded from {self.config_path}")
-        except ConfigurationError as e:
-            print(f"❌ Configuration error: {e}")
-            sys.exit(1)
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            with open(path, 'w') as f:
+                # Write comments and config
+                f.write("# Ambivo Agents Configuration\n")
+                f.write("# Environment variables with AMBIVO_AGENTS_ prefix will override these settings\n")
+                f.write("# Example: export AMBIVO_AGENTS_REDIS_HOST=localhost\n")
+                f.write("# Example: export AMBIVO_AGENTS_OPENAI_API_KEY=your_key_here\n\n")
+
+                yaml.dump(sample_config, f, default_flow_style=False, indent=2)
+            return True
         except Exception as e:
-            print(f"❌ Failed to load configuration: {e}")
-            sys.exit(1)
+            print(f"❌ Failed to save sample config: {e}")
+            return False
 
-        # Validate required sections
-        required_sections = ['agent_capabilities']
-        for section in required_sections:
-            if section not in self.config:
-                print(f"❌ Missing required configuration section: {section}")
-                sys.exit(1)
 
-    def _setup_signal_handlers(self):
-        """Setup signal handlers for graceful shutdown"""
+class AmbivoAgentsCLI:
+    """Enhanced CLI with agent caching, session management, and full ENV support"""
 
-        def signal_handler(signum, frame):
-            print(f"\n🔄 Received signal {signum}, initiating graceful shutdown...")
-            self.running = False
-            asyncio.create_task(self._shutdown())
+    def __init__(self, config_manager: EnhancedConfigManager):
+        self.config = config_manager
+        self.user_id = "cli_user"
+        self.tenant_id = "cli_tenant"
+        self.session_metadata = {
+            "cli_session": True,
+            "version": self.config.get('cli.version', '1.1.0'),
+            "mode": "shell_default",
+            "config_source": self.config.config_source
+        }
+        self.session_file = Path.home() / ".ambivo_agents_session"
 
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
+        # ✅ AGENT CACHING SYSTEM - Preserves session history
+        self._session_agents: Dict[str, Tuple[Any, Any]] = {}
+        self._agent_creation_lock = asyncio.Lock()
 
-    def _get_enabled_agents_from_config(self) -> List[str]:
-        """Get enabled agents from configuration"""
-        capabilities = self.config.get('agent_capabilities', {})
-        enabled_agents = []
+        # MCP integration
+        self.mcp_server = None
+        self.mcp_client = None
 
-        # Always include assistant as base agent
-        enabled_agents.append('assistant')
+        self._ensure_auto_session()
 
-        # Add agents based on capabilities
-        if capabilities.get('enable_knowledge_base', False):
-            enabled_agents.append('knowledge_base')
+        # Check import status
+        if not AGENT_SESSION_AVAILABLE:
+            if self.config.get('cli.verbose', False):
+                print("⚠️  Warning: AgentSession not available - some features may be limited")
 
-        if capabilities.get('enable_web_search', False):
-            enabled_agents.append('web_search')
+    def _ensure_auto_session(self):
+        """Automatically create a session if none exists and auto_session is enabled"""
+        if self.config.get('cli.auto_session', True):
+            current_session = self.get_current_session()
+            if not current_session:
+                session_id = str(uuid.uuid4())
+                self.set_current_session(session_id)
+                if self.config.get('cli.verbose', False):
+                    print(f"🔄 Auto-created session: {session_id}")
 
-        if capabilities.get('enable_code_execution', False):
-            enabled_agents.append('code_executor')
-
-        if capabilities.get('enable_media_editor', False):
-            enabled_agents.append('media_editor')
-
-        if capabilities.get('enable_youtube_download', False):
-            enabled_agents.append('youtube_download')
-
-        if capabilities.get('enable_web_scraping', False):
-            enabled_agents.append('web_scraper')
-
-        return enabled_agents
-
-    async def _initialize_moderator(self, user_id: str = None, enabled_agents: List[str] = None):
-        """Initialize the ModeratorAgent"""
-        if not user_id:
-            user_id = f"cli_user_{int(time.time())}"
-
-        if not enabled_agents:
-            enabled_agents = self._get_enabled_agents_from_config()
-
-        self.enabled_agents = enabled_agents
-
+    def get_current_session(self) -> Optional[str]:
+        """Get the currently active session from file"""
         try:
-            print("🚀 Initializing ModeratorAgent...")
-            print(f"👤 User ID: {user_id}")
-            print(f"🤖 Enabled agents: {', '.join(enabled_agents)}")
+            if self.session_file.exists():
+                return self.session_file.read_text().strip()
+        except Exception:
+            pass
+        return None
 
-            # Create ModeratorAgent with enabled agents
-            self.moderator, self.context = ModeratorAgent.create(
-                user_id=user_id,
-                tenant_id="cli_tenant",
-                enabled_agents=enabled_agents
+    def set_current_session(self, session_id: str):
+        """Set the current session and save to file"""
+        try:
+            self.session_file.write_text(session_id)
+            return True
+        except Exception as e:
+            print(f"❌ Failed to save session: {e}")
+            return False
+
+    def clear_current_session(self):
+        """Clear the current session"""
+        try:
+            if self.session_file.exists():
+                self.session_file.unlink()
+            return True
+        except Exception as e:
+            print(f"❌ Failed to clear session: {e}")
+            return False
+
+    async def get_or_create_agent(self, agent_class, session_id: str = None,
+                                  additional_metadata: Dict[str, Any] = None):
+        """
+        ✅ ENHANCED: Get existing agent from cache or create new one
+        This ensures agents are reused within sessions, preserving conversation history
+        """
+        if session_id is None:
+            session_id = self.get_current_session()
+
+        if not session_id:
+            raise ValueError("No session ID available for agent creation")
+
+        # Create cache key: agent_class + session_id
+        cache_key = f"{agent_class.__name__}_{session_id}"
+
+        async with self._agent_creation_lock:
+            # ✅ CHECK CACHE FIRST - Reuses existing agents
+            if cache_key in self._session_agents:
+                agent, context = self._session_agents[cache_key]
+                if self.config.get('cli.verbose', False):
+                    print(f"🔄 Reusing cached {agent_class.__name__} (ID: {agent.agent_id})")
+                    print(f"   📚 Agent retains conversation history and memory")
+                return agent, context
+
+            # Create new agent only if not in cache
+            if self.config.get('cli.verbose', False):
+                print(f"🆕 Creating new {agent_class.__name__} for session {session_id[:8]}...")
+
+            metadata = {**self.session_metadata}
+            if additional_metadata:
+                metadata.update(additional_metadata)
+
+            metadata['config'] = {
+                'agent_type': agent_class.__name__,
+                'configured': True,
+                'cached': True,
+                'session_id': session_id,
+                'config_source': self.config.config_source
+            }
+
+            # Use consistent agent_id based on session + agent type
+            consistent_agent_id = f"{agent_class.__name__.lower()}_{session_id}"
+
+            agent, context = agent_class.create(
+                agent_id=consistent_agent_id,
+                user_id=self.user_id,
+                tenant_id=self.tenant_id,
+                session_metadata=metadata,
+                session_id=session_id,
+                conversation_id=session_id
             )
 
-            self.session_start_time = datetime.now()
+            # ✅ CACHE THE AGENT - Will be reused for subsequent calls
+            self._session_agents[cache_key] = (agent, context)
 
-            print(f"✅ ModeratorAgent initialized successfully!")
-            print(f"🆔 Agent ID: {self.moderator.agent_id}")
-            print(f"📋 Session ID: {self.context.session_id}")
-            print(f"🗣️ Conversation ID: {self.context.conversation_id}")
+            if self.config.get('cli.verbose', False):
+                print(f"✅ Cached {agent_class.__name__} (ID: {agent.agent_id})")
+                print(f"📊 Total cached agents: {len(self._session_agents)}")
+                print(f"💾 Agent will retain memory across commands")
 
-            # Get and display agent status
-            status = await self.moderator.get_agent_status()
-            print(f"📊 Active specialized agents: {status['total_agents']}")
+            return agent, context
 
-            if not self.quiet_mode:
-                for agent_type, agent_info in status['active_agents'].items():
-                    print(f"   • {agent_type}: {agent_info['status']}")
+    def clear_session_agents(self, session_id: str = None):
+        """Clear cached agents for a specific session"""
+        if session_id is None:
+            session_id = self.get_current_session()
 
-        except Exception as e:
-            print(f"❌ Failed to initialize ModeratorAgent: {e}")
-            if self.debug_mode:
-                import traceback
-                traceback.print_exc()
-            sys.exit(1)
+        if not session_id:
+            return
 
-    async def _shutdown(self):
-        """Graceful shutdown"""
-        if self.moderator:
+        keys_to_remove = [key for key in self._session_agents.keys() if key.endswith(session_id)]
+
+        for key in keys_to_remove:
+            agent, context = self._session_agents[key]
+
+            if self.config.get('cli.verbose', False):
+                print(f"🗑️  Removing cached agent: {agent.agent_id}")
+
             try:
-                print("🧹 Cleaning up ModeratorAgent session...")
-                await self.moderator.cleanup_session()
-                print("✅ Cleanup completed")
+                asyncio.create_task(agent.cleanup_session())
             except Exception as e:
-                print(f"⚠️ Cleanup warning: {e}")
+                print(f"⚠️  Warning during agent cleanup: {e}")
 
-    def _print_banner(self):
-        """Print CLI banner"""
-        if self.quiet_mode:
-            return
+            del self._session_agents[key]
 
-        print("=" * 70)
-        print("🎛️  MODERATOR AGENT CLI")
-        print("=" * 70)
-        print("🤖 AI Agent Orchestrator - Route queries to specialized agents")
-        print("📖 Type 'help' for commands, 'quit' to exit")
-        #print("🔧 Configuration loaded from:", self.config_path)
-        print("=" * 70)
+        if keys_to_remove and self.config.get('cli.verbose', False):
+            print(f"🧹 Cleared {len(keys_to_remove)} agents for session {session_id[:8]}...")
 
-    def _print_help(self):
-        """Print help information"""
-        help_text = """
-🆘 MODERATOR AGENT CLI HELP
+    def clear_all_agents(self):
+        """Clear all cached agents"""
+        if self.config.get('cli.verbose', False):
+            print(f"🧹 Clearing all {len(self._session_agents)} cached agents...")
 
-📋 BASIC COMMANDS:
-   help, h          - Show this help message
-   quit, exit, bye  - Exit the CLI
-   status           - Show agent status and session info
-   config           - Display current configuration
-   history          - Show conversation history
-   clear            - Clear conversation history
-   debug            - Toggle debug mode
-   agents           - List active agents and their status
+        for key, (agent, context) in self._session_agents.items():
+            try:
+                asyncio.create_task(agent.cleanup_session())
+            except Exception as e:
+                print(f"⚠️  Warning during agent cleanup: {e}")
 
-💬 CHAT COMMANDS:
-   Just type your message and press Enter to chat with the ModeratorAgent!
+        self._session_agents.clear()
 
-   Examples:
-   • "Search for latest AI trends"
-   • "Download https://youtube.com/watch?v=example"
-   • "Ingest document.pdf into knowledge_base"
-   • "Extract audio from video.mp4"
-   • "Scrape https://example.com for content"
+    def get_cached_agents_info(self) -> Dict[str, Any]:
+        """Get information about cached agents"""
+        info = {
+            'total_agents': len(self._session_agents),
+            'agents': []
+        }
 
-🎯 AGENT ROUTING:
-   The ModeratorAgent automatically routes your queries to appropriate agents:
-   • 🔍 Web searches → WebSearchAgent
-   • 📺 YouTube operations → YouTubeDownloadAgent  
-   • 📚 Knowledge base → KnowledgeBaseAgent
-   • 🎬 Media editing → MediaEditorAgent
-   • 🕷️ Web scraping → WebScraperAgent
-   • 💻 Code execution → CodeExecutorAgent
-   • 💬 General chat → AssistantAgent
+        for key, (agent, context) in self._session_agents.items():
+            agent_info = {
+                'cache_key': key,
+                'agent_id': agent.agent_id,
+                'agent_type': agent.__class__.__name__,
+                'session_id': context.session_id,
+                'created_at': context.created_at.isoformat(),
+                'memory_available': hasattr(agent, 'memory') and agent.memory is not None,
+                'config_source': self.config.config_source
+            }
+            info['agents'].append(agent_info)
 
-🔧 ADVANCED:
-   Use Ctrl+C for graceful shutdown
-   Session state is maintained throughout your conversation
+        return info
+
+    async def smart_message_routing(self, message: str) -> str:
         """
-        print(help_text)
+        ✅ ENHANCED: Smart routing with agent caching and full config support
+        Uses cached agents to preserve conversation history across commands
+        """
+        message_lower = message.lower()
+        current_session = self.get_current_session()
 
-    def _format_duration(self, seconds: float) -> str:
-        """Format duration in human readable format"""
-        if seconds < 60:
-            return f"{seconds:.1f}s"
-        elif seconds < 3600:
-            minutes = int(seconds // 60)
-            remaining_seconds = seconds % 60
-            return f"{minutes}m {remaining_seconds:.1f}s"
-        else:
-            hours = int(seconds // 3600)
-            remaining_minutes = int((seconds % 3600) // 60)
-            remaining_seconds = seconds % 60
-            return f"{hours}h {remaining_minutes}m {remaining_seconds:.1f}s"
+        if not current_session:
+            raise ValueError("No active session for message processing")
 
-    async def _handle_status_command(self):
-        """Handle status command"""
+        # If ModeratorAgent is available and enabled, use it for routing
+        if MODERATOR_AVAILABLE and self.config.get('agents.moderator.enabled', False):
+            return await self._route_with_moderator(message, current_session)
+
+        # Otherwise use built-in routing logic with cached agents
+        return await self._route_with_builtin_logic(message, current_session)
+
+    async def _route_with_moderator(self, message: str, session_id: str) -> str:
+        """Route message using ModeratorAgent (cached)"""
         try:
-            status = await self.moderator.get_agent_status()
-            session_duration = time.time() - self.session_start_time.timestamp()
+            # ✅ USE CACHED MODERATOR AGENT
+            agent, context = await self.get_or_create_agent(ModeratorAgent, session_id,
+                                                            {"operation": "moderated_routing"})
 
-            print("\n📊 MODERATOR AGENT STATUS")
-            print("=" * 50)
-            print(f"🆔 Moderator ID: {status['moderator_id']}")
-            print(f"📋 Session ID: {self.context.session_id}")
-            print(f"👤 User ID: {self.context.user_id}")
-            print(f"⏱️ Session Duration: {self._format_duration(session_duration)}")
-            print(f"💬 Messages Processed: {self.message_count}")
-            print(f"🤖 Total Agents: {status['total_agents']}")
-            print(f"🎯 Enabled Agents: {', '.join(self.enabled_agents)}")
-            print(f"🔀 Routing Patterns: {status['routing_patterns']}")
-
-            print(f"\n🏃 ACTIVE AGENTS:")
-            for agent_type, agent_info in status['active_agents'].items():
-                agent_status = agent_info.get('status', 'unknown')
-                agent_id = agent_info.get('agent_id', 'unknown')
-                session_id = agent_info.get('session_id', 'unknown')
-
-                status_emoji = "✅" if agent_status == "active" else "❌"
-                print(f"   {status_emoji} {agent_type}")
-                print(f"      ID: {agent_id}")
-                print(f"      Session: {session_id}")
-                if 'error' in agent_info:
-                    print(f"      Error: {agent_info['error']}")
-
+            response = await agent.chat(message)
+            return response
         except Exception as e:
-            print(f"❌ Error getting status: {e}")
+            # Fallback to built-in routing
+            print(f"⚠️  ModeratorAgent routing failed, using fallback: {e}")
+            return await self._route_with_builtin_logic(message, session_id)
 
-    def _handle_config_command(self):
-        """Handle config command"""
-        print("\n⚙️ CONFIGURATION")
-        print("=" * 50)
-        print(f"📄 Config File: {self.config_path}")
+    def _detect_code_execution_request(self, message: str) -> bool:
+        """
+        Enhanced detection for code execution requests
 
-        # Agent capabilities
-        capabilities = self.config.get('agent_capabilities', {})
-        print(f"\n🎛️ AGENT CAPABILITIES:")
-        for capability, enabled in capabilities.items():
-            emoji = "✅" if enabled else "❌"
-            print(f"   {emoji} {capability}: {enabled}")
+        Called by: _route_with_builtin_logic()
+        Returns: True if message indicates code execution intent
+        """
+        message_lower = message.lower()
 
-        # Service configuration
-        service_config = self.config.get('service', {})
-        if service_config:
-            print(f"\n🔧 SERVICE CONFIG:")
-            for key, value in service_config.items():
-                print(f"   • {key}: {value}")
+        # Strong code execution indicators with regex
+        strong_patterns = [
+            r'write.*code.*(?:execute|run)',  # "write code to ... then execute"
+            r'(?:execute|run).*code',  # "execute code" or "run code"
+            r'code.*(?:then|and).*(?:execute|run)',  # "code then execute"
+            r'python.*(?:execute|run)',  # "python ... execute"
+            r'write.*python.*(?:execute|run)',  # "write python ... execute"
+            r'create.*code.*(?:execute|run)'  # "create code ... execute"
+        ]
 
-        # Memory configuration
-        memory_config = self.config.get('memory_management', {})
-        if memory_config:
-            print(f"\n🧠 MEMORY CONFIG:")
-            for key, value in memory_config.items():
-                if isinstance(value, dict):
-                    print(f"   • {key}:")
-                    for sub_key, sub_value in value.items():
-                        print(f"     - {sub_key}: {sub_value}")
+        # Check regex patterns first (strongest indicators)
+        import re
+        for pattern in strong_patterns:
+            if re.search(pattern, message_lower):
+                return True
+
+        # Check keyword combinations (moderate indicators)
+        has_write = any(word in message_lower for word in ['write', 'create', 'generate', 'make'])
+        has_code = any(word in message_lower for word in ['code', 'script', 'python', 'program'])
+        has_execute = any(word in message_lower for word in ['execute', 'run', 'test', 'show result'])
+
+        # If all three present, it's definitely a code execution request
+        return has_write and has_code and has_execute
+    async def _route_with_builtin_logic(self, message: str, session_id: str) -> str:
+        """Built-in routing logic using cached agents"""
+        """Built-in routing logic using cached agents - ENHANCED WITH CODE DETECTION"""
+        message_lower = message.lower()
+
+        if self._detect_code_execution_request(message):
+            # ✅ ROUTE TO CODE EXECUTOR AGENT
+            agent, context = await self.get_or_create_agent(CodeExecutorAgent, session_id,
+                                                            {"operation": "code_execution"})
+
+            try:
+                # Let CodeExecutorAgent handle both writing AND executing
+                from ambivo_agents.core.base import AgentMessage, MessageType
+
+                agent_message = AgentMessage(
+                    id=f"msg_{str(uuid.uuid4())[:8]}",
+                    sender_id="cli_user",
+                    recipient_id=agent.agent_id,
+                    content=message,
+                    message_type=MessageType.USER_INPUT,
+                    session_id=context.session_id,
+                    conversation_id=context.conversation_id
+                )
+
+                response_message = await agent.process_message(agent_message, context.to_execution_context())
+                return f"{response_message.content}\n\n🔧 *Processed by CodeExecutorAgent with code execution capabilities*"
+
+            except Exception as e:
+                return f"❌ Error in code execution: {str(e)}"
+
+        # YouTube Download Detection
+        elif any(keyword in message_lower for keyword in ['youtube', 'download', 'youtu.be']) and (
+                'http' in message or 'www.' in message):
+            # ✅ REUSE CACHED YOUTUBE AGENT - Preserves download history
+            agent, context = await self.get_or_create_agent(YouTubeDownloadAgent, session_id,
+                                                            {"operation": "youtube_download"})
+
+            try:
+                import re
+                youtube_patterns = [
+                    r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+                    r'https?://(?:www\.)?youtu\.be/[\w-]+',
+                ]
+
+                urls = []
+                for pattern in youtube_patterns:
+                    urls.extend(re.findall(pattern, message))
+
+                if urls:
+                    url = urls[0]
+                    default_audio_only = self.config.get('agents.youtube.default_audio_only', True)
+                    wants_video = any(keyword in message_lower for keyword in ['video', 'mp4', 'watch', 'visual'])
+                    audio_only = default_audio_only if not wants_video else False
+
+                    if 'info' in message_lower or 'information' in message_lower:
+                        result = await agent._get_youtube_info(url)
+                    else:
+                        result = await agent._download_youtube(url, audio_only=audio_only)
+
+                    # ✅ AGENT STAYS CACHED - No cleanup_session() call
+                    if result['success']:
+                        return f"✅ YouTube operation completed!\n{result.get('message', '')}\nSession: {context.session_id}\nAgent: {agent.agent_id}\n🔄 Agent cached for future use"
+                    else:
+                        return f"❌ YouTube operation failed: {result['error']}"
                 else:
-                    print(f"   • {key}: {value}")
+                    return "❌ No valid YouTube URLs found in message"
 
-    def _handle_history_command(self):
-        """Handle history command"""
-        if not self.conversation_history:
-            print("\n📝 No conversation history yet")
-            return
+            except Exception as e:
+                return f"❌ YouTube operation error: {e}"
 
-        print(f"\n📝 CONVERSATION HISTORY ({len(self.conversation_history)} messages)")
-        print("=" * 50)
-
-        for i, entry in enumerate(self.conversation_history[-10:], 1):  # Show last 10
-            timestamp = entry['timestamp'].strftime("%H:%M:%S")
-            message_type = entry['type']
-            content = entry['content']
-
-            if message_type == 'user':
-                print(f"{i:2d}. [{timestamp}] 👤 You: {content}")
-            else:
-                agent_name = entry.get('agent', 'Assistant')
-                print(f"{i:2d}. [{timestamp}] 🤖 {agent_name}: {content[:100]}{'...' if len(content) > 100 else ''}")
-
-    async def _handle_agents_command(self):
-        """Handle agents command"""
-        try:
-            status = await self.moderator.get_agent_status()
-
-            print(f"\n🤖 AGENT REGISTRY")
-            print("=" * 50)
-            print(f"📊 Total Active Agents: {status['total_agents']}")
-            print(f"🎯 Enabled Agent Types: {', '.join(self.enabled_agents)}")
-
-            print(f"\n🏃 DETAILED AGENT STATUS:")
-            for agent_type, agent_info in status['active_agents'].items():
-                agent_status = agent_info.get('status', 'unknown')
-                agent_id = agent_info.get('agent_id', 'unknown')
-
-                status_emoji = "✅" if agent_status == "active" else "❌"
-                print(f"\n   {status_emoji} {agent_type.upper()}")
-                print(f"      🆔 Agent ID: {agent_id}")
-                print(f"      📊 Status: {agent_status}")
-                print(f"      📋 Session: {agent_info.get('session_id', 'unknown')}")
-
-                if 'error' in agent_info:
-                    print(f"      ❌ Error: {agent_info['error']}")
-
-                # Add agent-specific capabilities description
-                if agent_type == 'web_search':
-                    print(f"      🔍 Capabilities: Web search, news search, academic search")
-                elif agent_type == 'youtube_download':
-                    print(f"      📺 Capabilities: YouTube video/audio download, info extraction")
-                elif agent_type == 'knowledge_base':
-                    print(f"      📚 Capabilities: Document ingestion, semantic search, Q&A")
-                elif agent_type == 'media_editor':
-                    print(f"      🎬 Capabilities: Video/audio conversion, extraction, editing")
-                elif agent_type == 'web_scraper':
-                    print(f"      🕷️ Capabilities: Web scraping, content extraction")
-                elif agent_type == 'code_executor':
-                    print(f"      💻 Capabilities: Python/Bash code execution")
-                elif agent_type == 'assistant':
-                    print(f"      💬 Capabilities: General conversation, help, coordination")
-
-        except Exception as e:
-            print(f"❌ Error getting agent information: {e}")
-
-    async def _handle_clear_command(self):
-        """Handle clear command"""
-        self.conversation_history.clear()
-        self.message_count = 0
-        print("🧹 Conversation history cleared")
-
-    def _handle_debug_command(self):
-        """Handle debug command"""
-        self.debug_mode = not self.debug_mode
-        status = "enabled" if self.debug_mode else "disabled"
-        print(f"🐛 Debug mode {status}")
-
-        # Update logging level
-        if self.debug_mode:
-            logging.getLogger().setLevel(logging.DEBUG)
-            logging.getLogger("ambivo_agents").setLevel(logging.DEBUG)
+        # General Assistant (fallback)
         else:
-            logging.getLogger().setLevel(logging.INFO)
-            logging.getLogger("ambivo_agents").setLevel(logging.INFO)
+            # ✅ REUSE CACHED ASSISTANT AGENT - Preserves full conversation history
+            agent, context = await self.get_or_create_agent(AssistantAgent, session_id,
+                                                            {"operation": "general_assistance"})
 
-    async def _process_user_input(self, user_input: str) -> bool:
-        """Process user input and return True if should continue"""
-        user_input = user_input.strip()
+            try:
+                from ambivo_agents.core.base import AgentMessage, MessageType
 
-        if not user_input:
-            return True
+                agent_message = AgentMessage(
+                    id=f"msg_{str(uuid.uuid4())[:8]}",
+                    sender_id="cli_user",
+                    recipient_id=agent.agent_id,
+                    content=message,
+                    message_type=MessageType.USER_INPUT,
+                    session_id=context.session_id,
+                    conversation_id=context.conversation_id
+                )
 
-        # Handle commands
-        if user_input.lower() in ['quit', 'exit', 'bye']:
-            return False
-        elif user_input.lower() in ['help', 'h']:
-            self._print_help()
-            return True
-        elif user_input.lower() == 'status':
-            await self._handle_status_command()
-            return True
-        elif user_input.lower() == 'config':
-            self._handle_config_command()
-            return True
-        elif user_input.lower() == 'history':
-            self._handle_history_command()
-            return True
-        elif user_input.lower() == 'agents':
-            await self._handle_agents_command()
-            return True
-        elif user_input.lower() == 'clear':
-            await self._handle_clear_command()
-            return True
-        elif user_input.lower() == 'debug':
-            self._handle_debug_command()
-            return True
+                response_message = await agent.process_message(agent_message, context.to_execution_context())
+                return f"{response_message.content}"
 
-        # Process as chat message
-        await self._handle_chat_message(user_input)
-        return True
+            except Exception as e:
+                return f"❌ Error processing your question: {e}"
 
-    async def _handle_chat_message(self, user_input: str):
-        """Handle chat message through ModeratorAgent"""
+
+# Initialize configuration and CLI
+config_manager = None
+cli_instance = None
+
+
+def initialize_cli(config_path: Optional[str] = None, verbose: bool = False, use_env_vars: Optional[bool] = None):
+    """
+    ✅ ENHANCED: Initialize CLI with full environment variable support
+
+    Args:
+        config_path: Path to YAML config file (optional)
+        verbose: Enable verbose output
+        use_env_vars: Force use of environment variables (None = auto-detect)
+    """
+    global config_manager, cli_instance
+
+    # ✅ USE ENHANCED CONFIG MANAGER with ENV support
+    config_manager = EnhancedConfigManager(config_path, use_env_vars)
+    if verbose:
+        config_manager.config['cli']['verbose'] = True
+
+    cli_instance = AmbivoAgentsCLI(config_manager)
+    return cli_instance
+
+
+# ============================================================================
+# MAIN CLI GROUP
+# ============================================================================
+
+@click.group(invoke_without_command=True)
+@click.version_option(version="1.1.0", prog_name="Ambivo Agents")
+@click.option('--config', '-c', help='Configuration file path')
+@click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
+@click.option('--env-vars', is_flag=True, help='Force use of environment variables')
+@click.pass_context
+def cli(ctx, config: Optional[str], verbose: bool, env_vars: bool):
+    """
+    Ambivo Agents - Multi-Agent AI System CLI with Full Environment Variable Support
+
+    🌟 Enhanced Features:
+    - 🌍 Full environment variable support (AMBIVO_AGENTS_ prefix)
+    - 📄 YAML configuration with ENV override
+    - 🔄 Agent caching preserves session history
+    - 📚 Conversation memory across commands
+    - 🔌 MCP (Model Context Protocol) Integration
+    - 🎯 Auto-session creation with UUID4
+    - ⚙️  Graceful config fallbacks
+
+    Configuration Priority:
+    1. Environment Variables (AMBIVO_AGENTS_*)
+    2. YAML Configuration File
+    3. Interactive Creation Prompt
+    4. Minimal Defaults
+
+    Environment Variable Examples:
+    export AMBIVO_AGENTS_REDIS_HOST=localhost
+    export AMBIVO_AGENTS_OPENAI_API_KEY=your_key
+    export AMBIVO_AGENTS_ENABLE_WEB_SEARCH=true
+    export AMBIVO_AGENTS_MCP_ENABLED=true
+
+    Author: Hemant Gosain 'Sunny'
+    Company: Ambivo
+    Email: sgosain@ambivo.com
+    """
+    global cli_instance
+
+    # ✅ ENHANCED: Initialize CLI with full ENV support
+    cli_instance = initialize_cli(config, verbose, env_vars if env_vars else None)
+
+    if verbose:
+        click.echo("🤖 Ambivo Agents CLI v1.1.0 - Enhanced with Full Environment Variable Support")
+        click.echo("📧 Contact: sgosain@ambivo.com")
+        click.echo("🏢 Company: https://www.ambivo.com")
+        click.echo("🌟 Agent caching, session management, ENV variables, and MCP integration")
+        click.echo(f"⚙️  Configuration source: {cli_instance.config.config_source}")
+
+    # If no command was provided, start shell mode by default
+    if ctx.invoked_subcommand is None:
+        default_mode = cli_instance.config.get('cli.default_mode', 'shell')
+        if default_mode == 'shell':
+            ctx.invoke(shell)
+        else:
+            click.echo(ctx.get_help())
+
+
+# ============================================================================
+# CHAT COMMANDS (Enhanced with session persistence)
+# ============================================================================
+
+@cli.command()
+@click.argument('message')
+@click.option('--conversation', '-conv', help='Conversation ID (overrides active session)')
+@click.option('--format', '-f', type=click.Choice(['text', 'json']), default='text', help='Output format')
+def chat(message: str, conversation: Optional[str], format: str):
+    """Send a message using smart agent routing with session history preservation"""
+
+    # Determine conversation ID
+    if conversation:
+        conv_id = conversation
+        session_source = f"explicit: {conversation}"
+    else:
+        active_session = cli_instance.get_current_session()
+        if active_session:
+            conv_id = active_session
+            session_source = f"active session: {active_session}"
+        else:
+            conv_id = "cli"
+            session_source = "default: cli"
+
+    verbose = cli_instance.config.get('cli.verbose', False)
+    if verbose:
+        click.echo(f"💬 Processing: {message}")
+        click.echo(f"📋 Session: {session_source}")
+        click.echo(f"⚙️  Config: {cli_instance.config.config_source}")
+
+    async def process():
         start_time = time.time()
 
-        try:
-            # Store user message in history
-            self.conversation_history.append({
-                'type': 'user',
-                'content': user_input,
-                'timestamp': datetime.now()
-            })
+        # ✅ This uses cached agents, preserving conversation history
+        response = await cli_instance.smart_message_routing(message)
+        processing_time = time.time() - start_time
 
-            # Send to ModeratorAgent
-            if not self.quiet_mode:
-                print("🤖 Processing...")
+        if format == 'json':
+            result = {
+                'success': True,
+                'response': response,
+                'processing_time': processing_time,
+                'message': message,
+                'conversation_id': conv_id,
+                'session_source': session_source,
+                'config_source': cli_instance.config.config_source,
+                'paradigm': 'cached_agent_reuse_with_history',
+                'mcp_available': MCP_AVAILABLE,
+                'moderator_available': MODERATOR_AVAILABLE,
+                'loader_available': LOADER_AVAILABLE
+            }
+            click.echo(json.dumps(result, indent=2))
+        else:
+            click.echo(f"\n🤖 Response:\n{response}")
+            if verbose:
+                click.echo(f"\n⏱️  Processing time: {processing_time:.2f}s")
+                click.echo(f"📋 Conversation: {conv_id}")
+                click.echo(f"🔄 Using cached agents with preserved history")
+                click.echo(f"🔌 MCP Available: {'✅' if MCP_AVAILABLE else '❌'}")
+                click.echo(f"🎯 ModeratorAgent: {'✅' if MODERATOR_AVAILABLE else '❌'}")
+                click.echo(f"⚙️  Config Source: {cli_instance.config.config_source}")
 
-            response = await self.moderator.chat(user_input)
+                # Show cached agent info if available
+                agents_info = cli_instance.get_cached_agents_info()
+                if agents_info['total_agents'] > 0:
+                    click.echo(f"🤖 Cached Agents: {agents_info['total_agents']}")
+                    memory_count = sum(1 for a in agents_info['agents'] if a['memory_available'])
+                    click.echo(f"📚 Agents with Memory: {memory_count}")
 
-            processing_time = time.time() - start_time
-            self.message_count += 1
+    asyncio.run(process())
 
-            # Store response in history
-            self.conversation_history.append({
-                'type': 'agent',
-                'content': response,
-                'timestamp': datetime.now(),
-                'agent': 'ModeratorAgent'
-            })
 
-            # Display response
-            print(f"\n🤖 ModeratorAgent: {response}")
+@cli.command()
+def interactive():
+    """Interactive chat mode with full session history preservation"""
 
-            if not self.quiet_mode:
-                print(f"⏱️ Processed in {processing_time:.2f}s")
+    click.echo("🤖 Starting interactive chat mode...")
 
-        except Exception as e:
-            print(f"❌ Error processing message: {e}")
-            if self.debug_mode:
-                import traceback
-                traceback.print_exc()
+    # Check for active session
+    active_session = cli_instance.get_current_session()
 
-    async def run_interactive(self, user_id: str = None):
-        """Run interactive CLI mode"""
-        await self._initialize_moderator(user_id)
+    if active_session:
+        session_display = active_session[:8] + "..." if len(active_session) > 8 else active_session
+        click.echo(f"📋 Using active session: {session_display}")
+        click.echo(f"📚 Conversation history will be preserved")
+    else:
+        click.echo("📋 No active session - using default conversation")
 
-        self._print_banner()
+    click.echo(f"⚙️  Configuration: {cli_instance.config.config_source}")
+    click.echo("Type 'quit', 'exit', or 'bye' to exit")
+    click.echo("-" * 60)
 
-        print(f"\n💡 ModeratorAgent ready! Type 'help' for commands or start chatting.")
-        print(f"🚀 Your queries will be intelligently routed to appropriate agents.")
+    async def interactive_loop():
+        # Use active session or generate a unique one for this interactive session
+        if active_session:
+            conversation_id = active_session
+        else:
+            conversation_id = f"interactive_{int(time.time())}"
 
-        while self.running:
+        while True:
             try:
-                user_input = input("\n🗣️  You: ").strip()
+                user_input = click.prompt("\n🗣️  You", type=str)
 
-                if not await self._process_user_input(user_input):
+                if user_input.lower() in ['quit', 'exit', 'bye']:
+                    click.echo("👋 Goodbye!")
+                    break
+
+                # ✅ Process with smart routing using conversation_id (preserves history)
+                response = await cli_instance.smart_message_routing(user_input)
+
+                click.echo(f"🤖 Agent: {response}")
+                session_display = conversation_id[:8] + "..." if len(conversation_id) > 8 else conversation_id
+                click.echo(f"📋 Session: {session_display}")
+
+            except KeyboardInterrupt:
+                click.echo("\n👋 Goodbye!")
+                break
+            except EOFError:
+                click.echo("\n👋 Goodbye!")
+                break
+
+    asyncio.run(interactive_loop())
+
+
+@cli.command()
+def shell():
+    """Start Ambivo Agents interactive shell with full environment variable support"""
+
+    # Show enhanced welcome message
+    click.echo("🚀 Ambivo Agents Shell v1.1.0 (Full Environment Variable Support)")
+    click.echo("💡 YAML config + ENV variables + agent caching + session history + MCP integration")
+
+    click.echo(f"⚙️  Configuration source: {cli_instance.config.config_source}")
+
+    if LOADER_AVAILABLE:
+        click.echo("✅ Using enhanced configuration loader (ENV support)")
+    else:
+        click.echo("⚠️  Using fallback configuration (limited ENV support)")
+
+    # Show current session
+    current_session = cli_instance.get_current_session()
+    if current_session:
+        session_display = current_session[:8] + "..." if len(current_session) > 8 else current_session
+        click.echo(f"🔗 Session: {session_display}")
+
+    # Show cached agents
+    if hasattr(cli_instance, '_session_agents'):
+        agents_info = cli_instance.get_cached_agents_info()
+        if agents_info['total_agents'] > 0:
+            click.echo(f"🤖 Cached agents: {agents_info['total_agents']} (with preserved memory)")
+
+    # Show feature availability
+    features = []
+    if MCP_AVAILABLE:
+        features.append("🔌 MCP")
+    if MODERATOR_AVAILABLE:
+        features.append("🎯 ModeratorAgent")
+    if LOADER_AVAILABLE:
+        features.append("🌍 ENV Variables")
+
+    if features:
+        click.echo(f"🌟 Available: {' | '.join(features)}")
+
+    click.echo("💡 Type 'help' for commands, 'exit' to quit")
+    click.echo("-" * 60)
+
+    def get_prompt():
+        """Generate dynamic prompt based on session state and theme"""
+        current_session = cli_instance.get_current_session()
+        theme = cli_instance.config.get('cli.theme', 'default')
+
+        if current_session:
+            # Show shortened session ID in prompt
+            session_short = current_session[:8] if len(current_session) > 8 else current_session
+            if theme == 'minimal':
+                return f"({session_short})> "
+            else:
+                return f"ambivo-agents ({session_short})> "
+        else:
+            if theme == 'minimal':
+                return "> "
+            else:
+                return "ambivo-agents> "
+
+    def process_shell_command(command_line: str):
+        """Process a command line in shell mode"""
+        if not command_line.strip():
+            return True
+
+        # Clean up command line - remove leading colons and extra whitespace
+        cleaned_command = command_line.strip()
+        if cleaned_command.startswith(':'):
+            cleaned_command = cleaned_command[1:].strip()
+
+        # Parse command line
+        parts = cleaned_command.split()
+        if not parts:
+            return True
+
+        cmd = parts[0].lower()
+        args = parts[1:] if len(parts) > 1 else []
+
+        # Handle shell-specific commands
+        if cmd in ['exit', 'quit', 'bye']:
+            click.echo("👋 Goodbye!")
+            return False
+
+        elif cmd == 'help':
+            click.echo("""
+🌟 Ambivo Agents Enhanced Shell Commands:
+
+📋 **Configuration (Environment Variable Support):**
+   config show                - Show current configuration with source
+   config get <key>           - Get configuration value
+   config set <key> <value>   - Set configuration value (runtime)
+   config save-sample <path>  - Save sample config with ENV documentation
+   config env-template        - Show environment variable template
+
+📋 **Session Management (with History Preservation):**
+   session create [name]      - Create session (UUID4 if no name)
+   session current            - Show current session + cached agents
+   session use <name>         - Switch to session (preserves per-session memory)
+   session end                - End current session (cleanup agents)
+   session history            - Show conversation history
+   session summary            - Show session summary
+   session clear              - Clear conversation history
+   session agents             - Show cached agents with memory status
+
+💬 **Chat Commands (with Session History):**
+   chat <message>             - Send message (uses cached agents)
+   <message>                  - Direct message (shortcut)
+
+🎬 **Specialized Agent Commands:**
+   youtube download <url>     - Download video/audio (cached agent)
+   youtube info <url>         - Get video information
+   search <query>             - Web search (cached agent)
+   scrape <url>              - Web scraping (cached agent)
+
+🤖 **Agent Management:**
+   agents                     - Show all cached agents
+   debug agents               - Debug agent memory and cache status
+   status                     - Show system status
+
+🔄 **Modes:**
+   interactive               - Start chat-only interactive mode
+   shell                     - This shell mode (default)
+
+🛠️ **Utilities:**
+   health                    - System health check
+   env-check                 - Check environment variables
+   demo                      - Run feature demonstration
+
+🚪 **Exit:**
+   exit, quit, bye           - Exit shell
+
+💡 **Enhanced Features:**
+   🌍 Full environment variable support (AMBIVO_AGENTS_ prefix)
+   📚 Conversation history preserved across commands
+   🔄 Agent caching and reuse within sessions
+   📄 YAML configuration with ENV variable override
+   🎯 ModeratorAgent support for advanced routing
+   ⚙️  Graceful configuration fallbacks
+
+🌍 **Environment Variable Examples:**
+   export AMBIVO_AGENTS_REDIS_HOST=localhost
+   export AMBIVO_AGENTS_OPENAI_API_KEY=your_key
+   export AMBIVO_AGENTS_ENABLE_WEB_SEARCH=true
+   export AMBIVO_AGENTS_MCP_ENABLED=true
+            """)
+            return True
+
+        elif cmd == 'clear':
+            click.clear()
+            return True
+
+        elif cmd == 'chat':
+            return handle_chat_command(args)
+        elif cmd == 'interactive':
+            return handle_interactive_command()
+        elif cmd == 'health':
+            return handle_health_command()
+        elif cmd == 'agents':
+            return handle_agents_command()
+        elif cmd == 'status':
+            return handle_status_command()
+        elif cmd == 'env-check':
+            return handle_env_check_command()
+        elif cmd == 'demo':
+            return handle_demo_command()
+        else:
+            # Try to interpret as chat message
+            return handle_chat_command([command_line])
+
+    def handle_chat_command(args):
+        """Handle chat command with session awareness"""
+        if not args:
+            click.echo("❌ Usage: chat <message>")
+            return True
+
+        message = ' '.join(args)
+
+        async def process_chat():
+            active_session = cli_instance.get_current_session()
+            verbose = cli_instance.config.get('cli.verbose', False)
+
+            if verbose:
+                click.echo(f"💬 Processing: {message}")
+                if active_session:
+                    click.echo(f"📋 Session: {active_session[:8]}...")
+
+            try:
+                # ✅ Uses cached agents with preserved conversation history
+                response = await cli_instance.smart_message_routing(message)
+                click.echo(f"\n🤖 Response:\n{response}")
+
+                if verbose:
+                    agents_info = cli_instance.get_cached_agents_info()
+                    click.echo(f"\n🔄 Cached agents: {agents_info['total_agents']}")
+
+            except Exception as e:
+                click.echo(f"❌ Error: {e}")
+
+        asyncio.run(process_chat())
+        return True
+
+    def handle_interactive_command():
+        """Handle interactive mode transition"""
+        click.echo("🔄 Switching to interactive chat mode...")
+        click.echo("💡 Type 'quit' to return to shell")
+        click.echo("📚 Conversation history will be preserved")
+
+        # Start interactive chat mode with session awareness
+        async def interactive_chat():
+            current_session = cli_instance.get_current_session()
+
+            while True:
+                try:
+                    if current_session:
+                        session_short = current_session[:8] if len(current_session) > 8 else current_session
+                        prompt_text = f"🗣️  You ({session_short})"
+                    else:
+                        prompt_text = "🗣️  You"
+
+                    user_input = click.prompt(f"\n{prompt_text}", type=str)
+
+                    if user_input.lower() in ['quit', 'exit', 'bye']:
+                        click.echo("🔄 Returning to shell...")
+                        break
+
+                    # Process with cached agents (preserves history)
+                    response = await cli_instance.smart_message_routing(user_input)
+                    click.echo(f"🤖 Agent: {response}")
+
+                except KeyboardInterrupt:
+                    click.echo("\n🔄 Returning to shell...")
+                    break
+                except EOFError:
+                    click.echo("\n🔄 Returning to shell...")
+                    break
+
+        asyncio.run(interactive_chat())
+        return True
+
+    def handle_health_command():
+        """Enhanced health check"""
+        click.echo("🏥 System Health Check:")
+        click.echo("✅ CLI is working")
+        click.echo(f"✅ Configuration: {cli_instance.config.config_source}")
+        click.echo(f"✅ Loader: {'Enhanced' if LOADER_AVAILABLE else 'Fallback'}")
+        click.echo(f"🔌 MCP: {'Available' if MCP_AVAILABLE else 'Not Available'}")
+        click.echo(f"🎯 ModeratorAgent: {'Available' if MODERATOR_AVAILABLE else 'Not Available'}")
+
+        # Session and agent status
+        current_session = cli_instance.get_current_session()
+        agents_info = cli_instance.get_cached_agents_info()
+
+        click.echo(f"📋 Session: {'Active' if current_session else 'None'}")
+        click.echo(f"🤖 Cached agents: {agents_info['total_agents']}")
+
+        if agents_info['agents']:
+            memory_count = sum(1 for a in agents_info['agents'] if a['memory_available'])
+            click.echo(f"📚 Agents with memory: {memory_count}")
+
+        return True
+
+    def handle_agents_command():
+        """Show detailed agent information"""
+        agents_info = cli_instance.get_cached_agents_info()
+        current_session = cli_instance.get_current_session()
+
+        session_display = current_session[:8] + "..." if current_session and len(
+            current_session) > 8 else current_session or 'None'
+        click.echo(f"🤖 Cached Agents (Session: {session_display})")
+        click.echo(f"📊 Total: {agents_info['total_agents']}")
+        click.echo("-" * 40)
+
+        if agents_info['agents']:
+            for agent_info in agents_info['agents']:
+                memory_icon = "📚" if agent_info['memory_available'] else "📭"
+                click.echo(f"{memory_icon} {agent_info['agent_type']}")
+                click.echo(f"   ID: {agent_info['agent_id']}")
+                click.echo(f"   Created: {agent_info['created_at']}")
+                if 'config_source' in agent_info:
+                    click.echo(f"   Config: {agent_info['config_source']}")
+        else:
+            click.echo("📭 No cached agents")
+            click.echo("💡 Agents will be created when you send messages")
+
+        return True
+
+    def handle_status_command():
+        """Show system status in shell"""
+        click.echo("📊 System Status:")
+        click.echo(f"   Configuration: {cli_instance.config.config_source}")
+        click.echo(
+            f"   Session: {cli_instance.get_current_session()[:8] + '...' if cli_instance.get_current_session() else 'None'}")
+
+        agents_info = cli_instance.get_cached_agents_info()
+        click.echo(f"   Cached Agents: {agents_info['total_agents']}")
+        click.echo(f"   MCP: {'✅' if MCP_AVAILABLE else '❌'}")
+        click.echo(f"   Loader: {'✅' if LOADER_AVAILABLE else '❌'}")
+
+        return True
+
+    def handle_env_check_command():
+        """Check environment variable configuration"""
+        click.echo("🌍 Environment Variable Configuration Check")
+        click.echo("=" * 50)
+
+        # Check for key environment variables
+        key_env_vars = [
+            'AMBIVO_AGENTS_REDIS_HOST',
+            'AMBIVO_AGENTS_REDIS_PORT',
+            'AMBIVO_AGENTS_OPENAI_API_KEY',
+            'AMBIVO_AGENTS_ANTHROPIC_API_KEY',
+            'AMBIVO_AGENTS_ENABLE_WEB_SEARCH',
+            'AMBIVO_AGENTS_MCP_ENABLED'
+        ]
+
+        found_vars = []
+        missing_vars = []
+
+        for var in key_env_vars:
+            value = os.getenv(var)
+            if value:
+                # Mask sensitive values
+                if 'key' in var.lower() or 'token' in var.lower():
+                    display_value = value[:8] + "..." if len(value) > 8 else "***"
+                else:
+                    display_value = value
+
+                found_vars.append((var, display_value))
+            else:
+                missing_vars.append(var)
+
+        if found_vars:
+            click.echo("✅ Found environment variables:")
+            for var, value in found_vars:
+                click.echo(f"   {var} = {value}")
+
+        if missing_vars:
+            click.echo(f"\n❌ Missing environment variables:")
+            for var in missing_vars:
+                click.echo(f"   {var}")
+
+        click.echo(f"\n📊 Summary:")
+        click.echo(f"   Found: {len(found_vars)}")
+        click.echo(f"   Missing: {len(missing_vars)}")
+        click.echo(f"   Configuration source: {cli_instance.config.config_source}")
+
+        if LOADER_AVAILABLE:
+            click.echo("✅ Enhanced loader available - full ENV support")
+        else:
+            click.echo("⚠️  Fallback loader - limited ENV support")
+
+        return True
+
+    def handle_demo_command():
+        """Run a demonstration of the enhanced CLI features"""
+        click.echo("🎪 Ambivo Agents Enhanced CLI Demo")
+        click.echo("=" * 50)
+
+        # Show configuration
+        click.echo("1. 📋 Configuration System:")
+        click.echo(f"   Source: {cli_instance.config.config_source}")
+        click.echo(f"   Loader: {'Enhanced' if LOADER_AVAILABLE else 'Fallback'}")
+
+        # Show session management
+        current_session = cli_instance.get_current_session()
+        click.echo(f"\n2. 📋 Session Management:")
+        click.echo(f"   Current session: {current_session[:8] + '...' if current_session else 'None'}")
+
+        # Show agent caching
+        agents_info = cli_instance.get_cached_agents_info()
+        click.echo(f"\n3. 🤖 Agent Caching:")
+        click.echo(f"   Cached agents: {agents_info['total_agents']}")
+        click.echo(f"   Memory preservation: ✅")
+
+        # Show features
+        click.echo(f"\n4. 🌟 Available Features:")
+        features = [
+            ("Environment Variables", LOADER_AVAILABLE),
+            ("MCP Integration", MCP_AVAILABLE),
+            ("ModeratorAgent", MODERATOR_AVAILABLE),
+            ("Session History", True),
+            ("Agent Caching", True)
+        ]
+
+        for feature, available in features:
+            status = "✅" if available else "❌"
+            click.echo(f"   {status} {feature}")
+
+        click.echo(f"\n5. 💡 Quick Demo Commands:")
+        demo_commands = [
+            "chat 'Hello, how are you?'",
+            "agents",
+            "status",
+            "env-check"
+        ]
+
+        for cmd in demo_commands:
+            click.echo(f"   • {cmd}")
+
+        click.echo(f"\n🎯 The CLI preserves conversation history across commands!")
+        click.echo(f"🔄 Agents are cached and reused within sessions for efficiency!")
+        click.echo(f"🌍 Environment variables override YAML configuration!")
+
+        return True
+
+    # Main shell loop
+    try:
+        while True:
+            try:
+                prompt = get_prompt()
+
+                try:
+                    command_line = input(prompt)
+                except (KeyboardInterrupt, EOFError):
+                    click.echo("\n👋 Goodbye!")
+                    break
+                except Exception as e:
+                    click.echo(f"\n⚠️  Input error: {e}")
+                    continue
+
+                # Process command
+                if not process_shell_command(command_line):
                     break
 
             except KeyboardInterrupt:
-                print(f"\n👋 Shutting down gracefully...")
-                break
+                click.echo("\n💡 Use 'exit' to quit")
+                continue
             except EOFError:
-                print(f"\n👋 Session ended")
+                click.echo("\n👋 Goodbye!")
                 break
 
-        await self._shutdown()
+    except Exception as e:
+        click.echo(f"❌ Shell error: {e}")
+        if cli_instance.config.get('cli.verbose', False):
+            import traceback
+            traceback.print_exc()
 
-    async def run_single_query(self, query: str, user_id: str = None):
-        """Run single query mode"""
-        await self._initialize_moderator(user_id)
 
-        print(f"🗣️  Query: {query}")
-        print("🤖 Processing...")
+@cli.command()
+def status():
+    """Show comprehensive agent service status"""
+    current_session = cli_instance.get_current_session()
+    agents_info = cli_instance.get_cached_agents_info()
 
-        try:
-            start_time = time.time()
-            response = await self.moderator.chat(query)
-            processing_time = time.time() - start_time
+    click.echo("📊 Ambivo Agents Status")
+    click.echo("=" * 50)
+    click.echo(
+        f"🔗 Current Session: {current_session[:8] + '...' if current_session and len(current_session) > 8 else current_session or 'None'}")
+    click.echo(f"🤖 Cached Agents: {agents_info['total_agents']}")
+    click.echo(f"⚙️  Configuration: {cli_instance.config.config_source}")
+    click.echo(f"🔌 MCP Available: {'✅' if MCP_AVAILABLE else '❌'}")
+    click.echo(f"🎯 ModeratorAgent Available: {'✅' if MODERATOR_AVAILABLE else '❌'}")
+    click.echo(f"📋 Loader Available: {'✅' if LOADER_AVAILABLE else '❌'}")
 
-            print(f"\n🤖 Response: {response}")
-            print(f"⏱️ Processed in {processing_time:.2f}s")
+    # Show key configuration values
+    click.echo(f"\n⚙️  Key Configuration:")
+    key_configs = [
+        ('Auto Session', 'cli.auto_session'),
+        ('Web Search', 'agent_capabilities.enable_web_search'),
+        ('Knowledge Base', 'agent_capabilities.enable_knowledge_base'),
+        ('MCP Enabled', 'mcp.enabled'),
+        ('YouTube Downloads', 'agent_capabilities.enable_youtube_download')
+    ]
 
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            if self.debug_mode:
-                import traceback
-                traceback.print_exc()
+    for label, key in key_configs:
+        value = cli_instance.config.get(key)
+        status_icon = "✅" if value else "❌"
+        click.echo(f"   {status_icon} {label}: {value}")
 
-        await self._shutdown()
 
-    async def run_test_mode(self, user_id: str = None):
-        """Run automated test mode"""
-        await self._initialize_moderator(user_id)
+@cli.command()
+def env_check():
+    """Check environment variable configuration"""
+    click.echo("🌍 Environment Variable Configuration Check")
+    click.echo("=" * 50)
 
-        print("\n🧪 RUNNING AUTOMATED TESTS")
-        print("=" * 50)
+    # Check for key environment variables
+    key_env_vars = [
+        'AMBIVO_AGENTS_REDIS_HOST',
+        'AMBIVO_AGENTS_REDIS_PORT',
+        'AMBIVO_AGENTS_OPENAI_API_KEY',
+        'AMBIVO_AGENTS_ANTHROPIC_API_KEY',
+        'AMBIVO_AGENTS_ENABLE_WEB_SEARCH',
+        'AMBIVO_AGENTS_MCP_ENABLED'
+    ]
 
-        test_queries = [
-            "Hello, I need help with something",
-            "Search for latest AI trends in 2025",
-            "Download https://youtube.com/watch?v=C0DPdy98e4c",
-            "Extract audio from video.mp4 as MP3",
-            "What is machine learning and how does it work?",
-            "Scrape https://example.com for content"
-        ]
+    found_vars = []
+    missing_vars = []
 
-        results = []
+    for var in key_env_vars:
+        value = os.getenv(var)
+        if value:
+            # Mask sensitive values
+            if 'key' in var.lower() or 'token' in var.lower():
+                display_value = value[:8] + "..." if len(value) > 8 else "***"
+            else:
+                display_value = value
 
-        for i, query in enumerate(test_queries, 1):
-            print(f"\n📝 Test {i}/{len(test_queries)}: {query}")
-            print("-" * 30)
-
-            try:
-                start_time = time.time()
-                response = await self.moderator.chat(query)
-                processing_time = time.time() - start_time
-
-                print(f"✅ Response: {response[:100]}{'...' if len(response) > 100 else ''}")
-                print(f"⏱️ Time: {processing_time:.2f}s")
-
-                results.append({
-                    'query': query,
-                    'success': True,
-                    'response_length': len(response),
-                    'processing_time': processing_time
-                })
-
-            except Exception as e:
-                print(f"❌ Error: {e}")
-                results.append({
-                    'query': query,
-                    'success': False,
-                    'error': str(e)
-                })
-
-        # Print summary
-        print(f"\n📊 TEST SUMMARY")
-        print("=" * 50)
-
-        successful = sum(1 for r in results if r['success'])
-        total = len(results)
-
-        print(f"✅ Successful: {successful}/{total}")
-        print(f"❌ Failed: {total - successful}/{total}")
-
-        if successful == total:
-            print("🎉 All tests passed!")
+            found_vars.append((var, display_value))
         else:
-            print("⚠️ Some tests failed")
+            missing_vars.append(var)
 
-        avg_time = sum(r.get('processing_time', 0) for r in results if r['success']) / max(successful, 1)
-        print(f"⏱️ Average processing time: {avg_time:.2f}s")
+    if found_vars:
+        click.echo("✅ Found environment variables:")
+        for var, value in found_vars:
+            click.echo(f"   {var} = {value}")
 
-        await self._shutdown()
+    if missing_vars:
+        click.echo(f"\n❌ Missing environment variables:")
+        for var in missing_vars:
+            click.echo(f"   {var}")
+
+    click.echo(f"\n📊 Summary:")
+    click.echo(f"   Found: {len(found_vars)}")
+    click.echo(f"   Missing: {len(missing_vars)}")
+    click.echo(f"   Configuration source: {cli_instance.config.config_source}")
+
+    if LOADER_AVAILABLE:
+        click.echo("✅ Enhanced loader available - full ENV support")
+    else:
+        click.echo("⚠️  Fallback loader - limited ENV support")
+
+
+@cli.command()
+def demo():
+    """Run a demonstration of the enhanced CLI features"""
+    click.echo("🎪 Ambivo Agents Enhanced CLI Demo")
+    click.echo("=" * 50)
+
+    # Show configuration
+    click.echo("1. 📋 Configuration System:")
+    click.echo(f"   Source: {cli_instance.config.config_source}")
+    click.echo(f"   Loader: {'Enhanced' if LOADER_AVAILABLE else 'Fallback'}")
+
+    # Show session management
+    current_session = cli_instance.get_current_session()
+    click.echo(f"\n2. 📋 Session Management:")
+    click.echo(f"   Current session: {current_session[:8] + '...' if current_session else 'None'}")
+
+    # Show agent caching
+    agents_info = cli_instance.get_cached_agents_info()
+    click.echo(f"\n3. 🤖 Agent Caching:")
+    click.echo(f"   Cached agents: {agents_info['total_agents']}")
+    click.echo(f"   Memory preservation: ✅")
+
+    # Show features
+    click.echo(f"\n4. 🌟 Available Features:")
+    features = [
+        ("Environment Variables", LOADER_AVAILABLE),
+        ("MCP Integration", MCP_AVAILABLE),
+        ("ModeratorAgent", MODERATOR_AVAILABLE),
+        ("Session History", True),
+        ("Agent Caching", True)
+    ]
+
+    for feature, available in features:
+        status = "✅" if available else "❌"
+        click.echo(f"   {status} {feature}")
+
+    click.echo(f"\n5. 💡 Quick Demo Commands:")
+    demo_commands = [
+        "chat 'Hello, how are you?'",
+        "agents",
+        "status",
+        "env-check"
+    ]
+
+    for cmd in demo_commands:
+        click.echo(f"   • {cmd}")
+
+    click.echo(f"\n🎯 The CLI preserves conversation history across commands!")
+    click.echo(f"🔄 Agents are cached and reused within sessions for efficiency!")
+    click.echo(f"🌍 Environment variables override YAML configuration!")
 
 
 def main():
-    """Main CLI entry point"""
-    parser = argparse.ArgumentParser(
-        description="ModeratorAgent CLI - AI Agent Orchestrator",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s                                    # Interactive mode
-  %(prog)s -q "Search for Python tutorials"  # Single query
-  %(prog)s --test                            # Run automated tests
-  %(prog)s --config custom_config.yaml      # Use custom config
-  %(prog)s --user myuser --debug             # Debug mode with custom user
-        """
-    )
-
-    parser.add_argument(
-        '-q', '--query',
-        type=str,
-        help='Run a single query and exit'
-    )
-
-    parser.add_argument(
-        '--test',
-        action='store_true',
-        help='Run automated test suite'
-    )
-
-    parser.add_argument(
-        '--config',
-        type=str,
-        default='agent_config.yaml',
-        help='Path to configuration file (default: agent_config.yaml)'
-    )
-
-    parser.add_argument(
-        '--user',
-        type=str,
-        help='User ID for the session'
-    )
-
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help='Enable debug mode'
-    )
-
-    parser.add_argument(
-        '--quiet',
-        action='store_true',
-        help='Quiet mode - minimal output'
-    )
-
-    args = parser.parse_args()
-
-    if not MODERATOR_AVAILABLE:
-        print("❌ ModeratorAgent not available. Please install the ambivo_agents package.")
-        sys.exit(1)
-
+    """Main CLI entry point with enhanced error handling"""
     try:
-        # Initialize CLI
-        cli = ModeratorCLI(config_path=args.config)
-        cli.debug_mode = args.debug
-        cli.quiet_mode = args.quiet
-
-        # Determine mode and run
-        if args.query:
-            # Single query mode
-            asyncio.run(cli.run_single_query(args.query, args.user))
-        elif args.test:
-            # Test mode
-            asyncio.run(cli.run_test_mode(args.user))
-        else:
-            # Interactive mode
-            asyncio.run(cli.run_interactive(args.user))
-
+        cli()
     except KeyboardInterrupt:
-        print("\n👋 CLI interrupted by user")
+        click.echo("\n👋 CLI interrupted by user")
     except Exception as e:
-        print(f"❌ CLI error: {e}")
-        if args.debug:
+        click.echo(f"❌ CLI error: {e}")
+        if os.getenv('AMBIVO_AGENTS_CLI_VERBOSE') == 'true':
             import traceback
             traceback.print_exc()
         sys.exit(1)
 
-def cli():
+
+def cli_main():
     """Entry point function for console script"""
     main()
+
 
 if __name__ == "__main__":
     main()

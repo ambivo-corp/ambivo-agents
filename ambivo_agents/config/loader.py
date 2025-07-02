@@ -136,6 +136,33 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}MODERATOR_ENABLED_AGENTS": ("moderator", "default_enabled_agents"),  # Alternative
     f"{ENV_PREFIX}MODERATOR_ROUTING_CONFIDENCE_THRESHOLD": ("moderator", "routing", "confidence_threshold"),
     f"{ENV_PREFIX}MODERATOR_CONFIDENCE_THRESHOLD": ("moderator", "routing", "confidence_threshold"),  # Alternative
+    # Add these to the existing ENV_VARIABLE_MAPPING dictionary
+
+    # MCP Configuration
+    f"{ENV_PREFIX}MCP_SERVER_ENABLED": ("mcp", "server", "enabled"),
+    f"{ENV_PREFIX}MCP_SERVER_NAME": ("mcp", "server", "name"),
+    f"{ENV_PREFIX}MCP_SERVER_VERSION": ("mcp", "server", "version"),
+    f"{ENV_PREFIX}MCP_SERVER_STDIO": ("mcp", "server", "stdio"),
+
+    f"{ENV_PREFIX}MCP_CLIENT_ENABLED": ("mcp", "client", "enabled"),
+    f"{ENV_PREFIX}MCP_CLIENT_AUTO_CONNECT_SERVERS": ("mcp", "client", "auto_connect_servers"),
+
+    # External MCP Servers
+    f"{ENV_PREFIX}MCP_FILESYSTEM_COMMAND": ("mcp", "external_servers", "filesystem", "command"),
+    f"{ENV_PREFIX}MCP_FILESYSTEM_PATH": ("mcp", "external_servers", "filesystem", "allowed_path"),
+    f"{ENV_PREFIX}MCP_FILESYSTEM_CAPABILITIES": ("mcp", "external_servers", "filesystem", "capabilities"),
+
+    f"{ENV_PREFIX}MCP_GITHUB_COMMAND": ("mcp", "external_servers", "github", "command"),
+    f"{ENV_PREFIX}MCP_GITHUB_CAPABILITIES": ("mcp", "external_servers", "github", "capabilities"),
+    f"{ENV_PREFIX}MCP_GITHUB_TOKEN": ("mcp", "external_servers", "github", "env", "GITHUB_PERSONAL_ACCESS_TOKEN"),
+
+    f"{ENV_PREFIX}MCP_SQLITE_COMMAND": ("mcp", "external_servers", "sqlite", "command"),
+    f"{ENV_PREFIX}MCP_SQLITE_CAPABILITIES": ("mcp", "external_servers", "sqlite", "capabilities"),
+
+    # Shorter alternatives
+    f"{ENV_PREFIX}MCP_ENABLED": ("mcp", "server", "enabled"),
+    f"{ENV_PREFIX}GITHUB_TOKEN": ("mcp", "external_servers", "github", "env", "GITHUB_PERSONAL_ACCESS_TOKEN"),
+    f"{ENV_PREFIX}FILESYSTEM_PATH": ("mcp", "external_servers", "filesystem", "allowed_path"),
 }
 
 # Required environment variables for minimal configuration
@@ -371,17 +398,42 @@ def _set_nested_value(config: Dict[str, Any], path: tuple, value: Any) -> None:
             current[key] = {}
         current = current[key]
 
-    # Handle special cases
     final_key = path[-1]
 
-    if final_key == "images" and isinstance(value, str):
-        # Docker images should be a list
-        current[final_key] = [value]
-    elif final_key == "default_enabled_agents" and isinstance(value, str):
-        # Moderator enabled agents should be a list
-        current[final_key] = [agent.strip() for agent in value.split(",")]
-    else:
-        current[final_key] = value
+    # Handle special cases for different sections
+    if len(path) >= 1:
+        # Docker images handling
+        if path[0] == "docker" and final_key == "images" and isinstance(value, str):
+            current[final_key] = [value]
+            return
+
+        # Moderator enabled agents handling
+        elif path[0] == "moderator" and final_key == "default_enabled_agents" and isinstance(value, str):
+            current[final_key] = [agent.strip() for agent in value.split(",")]
+            return
+
+        # MCP-specific handling
+        elif path[0] == "mcp":
+            # Handle auto_connect_servers list
+            if final_key == "auto_connect_servers" and isinstance(value, str):
+                current[final_key] = [server.strip() for server in value.split(',')]
+                return
+
+            # Handle capabilities list
+            if final_key == "capabilities" and isinstance(value, str):
+                current[final_key] = [cap.strip() for cap in value.split(',')]
+                return
+
+            # Handle filesystem args special case
+            if "filesystem" in path and final_key == "allowed_path":
+                # Also set the args with the path
+                if "args" not in current:
+                    current["args"] = ["@modelcontextprotocol/server-filesystem", value]
+                current[final_key] = value
+                return
+
+    # Default handling
+    current[final_key] = value
 
 
 def _convert_env_value(value: str) -> Union[str, int, float, bool]:
@@ -500,6 +552,52 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         service.setdefault('log_to_file', False)
         service.setdefault('enable_metrics', True)
 
+    # Add this to the _set_env_config_defaults function
+
+    # Set MCP defaults
+    if 'mcp' in config:
+        mcp_config = config['mcp']
+
+        # Set server defaults
+        if 'server' in mcp_config:
+            server = mcp_config['server']
+            server.setdefault('name', 'ambivo-agents')
+            server.setdefault('version', '1.0.0')
+            server.setdefault('stdio', True)
+
+        # Set client defaults
+        if 'client' in mcp_config:
+            client = mcp_config['client']
+            client.setdefault('enabled', True)
+            if 'auto_connect_servers' not in client:
+                client['auto_connect_servers'] = ['filesystem', 'github', 'sqlite']
+
+        # Set external server defaults
+        if 'external_servers' in mcp_config:
+            ext_servers = mcp_config['external_servers']
+
+            # Filesystem server defaults
+            if 'filesystem' in ext_servers:
+                fs = ext_servers['filesystem']
+                fs.setdefault('command', 'npx')
+                fs.setdefault('capabilities', ["file_read", "file_write"])
+                # Args are set automatically when allowed_path is provided
+
+            # GitHub server defaults
+            if 'github' in ext_servers:
+                gh = ext_servers['github']
+                gh.setdefault('command', 'npx')
+                gh.setdefault('args', ["@modelcontextprotocol/server-github"])
+                gh.setdefault('capabilities', ["repo_access", "issue_management"])
+                if 'env' not in gh:
+                    gh['env'] = {}
+
+            # SQLite server defaults
+            if 'sqlite' in ext_servers:
+                sqlite = ext_servers['sqlite']
+                sqlite.setdefault('command', 'npx')
+                sqlite.setdefault('args', ["@modelcontextprotocol/server-sqlite"])
+                sqlite.setdefault('capabilities', ["database_read", "database_write"])
     # Set moderator defaults
     if 'moderator' in config:
         mod = config['moderator']

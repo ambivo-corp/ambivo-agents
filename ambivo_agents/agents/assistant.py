@@ -5,7 +5,7 @@ from typing import Dict, Any, AsyncIterator
 
 from ambivo_agents import BaseAgent, AgentRole, ExecutionContext, AgentMessage, MessageType
 from ambivo_agents.core.history import BaseAgentHistoryMixin
-
+from ..mcp.agent_integration import MCPIntegratedAgent
 
 class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
     """General purpose assistant agent with conversation history"""
@@ -106,79 +106,54 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
             return "No previous conversation"
 
     async def _route_request(self, intent_analysis: Dict[str, Any], user_message: str,
-                             context: ExecutionContext) -> str:
-        """Route request based on intent analysis"""
-        primary_intent = intent_analysis.get("primary_intent", "question")
-        requires_context = intent_analysis.get("requires_context", False)
+                             context: ExecutionContext, llm_context: Dict[str, Any]) -> str:
+        """Route request based on intent analysis - FIXED: Preserves context"""
 
-        # Route based on primary intent
-        if primary_intent == "greeting":
-            return "Hello! How can I assist you today?"
+        if self.llm_service:
+            # 🔥 FIX: Enhanced prompt that works with context-aware LLM service
+            if intent_analysis.get('requires_context', False):
+                context_prompt = f"""You are a helpful assistant. The user has asked: {user_message}
 
-        elif primary_intent == "farewell":
-            return "Thank you for using the assistant. Have a great day!"
-
-        elif primary_intent == "continuation":
-            # Handle context references
-            conversation_context = self._get_conversation_context_summary()
-            if self.llm_service:
-                prompt = f"""The user is referring to our previous conversation. Provide a helpful response based on the context.
-
-Previous conversation:
-{conversation_context}
-
-Current user message: {user_message}
-
-Please provide a helpful, contextual response."""
-                return await self.llm_service.generate_response(prompt)
+    This request references previous conversation. Please provide a helpful, contextual response that acknowledges and builds upon our previous discussion."""
             else:
-                return f"I understand you're referring to our previous conversation. Could you provide more specific details about what you'd like help with?"
+                context_prompt = f"""You are a helpful assistant. Please respond to: {user_message}
 
-        elif primary_intent in ["question", "request"]:
-            # Build context-aware prompt for LLM
-            if requires_context:
-                conversation_context = self._get_conversation_context_summary()
-                context_prompt = f"\n\nConversation context:\n{conversation_context}\n\n"
-            else:
-                context_prompt = ""
+    Provide a helpful, accurate response."""
 
-            if self.llm_service:
-                prompt = f"""You are a helpful assistant. Respond to this user message appropriately.{context_prompt}User message: {user_message}
-
-Please provide a helpful, accurate, and contextual response."""
-                return await self.llm_service.generate_response(prompt)
-            else:
-                if requires_context:
-                    return f"I understand you're asking about something related to our previous conversation. How can I help you with '{user_message}'?"
-                else:
-                    return f"I understand you said: '{user_message}'. How can I help you with that?"
-
+            # 🔥 FIX: Pass conversation history through context - THIS IS THE KEY
+            return await self.llm_service.generate_response(
+                prompt=context_prompt,
+                context=llm_context
+                # 🔥 FIX: Context with conversation_history preserves memory across provider switches
+            )
         else:
-            # Default handling
-            if self.llm_service:
-                prompt = f"""You are a helpful assistant. Respond to this user message: {user_message}"""
-                return await self.llm_service.generate_response(prompt)
-            else:
-                return f"I understand you said: '{user_message}'. How can I help you with that?"
+            return f"I understand you said: '{user_message}'. How can I help you with that?"
 
     async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
-        """Process user requests with conversation history"""
+        """Process user requests with conversation history - FIXED: Context preserved across LLM provider switches"""
         self.memory.store_message(message)
 
         try:
             user_message = message.content
-
-            # Update conversation state
             self.update_conversation_state(user_message)
 
-            # Get conversation context for LLM analysis
+            # 🔥 FIX: Get conversation history for LLM context
             conversation_context = self._get_conversation_context_summary()
+            conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
-            # Use LLM to analyze intent
+            # 🔥 FIX: Use LLM to analyze intent WITH CONTEXT
             intent_analysis = await self._analyze_intent(user_message, conversation_context)
 
-            # Route request based on LLM analysis
-            response_content = await self._route_request(intent_analysis, user_message, context)
+            # 🔥 FIX: Build LLM context with conversation history
+            llm_context = {
+                'conversation_id': message.conversation_id,
+                'user_id': message.sender_id,
+                'conversation_history': conversation_history,  # 🔥 KEY FIX: Include history
+                'intent_analysis': intent_analysis
+            }
+
+            # 🔥 FIX: Route request with preserved context
+            response_content = await self._route_request(intent_analysis, user_message, context, llm_context)
 
             response = self.create_response(
                 content=response_content,
@@ -202,30 +177,45 @@ Please provide a helpful, accurate, and contextual response."""
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
         str]:
-        """Stream processing for AssistantAgent"""
+        """Stream processing for AssistantAgent - FIXED: Context preserved across LLM provider switches"""
         self.memory.store_message(message)
 
         try:
             user_message = message.content
             self.update_conversation_state(user_message)
 
+            # 🔥 FIX: Get conversation history for streaming context
             conversation_context = self._get_conversation_context_summary()
+            conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+
             intent_analysis = await self._analyze_intent(user_message, conversation_context)
 
-            # Route and stream response
+            # 🔥 FIX: Build LLM context with conversation history for streaming
+            llm_context = {
+                'conversation_id': message.conversation_id,
+                'user_id': message.sender_id,
+                'conversation_history': conversation_history,  # 🔥 KEY FIX
+                'intent_analysis': intent_analysis,
+                'streaming': True
+            }
+
+            # Route and stream response with context
             if self.llm_service:
                 # Build context-aware prompt
                 if intent_analysis.get('requires_context', False):
-                    context_prompt = f"\n\nConversation context:\n{conversation_context}\n\n"
+                    context_prompt = f"""You are a helpful assistant. The user has asked: {user_message}
+
+    This request references previous conversation. Please provide a helpful, contextual response that acknowledges and builds upon our previous discussion."""
                 else:
-                    context_prompt = ""
+                    context_prompt = f"""You are a helpful assistant. Please respond to: {user_message}
 
-                prompt = f"""You are a helpful assistant. Respond to this user message appropriately.{context_prompt}User message: {user_message}
+    Provide a helpful, accurate response."""
 
-Please provide a helpful, accurate, and contextual response."""
-
-                # Stream the LLM response
-                async for chunk in self.llm_service.generate_response_stream(prompt):
+                # 🔥 FIX: Stream with conversation context preserved
+                async for chunk in self.llm_service.generate_response_stream(
+                        prompt=context_prompt,
+                        context=llm_context  # 🔥 CRITICAL: Context preserves memory across provider switches
+                ):
                     yield chunk
             else:
                 # Fallback for no LLM service

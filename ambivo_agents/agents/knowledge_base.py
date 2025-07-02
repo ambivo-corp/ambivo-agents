@@ -300,8 +300,10 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             "confidence": 0.7
         }
 
+    # ambivo_agents/agents/knowledge_base.py - FIXED METHODS for context preservation
+
     async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
-        """Process message with LLM-based KB intent detection and history context"""
+        """Process message with LLM-based KB intent detection - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
         try:
@@ -310,14 +312,31 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             # Update conversation state
             self.update_conversation_state(user_message)
 
-            # Get conversation context for LLM analysis
+            # 🔥 FIX: Get conversation context AND conversation history
             conversation_context = self._get_kb_conversation_context_summary()
+            conversation_history = []
 
-            # Use LLM to analyze intent
-            intent_analysis = await self._llm_analyze_kb_intent(user_message, conversation_context)
+            try:
+                conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+            except Exception as e:
+                print(f"Could not get conversation history: {e}")
 
-            # Route request based on LLM analysis
-            response_content = await self._route_kb_with_llm_analysis(intent_analysis, user_message, context)
+            # 🔥 FIX: Build LLM context with conversation history
+            llm_context = {
+                'conversation_history': conversation_history,  # 🔥 KEY FIX
+                'conversation_id': message.conversation_id,
+                'user_id': message.sender_id,
+                'agent_type': 'knowledge_base'
+            }
+
+            # 🔥 FIX: Use LLM to analyze intent WITH CONTEXT
+            intent_analysis = await self._llm_analyze_kb_intent_with_context(user_message, conversation_context,
+                                                                             llm_context)
+
+            # Route request based on LLM analysis with context
+            response_content = await self._route_kb_with_llm_analysis_with_context(intent_analysis, user_message,
+                                                                                   context, llm_context)
+
             if isinstance(response_content, tuple):
                 response_content, sources_dict = response_content
             else:
@@ -344,6 +363,352 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             )
             return error_response
 
+    async def _llm_analyze_kb_intent_with_context(self, user_message: str, conversation_context: str = "",
+                                                  llm_context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Use LLM to analyze knowledge base related intent - FIXED: With conversation context"""
+        if not self.llm_service:
+            return self._keyword_based_kb_analysis(user_message)
+
+        prompt = f"""
+        Analyze this user message in the context of a knowledge base conversation and extract:
+        1. Primary intent (ingest_document, ingest_text, query_kb, create_kb, manage_kb, help_request)
+        2. Knowledge base name (if mentioned or inferrable)
+        3. Document/file references (file paths, document names)
+        4. Query content (if querying)
+        5. Context references (referring to previous KB operations)
+        6. Operation specifics (metadata, query type, etc.)
+
+        Conversation Context:
+        {conversation_context}
+
+        Current User Message: {user_message}
+
+        Respond in JSON format:
+        {{
+            "primary_intent": "ingest_document|ingest_text|query_kb|create_kb|manage_kb|help_request",
+            "kb_name": "knowledge_base_name or null",
+            "document_references": ["file1.pdf", "doc2.txt"],
+            "query_content": "the actual question to ask" or null,
+            "uses_context_reference": true/false,
+            "context_type": "previous_kb|previous_document|previous_query",
+            "operation_details": {{
+                "query_type": "free-text|multi-select|single-select|yes-no",
+                "custom_metadata": {{}},
+                "source_type": "file|url|text"
+            }},
+            "confidence": 0.0-1.0
+        }}
+        """
+
+        try:
+            # 🔥 FIX: Pass conversation history through context
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                context=llm_context  # 🔥 KEY: Context preserves memory across provider switches
+            )
+
+            import re
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                return self._extract_kb_intent_from_llm_response(response, user_message)
+        except Exception as e:
+            print(f"LLM KB intent analysis failed: {e}")
+            return self._keyword_based_kb_analysis(user_message)
+
+    async def _route_kb_with_llm_analysis_with_context(self, intent_analysis: Dict[str, Any], user_message: str,
+                                                       context: ExecutionContext, llm_context: Dict[str, Any]) -> str | \
+                                                                                                                  tuple[
+                                                                                                                      Any, dict]:
+        """Route KB request based on LLM intent analysis - FIXED: With context preservation"""
+
+        primary_intent = intent_analysis.get("primary_intent", "help_request")
+        kb_name = intent_analysis.get("kb_name")
+        documents = intent_analysis.get("document_references", [])
+        query_content = intent_analysis.get("query_content")
+        uses_context = intent_analysis.get("uses_context_reference", False)
+        operation_details = intent_analysis.get("operation_details", {})
+
+        # Resolve context references if needed
+        if uses_context:
+            kb_name = kb_name or self.get_current_knowledge_base()
+            if not documents:
+                recent_doc = self.get_recent_document()
+                if recent_doc:
+                    documents = [recent_doc]
+
+        # Route based on intent
+        if primary_intent == "help_request":
+            return await self._handle_kb_help_request_with_context(user_message, llm_context)
+        elif primary_intent == "ingest_document":
+            return await self._handle_document_ingestion(kb_name, documents, operation_details, user_message)
+        elif primary_intent == "ingest_text":
+            return await self._handle_text_ingestion(kb_name, user_message, operation_details)
+        elif primary_intent == "query_kb":
+            return await self._handle_kb_query(kb_name, query_content, operation_details)
+        elif primary_intent == "create_kb":
+            return await self._handle_kb_creation(kb_name, user_message)
+        elif primary_intent == "manage_kb":
+            return await self._handle_kb_management(kb_name, user_message)
+        else:
+            return await self._handle_kb_help_request_with_context(user_message, llm_context)
+
+    async def _handle_kb_help_request_with_context(self, user_message: str, llm_context: Dict[str, Any]) -> str:
+        """Handle KB help requests with conversation context - FIXED: Context preserved"""
+
+        # Use LLM for more intelligent help if available
+        if self.llm_service and llm_context.get('conversation_history'):
+            help_prompt = f"""As a knowledge base assistant, provide helpful guidance for: {user_message}
+
+    Consider the user's previous KB operations and provide contextual assistance."""
+
+            try:
+                # 🔥 FIX: Use LLM with conversation context
+                intelligent_help = await self.llm_service.generate_response(
+                    prompt=help_prompt,
+                    context=llm_context  # 🔥 KEY: Context preserves memory
+                )
+                return intelligent_help
+            except Exception as e:
+                print(f"LLM help generation failed: {e}")
+
+        # Fallback to standard help message
+        state = self.get_conversation_state()
+
+        response = ("I'm your Knowledge Base Agent! I can help you with:\n\n"
+                    "📄 **Document Management**\n"
+                    "- Ingest PDFs, DOCX, TXT, MD files\n"
+                    "- Process web content from URLs\n"
+                    "- Add text content directly\n\n"
+                    "🔍 **Intelligent Search**\n"
+                    "- Natural language queries\n"
+                    "- Semantic similarity search\n"
+                    "- Source attribution\n\n"
+                    "🧠 **Smart Context Features**\n"
+                    "- Remembers knowledge bases from conversation\n"
+                    "- Understands 'that KB' and 'this document'\n"
+                    "- Maintains working context\n\n")
+
+        # Add current context information
+        if state.knowledge_bases:
+            response += f"🗃️ **Your Knowledge Bases:**\n"
+            for kb in state.knowledge_bases[-3:]:  # Show last 3
+                response += f"   • {kb}\n"
+
+        if state.working_files:
+            response += f"\n📁 **Recent Documents:** {len(state.working_files)} files\n"
+
+        response += "\n💡 **Examples:**\n"
+        response += "• 'Ingest research.pdf into ai_papers'\n"
+        response += "• 'Query ai_papers: What are the main findings?'\n"
+        response += "• 'Add this text to the knowledge base: [content]'\n"
+        response += "\nI understand context from our conversation! 🚀"
+
+        return response
+
+    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
+        str]:
+        """Stream processing for Knowledge Base operations - FIXED: Context preserved across provider switches"""
+        self.memory.store_message(message)
+
+        try:
+            user_message = message.content
+            self.update_conversation_state(user_message)
+
+            yield "📚 **Knowledge Base Assistant**\n\n"
+
+            # 🔥 FIX: Get conversation context for streaming
+            conversation_context = self._get_kb_conversation_context_summary()
+            conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+
+            yield "🧠 Analyzing knowledge base request...\n"
+
+            # 🔥 FIX: Build LLM context for streaming
+            llm_context = {
+                'conversation_history': conversation_history,  # 🔥 KEY FIX
+                'conversation_id': message.conversation_id,
+                'streaming': True
+            }
+
+            intent_analysis = await self._llm_analyze_kb_intent(user_message, conversation_context)
+
+            primary_intent = intent_analysis.get("primary_intent", "help_request")
+            kb_name = intent_analysis.get("kb_name")
+            documents = intent_analysis.get("document_references", [])
+
+            # Route based on intent with streaming
+            if primary_intent == "ingest_document":
+                yield f"📄 **Document Ingestion**\n\n"
+                if not kb_name:
+                    yield "🔍 Determining knowledge base...\n"
+                if not documents:
+                    yield "📁 Identifying documents...\n"
+
+                async for chunk in self._stream_document_ingestion_with_context(kb_name, documents, user_message,
+                                                                                llm_context):
+                    yield chunk
+
+            elif primary_intent == "ingest_text":
+                yield f"📝 **Text Ingestion**\n\n"
+                async for chunk in self._stream_text_ingestion_with_context(kb_name, user_message, llm_context):
+                    yield chunk
+
+            elif primary_intent == "query_kb":
+                yield f"🔍 **Knowledge Base Query**\n\n"
+                async for chunk in self._stream_kb_query_with_context(kb_name, intent_analysis.get("query_content"),
+                                                                      user_message, llm_context):
+                    yield chunk
+
+            else:
+                # Stream help or other responses with context
+                if self.llm_service:
+                    help_prompt = f"As a knowledge base assistant, help with: {user_message}"
+
+                    # 🔥 FIX: Stream with conversation context
+                    async for chunk in self.llm_service.generate_response_stream(
+                            help_prompt,
+                            context=llm_context  # 🔥 KEY: Context preserves memory
+                    ):
+                        yield chunk
+                else:
+                    response_content = await self._route_kb_with_llm_analysis(intent_analysis, user_message, context)
+                    yield response_content
+
+        except Exception as e:
+            yield f"❌ **Knowledge Base Error:** {str(e)}"
+
+    async def _stream_document_ingestion_with_context(self, kb_name: str, documents: list, user_message: str,
+                                                      llm_context: Dict[str, Any]) -> AsyncIterator[str]:
+        """Stream document ingestion with context preservation"""
+        try:
+            if not kb_name or not documents:
+                # Resolve missing parameters with streaming feedback
+                if not kb_name:
+                    yield "⚠️ No knowledge base specified. "
+                    if self.llm_service:
+                        # 🔥 FIX: Use context-aware LLM for help
+                        async for chunk in self.llm_service.generate_response_stream(
+                                f"User wants to ingest documents but didn't specify KB. Help them: {user_message}",
+                                context=llm_context  # 🔥 KEY: Context preserves memory
+                        ):
+                            yield chunk
+                    return
+
+            document_path = documents[0]
+            yield f"📁 **Processing:** {document_path}\n"
+            yield f"🗃️ **Target KB:** {kb_name}\n\n"
+
+            yield "⏳ Starting ingestion process...\n"
+
+            # Simulate progress updates during ingestion
+            start_time = time.time()
+
+            # Call the actual ingestion method
+            result = await self._ingest_document(kb_name, document_path)
+
+            processing_time = time.time() - start_time
+
+            if result['success']:
+                yield f"✅ **Ingestion Completed Successfully!**\n\n"
+                yield f"📊 **Summary:**\n"
+                yield f"• Document: {document_path}\n"
+                yield f"• Knowledge Base: {kb_name}\n"
+                yield f"• Processing Time: {processing_time:.2f}s\n"
+                yield f"• Status: Ready for queries! 🎉\n"
+            else:
+                yield f"❌ **Ingestion Failed:** {result['error']}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during document ingestion:** {str(e)}"
+
+    async def _stream_text_ingestion_with_context(self, kb_name: str, user_message: str, llm_context: Dict[str, Any]) -> \
+    AsyncIterator[str]:
+        """Stream text ingestion with context preservation"""
+        try:
+            if not kb_name:
+                yield "⚠️ Please specify which knowledge base to use.\n"
+                return
+
+            # Extract text content
+            text_content = self._extract_text_for_ingestion(user_message)
+
+            if not text_content:
+                yield f"📝 Ready to add text to **{kb_name}**. What text would you like me to ingest?\n"
+                return
+
+            yield f"📝 **Processing text for {kb_name}**\n"
+            yield f"📊 **Text length:** {len(text_content)} characters\n\n"
+
+            yield "⏳ Processing and indexing text...\n"
+
+            result = await self._ingest_text(kb_name, text_content)
+
+            if result['success']:
+                preview = text_content[:100] + "..." if len(text_content) > 100 else text_content
+                yield f"✅ **Text Ingestion Completed**\n\n"
+                yield f"📄 **Preview:** {preview}\n"
+                yield f"🗃️ **Knowledge Base:** {kb_name}\n"
+                yield f"📊 **Length:** {len(text_content)} characters\n"
+                yield f"🎉 **Status:** Text successfully indexed!\n"
+            else:
+                yield f"❌ **Text ingestion failed:** {result['error']}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during text ingestion:** {str(e)}"
+
+    async def _stream_kb_query_with_context(self, kb_name: str, query_content: str, user_message: str,
+                                            llm_context: Dict[str, Any]) -> AsyncIterator[str]:
+        """Stream knowledge base queries with context preservation"""
+        try:
+            if not kb_name:
+                yield "🔍 **Knowledge Base Query**\n\n"
+                available_kbs = self.conversation_state.knowledge_bases
+                if available_kbs:
+                    yield "**Available Knowledge Bases:**\n"
+                    for kb in available_kbs:
+                        yield f"• {kb}\n"
+                    yield f"\nWhich knowledge base would you like to search?\n"
+                else:
+                    yield "No knowledge bases found. Please create one first.\n"
+                return
+
+            if not query_content:
+                yield f"🔍 **Searching {kb_name}**\n\nWhat would you like me to find?\n"
+                return
+
+            yield f"🔍 **Searching Knowledge Base:** {kb_name}\n"
+            yield f"❓ **Query:** {query_content}\n\n"
+
+            yield "⏳ Performing semantic search...\n"
+
+            # Perform the actual query
+            result = await self._query_knowledge_base(kb_name, query_content)
+
+            if result['success']:
+                answer = result['answer']
+                source_count = len(result.get('source_details', []))
+
+                yield f"📋 **Search Results:**\n\n"
+
+                # Stream the answer progressively if it's long
+                if len(answer) > 200:
+                    words = answer.split()
+                    chunk_size = 20
+                    for i in range(0, len(words), chunk_size):
+                        chunk = ' '.join(words[i:i + chunk_size])
+                        yield f"{chunk} "
+                        await asyncio.sleep(0.05)  # Small delay for streaming effect
+                else:
+                    yield answer
+
+                yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
+                yield f"✅ **Query completed successfully!**\n"
+            else:
+                yield f"❌ **Query failed:** {result['error']}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during query:** {str(e)}"
     def _get_kb_conversation_context_summary(self) -> str:
         """Get KB conversation context summary"""
         try:
@@ -947,61 +1312,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        str]:
-        """Stream processing for Knowledge Base operations with progress updates"""
-        self.memory.store_message(message)
 
-        try:
-            user_message = message.content
-            self.update_conversation_state(user_message)
-
-            # Get conversation context
-            yield "📚 **Knowledge Base Assistant**\n\n"
-            conversation_context = self._get_kb_conversation_context_summary()
-
-            # Use LLM to analyze intent
-            yield "🧠 Analyzing knowledge base request...\n"
-            intent_analysis = await self._llm_analyze_kb_intent(user_message, conversation_context)
-
-            primary_intent = intent_analysis.get("primary_intent", "help_request")
-            kb_name = intent_analysis.get("kb_name")
-            documents = intent_analysis.get("document_references", [])
-
-            # Route based on intent with streaming
-            if primary_intent == "ingest_document":
-                yield f"📄 **Document Ingestion**\n\n"
-                if not kb_name:
-                    yield "🔍 Determining knowledge base...\n"
-                if not documents:
-                    yield "📁 Identifying documents...\n"
-
-                async for chunk in self._stream_document_ingestion(kb_name, documents, user_message):
-                    yield chunk
-
-            elif primary_intent == "ingest_text":
-                yield f"📝 **Text Ingestion**\n\n"
-                async for chunk in self._stream_text_ingestion(kb_name, user_message):
-                    yield chunk
-
-            elif primary_intent == "query_kb":
-                yield f"🔍 **Knowledge Base Query**\n\n"
-                async for chunk in self._stream_kb_query(kb_name, intent_analysis.get("query_content"), user_message):
-                    yield chunk
-
-            else:
-                # Stream help or other responses
-                if self.llm_service:
-                    async for chunk in self.llm_service.generate_response_stream(
-                            f"As a knowledge base assistant, help with: {user_message}"
-                    ):
-                        yield chunk
-                else:
-                    response_content = await self._route_kb_with_llm_analysis(intent_analysis, user_message, context)
-                    yield response_content
-
-        except Exception as e:
-            yield f"❌ **Knowledge Base Error:** {str(e)}"
 
     async def _stream_document_ingestion(self, kb_name: str, documents: list, user_message: str) -> AsyncIterator[str]:
         """Stream document ingestion with progress updates"""
