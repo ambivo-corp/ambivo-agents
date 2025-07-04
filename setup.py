@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Ambivo Agents Setup Script - UPDATED WITH PROPER MCP SUPPORT
+Ambivo Agents Setup Script
 
 Author: Hemant Gosain 'Sunny'
 Company: Ambivo
@@ -17,7 +17,7 @@ def read_readme():
         with open("README.md", "r", encoding="utf-8") as fh:
             return fh.read()
     except FileNotFoundError:
-        return "Ambivo Agents - Multi-Agent AI System with MCP Support"
+        return "Ambivo Agents - Multi-Agent AI System"
 
 
 def read_requirements():
@@ -80,10 +80,10 @@ def read_requirements():
 
 setup(
     name="ambivo-agents",
-    version="1.0.8",
+    version="1.0.9",
     author="Hemant Gosain 'Sunny'",
-    author_email="sgosain@ambivo.com",
-    description="Multi-Agent AI System with MCP (Model Context Protocol) support for automation",
+    author_email="info@ambivo.com",
+    description="Multi-Agent AI System for automation",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     url="https://github.com/ambivo-corp/ambivo-agents",
@@ -107,13 +107,8 @@ setup(
     python_requires=">=3.11",
     install_requires=read_requirements(),
 
-    # UPDATED: Proper optional dependencies with MCP support
+    # Optional dependencies
     extras_require={
-        # MCP Protocol Support
-        "mcp": [
-            "mcp>=1.0.0",
-        ],
-
         # Web capabilities
         "web": [
             "beautifulsoup4>=4.13.4",
@@ -149,7 +144,6 @@ setup(
 
         # Convenience combinations
         "full": [
-            "mcp>=1.0.0",
             "beautifulsoup4>=4.13.4",
             "playwright>=1.40.0",
             "pytubefix>=6.0.0",
@@ -168,24 +162,15 @@ setup(
             "playwright>=1.40.0",
             "pytubefix>=6.0.0",
             "anthropic>=0.55.0",
-            "mcp>=1.0.0",
         ]
     },
 
-    # UPDATED: Entry points with proper MCP support
+    # Entry points
     entry_points={
         "console_scripts": [
             # Main CLI commands
             "ambivo-agents=ambivo_agents.cli:main",
             "ambivo=ambivo_agents.cli:main",
-
-            # MCP server entry point (for direct stdio usage)
-            "ambivo-mcp-server=ambivo_agents.mcp.mcp_server:main",
-        ],
-
-        # MCP server registration (for MCP client discovery)
-        "mcp.servers": [
-            "ambivo-agents=ambivo_agents.mcp.server:main",
         ],
     },
 
@@ -196,15 +181,11 @@ setup(
             "*.yml",
             "*.json",
             "*.md",
-            "mcp/*.py",
-            "mcp/*.yaml",
-            "mcp/*.yml",
-            "mcp/templates/*",
         ],
     },
 
     keywords=[
-        "ai", "automation", "agents", "mcp", "model-context-protocol",
+        "ai", "automation", "agents",
         "youtube", "media", "processing", "knowledge-base", "web-scraping",
         "claude", "openai", "anthropic", "langchain", "llama-index"
     ],
@@ -214,7 +195,6 @@ setup(
         "Source": "https://github.com/ambivo-corp/ambivo-agents",
         "Documentation": "https://github.com/ambivo-corp/ambivo-agents/blob/main/README.md",
         "Company": "https://www.ambivo.com",
-        "MCP Documentation": "https://spec.modelcontextprotocol.io/",
     },
 )
 
@@ -225,16 +205,13 @@ setup(
 if __name__ == "__main__":
     print("""
     ============================================================================
-    AMBIVO AGENTS - MCP-COMPLIANT INSTALLATION
+    AMBIVO AGENTS INSTALLATION
     ============================================================================
 
     INSTALLATION OPTIONS:
 
-    # Basic installation (no MCP)
+    # Basic installation
     pip install ambivo-agents
-
-    # With MCP support for Claude Desktop integration
-    pip install ambivo-agents[mcp]
 
     # With web capabilities
     pip install ambivo-agents[web]
@@ -249,52 +226,16 @@ if __name__ == "__main__":
     pip install ambivo-agents[all]
 
     ============================================================================
-    MCP INTEGRATION USAGE:
+    QUICK START:
     ============================================================================
 
-    # Start MCP server for Claude Desktop
-    ambivo-mcp-server
+    from ambivo_agents.agents.youtube_download import YouTubeDownloadAgent
+    from ambivo_agents.agents.knowledge_base import KnowledgeBaseAgent
 
-    # Or via main CLI
-    ambivo mcp server
-
-    # Generate Claude Desktop configuration
-    ambivo mcp claude-config
-
-    ============================================================================
-    CLAUDE DESKTOP SETUP:
-    ============================================================================
-
-    1. Install with MCP support:
-       pip install ambivo-agents[mcp]
-
-    2. Generate config:
-       ambivo mcp claude-config
-
-    3. Add the output to your Claude Desktop config:
-       ~/.claude_desktop_config.json (macOS/Linux)
-       %APPDATA%/Claude/claude_desktop_config.json (Windows)
-
-    4. Restart Claude Desktop
-
-    5. Your Ambivo agents will appear as available tools in Claude!
-
-    ============================================================================
-    EXAMPLE CLAUDE DESKTOP CONFIG:
-    ============================================================================
-
-    {
-      "mcpServers": {
-        "ambivo-agents": {
-          "command": "ambivo-mcp-server",
-          "args": [],
-          "env": {
-            "AMBIVO_AGENTS_REDIS_HOST": "localhost",
-            "AMBIVO_AGENTS_OPENAI_API_KEY": "your_key_here"
-          }
-        }
-      }
-    }
+    # Create agent with auto-context
+    agent, context = YouTubeDownloadAgent.create(user_id="your_user")
+    response = agent.chat_sync("Download https://youtube.com/watch?v=example")
+    print(response)
 
     ============================================================================
     """)

@@ -364,6 +364,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         # Add web search tools
         self._add_search_tools()
 
+
     async def _llm_analyze_intent(self, user_message: str, conversation_context: str = "") -> Dict[str, Any]:
         """Use LLM to analyze user intent and extract relevant information"""
         if not self.llm_service:
@@ -880,6 +881,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
 
         except Exception as e:
             return f"❌ **Error during search:** {str(e)}"
+
     def _get_search_help_message(self) -> str:
         """Get contextual help message"""
         recent_search = self.get_recent_search_term()

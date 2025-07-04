@@ -798,7 +798,7 @@ def cli(ctx, config: Optional[str], verbose: bool, env_vars: bool):
 
     if verbose:
         click.echo("🤖 Ambivo Agents CLI v1.1.0 - Enhanced with Full Environment Variable Support")
-        click.echo("📧 Contact: sgosain@ambivo.com")
+        click.echo("📧 Contact: info@ambivo.com")
         click.echo("🏢 Company: https://www.ambivo.com")
         click.echo("🌟 Agent caching, session management, ENV variables, and MCP integration")
         click.echo(f"⚙️  Configuration source: {cli_instance.config.config_source}")

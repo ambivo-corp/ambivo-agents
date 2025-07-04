@@ -64,7 +64,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         self.specialized_agents = {}
         self.agent_routing_patterns = {}
 
-        self._validate_agent_initialization()
 
         # Setup routing intelligence
         self._setup_routing_patterns()

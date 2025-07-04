@@ -1,11 +1,11 @@
-# AssistantAgent with BaseAgentHistoryMixin
+
 import json
 import uuid
 from typing import Dict, Any, AsyncIterator
 
 from ambivo_agents import BaseAgent, AgentRole, ExecutionContext, AgentMessage, MessageType
 from ambivo_agents.core.history import BaseAgentHistoryMixin
-from ..mcp.agent_integration import MCPIntegratedAgent
+
 
 class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
     """General purpose assistant agent with conversation history"""
@@ -26,6 +26,20 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
 
         # Initialize history mixin
         self.setup_history_mixin()
+
+
+        self.connected_servers = {}
+
+
+
+    def _extract_file_path(self, text: str) -> str:
+        """Extract file path from text"""
+        import re
+        # Simple file path extraction
+        file_match = re.search(r'(?:read file|open file|show file)\s+["\']?([^"\']+)["\']?', text, re.IGNORECASE)
+        if file_match:
+            return file_match.group(1)
+        return None
 
     async def _analyze_intent(self, user_message: str, conversation_context: str = "") -> Dict[str, Any]:
         """Analyze user intent with conversation context"""
@@ -107,18 +121,29 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
 
     async def _route_request(self, intent_analysis: Dict[str, Any], user_message: str,
                              context: ExecutionContext, llm_context: Dict[str, Any]) -> str:
-        """Route request based on intent analysis - FIXED: Preserves context"""
+        """Route request based on intent analysis - FIXED: Preserves context + MCP integration"""
 
+
+
+        # Handle different intent types
+        primary_intent = intent_analysis.get("primary_intent", "question")
+
+        if primary_intent == "greeting":
+            return "Hello! How can I assist you today?"
+        elif primary_intent == "farewell":
+            return "Thank you for using the assistant. Have a great day!"
+
+        # For all other intents, use LLM with enhanced context
         if self.llm_service:
             # 🔥 FIX: Enhanced prompt that works with context-aware LLM service
             if intent_analysis.get('requires_context', False):
                 context_prompt = f"""You are a helpful assistant. The user has asked: {user_message}
 
-    This request references previous conversation. Please provide a helpful, contextual response that acknowledges and builds upon our previous discussion."""
+This request references previous conversation. Please provide a helpful, contextual response that acknowledges and builds upon our previous discussion."""
             else:
                 context_prompt = f"""You are a helpful assistant. Please respond to: {user_message}
 
-    Provide a helpful, accurate response."""
+Provide a helpful, accurate response."""
 
             # 🔥 FIX: Pass conversation history through context - THIS IS THE KEY
             return await self.llm_service.generate_response(
@@ -149,7 +174,8 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                 'conversation_id': message.conversation_id,
                 'user_id': message.sender_id,
                 'conversation_history': conversation_history,  # 🔥 KEY FIX: Include history
-                'intent_analysis': intent_analysis
+                'intent_analysis': intent_analysis,
+
             }
 
             # 🔥 FIX: Route request with preserved context
@@ -196,7 +222,8 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                 'user_id': message.sender_id,
                 'conversation_history': conversation_history,  # 🔥 KEY FIX
                 'intent_analysis': intent_analysis,
-                'streaming': True
+                'streaming': True,
+
             }
 
             # Route and stream response with context
@@ -205,11 +232,11 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                 if intent_analysis.get('requires_context', False):
                     context_prompt = f"""You are a helpful assistant. The user has asked: {user_message}
 
-    This request references previous conversation. Please provide a helpful, contextual response that acknowledges and builds upon our previous discussion."""
+This request references previous conversation. Please provide a helpful, contextual response that acknowledges and builds upon our previous discussion."""
                 else:
                     context_prompt = f"""You are a helpful assistant. Please respond to: {user_message}
 
-    Provide a helpful, accurate response."""
+Provide a helpful, accurate response."""
 
                 # 🔥 FIX: Stream with conversation context preserved
                 async for chunk in self.llm_service.generate_response_stream(
@@ -223,5 +250,3 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
 
         except Exception as e:
             yield f"Assistant error: {str(e)}"
-
-

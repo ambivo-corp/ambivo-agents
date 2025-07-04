@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.0.8"
-description = "Multi-Agent AI System with MCP (Model Context Protocol) support for automation"
+version = "1.0.9"
+description = "Multi-Agent AI System for automation"
 authors = [
-    {name = "Hemant Gosain 'Sunny'", email = "sgosain@ambivo.com"}
+    {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}
 ]
 license = {text = "MIT"}
 readme = "README.md"
@@ -82,11 +82,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# MCP support as optional dependency
-mcp = [
-    "mcp>=1.0.0",
-]
-
 # Web capabilities
 web = [
     "beautifulsoup4>=4.13.4",
@@ -121,7 +116,7 @@ dev = [
 
 # Convenience combinations
 full = [
-    "ambivo-agents[mcp,web,media,anthropic]"
+    "ambivo-agents[web,media,anthropic]"
 ]
 
 all = [
@@ -134,7 +129,6 @@ all = [
     "playwright>=1.40.0",
     "pytubefix>=6.0.0",
     "anthropic>=0.55.0",
-    "mcp>=1.0.0",
     "pre-commit>=3.0.0",
 ]
 
@@ -142,13 +136,6 @@ all = [
 # Main CLI
 ambivo-agents = "ambivo_agents.cli:main"
 ambivo = "ambivo_agents.cli:main"
-
-# MCP-specific entry points
-ambivo-mcp-server = "ambivo_agents.mcp.mcp_server:main"
-
-[project.entry-points."mcp.servers"]
-# Register as MCP server for discovery
-ambivo-agents = "ambivo_agents.mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/ambivo-corp/ambivo-agents"
@@ -166,20 +153,7 @@ ambivo_agents = [
     "*.yml",
     "*.json",
     "*.md",
-    "mcp/*.py",
-    "mcp/*.yaml",
-    "mcp/*.yml",
 ]
-
-# MCP-specific tool configuration
-[tool.mcp]
-name = "ambivo-agents"
-version = "1.0.8"
-description = "Multi-Agent AI System with MCP support"
-
-[tool.mcp.server]
-command = "ambivo-mcp-server"
-args = []
 
 # Black formatting
 [tool.black]
