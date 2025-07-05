@@ -10,6 +10,8 @@ import traceback
 import logging
 from datetime import datetime
 
+from ambivo_agents import ModeratorAgent
+
 # ✅ BEST PRACTICE: Configure logging for debugging
 logging.basicConfig(
     level=logging.INFO,

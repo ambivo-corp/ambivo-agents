@@ -564,12 +564,12 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    # ROBUST VIDEO RESIZE FIX
-    # Replace the existing _resize_video method with this enhanced version
+    # PATCH: Replace the _resize_video method in MediaEditorAgent
+    # Add this to your media_editor.py file
 
     async def _resize_video(self, input_video: str, width: int = None, height: int = None,
                             maintain_aspect: bool = True, preset: str = "custom"):
-        """ROBUST: Resize video with multiple fallback approaches and better error handling"""
+        """FIXED: Video resize with simpler, more compatible FFmpeg commands"""
         try:
             if not Path(input_video).exists():
                 return {"success": False, "error": f"Input video file not found: {input_video}"}
@@ -587,40 +587,32 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             if not width or not height:
                 return {"success": False, "error": "Width and height must be specified"}
 
-            # CRITICAL: Ensure even dimensions for H.264 compatibility
-            width = width + (width % 2)  # Make even
-            height = height + (height % 2)  # Make even
+            # Ensure even dimensions (required for H.264)
+            width = width + (width % 2)
+            height = height + (height % 2)
 
             output_filename = f"resized_video_{int(time.time())}.mp4"
 
-            # Multiple scaling approaches with increasing simplicity
+            # SIMPLIFIED: Use the same command pattern that works for thumbnails
+            # Since thumbnail creation works, let's use a similar simple approach
             scale_commands = [
-                # Approach 1: Simple scale with force even dimensions
-                f"ffmpeg -y -v error -i ${{input_video}} -vf scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2 -c:a copy ${{OUTPUT}}",
+                # Approach 1: Ultra-simple, same style as working thumbnail command
+                f"ffmpeg -y -i ${{input_video}} -vf scale={width}:{height} ${{OUTPUT}}",
 
-                # Approach 2: Basic scale filter
-                f"ffmpeg -y -v error -i ${{input_video}} -vf scale={width}:{height} -c:a copy ${{OUTPUT}}",
+                # Approach 2: With audio copy (like thumbnail but with audio)
+                f"ffmpeg -y -i ${{input_video}} -vf scale={width}:{height} -c:a copy ${{OUTPUT}}",
 
-                # Approach 3: Scale with aspect ratio maintained using -1
-                f"ffmpeg -y -v error -i ${{input_video}} -vf scale={width}:-2 -c:a copy ${{OUTPUT}}",
+                # Approach 3: Force even dimensions (H.264 compatible)
+                f"ffmpeg -y -i ${{input_video}} -vf scale={width}:{height}:force_divisible_by=2 ${{OUTPUT}}",
 
-                # Approach 4: Simple scale without audio copy (more compatible)
-                f"ffmpeg -y -v error -i ${{input_video}} -vf scale={width}:{height} ${{OUTPUT}}",
-
-                # Approach 5: Most basic approach with low quality but high compatibility
+                # Approach 4: Basic resize without filters
                 f"ffmpeg -y -i ${{input_video}} -s {width}x{height} ${{OUTPUT}}",
-
-                # Approach 6: Ultra-basic with fast preset
-                f"ffmpeg -y -i ${{input_video}} -vf scale={width}:{height} -preset fast -crf 23 ${{OUTPUT}}",
-
-                # Approach 7: Fallback with specific codec settings
-                f"ffmpeg -y -i ${{input_video}} -vf scale={width}:{height} -c:v libx264 -c:a aac ${{OUTPUT}}"
             ]
 
             last_error = None
             for i, ffmpeg_command in enumerate(scale_commands):
                 try:
-                    print(f"🔄 Trying resize approach {i + 1}/{len(scale_commands)}: {width}x{height}")
+                    print(f"🔄 Trying resize method {i + 1}: {width}x{height}")
 
                     result = self.media_executor.execute_ffmpeg_command(
                         ffmpeg_command=ffmpeg_command,
@@ -640,11 +632,11 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                         }
                     else:
                         last_error = result.get('error', 'Unknown error')
-                        print(f"❌ Approach {i + 1} failed: {last_error[:200]}...")
+                        print(f"❌ Method {i + 1} failed: {last_error[:100]}...")
 
                 except Exception as approach_error:
                     last_error = str(approach_error)
-                    print(f"❌ Approach {i + 1} exception: {last_error}")
+                    print(f"❌ Method {i + 1} exception: {last_error}")
 
             return {
                 "success": False,
@@ -656,8 +648,57 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": f"Resize method error: {str(e)}"}
 
-    # ENHANCED DIMENSION PARSING
-    # Replace the existing _parse_dimensions method with this improved version
+    # ALTERNATIVE: If the above doesn't work, try this minimal version
+    async def _resize_video_minimal(self, input_video: str, width: int = None, height: int = None,
+                                    maintain_aspect: bool = True, preset: str = "custom"):
+        """MINIMAL: Copy the exact working pattern from thumbnail creation"""
+        try:
+            if not Path(input_video).exists():
+                return {"success": False, "error": f"Input video file not found: {input_video}"}
+
+            # Handle presets
+            if preset == "720p":
+                width, height = 1280, 720
+            elif preset == "1080p":
+                width, height = 1920, 1080
+            elif preset == "4k":
+                width, height = 3840, 2160
+            elif preset == "480p":
+                width, height = 854, 480
+
+            if not width or not height:
+                return {"success": False, "error": "Width and height must be specified"}
+
+            output_filename = f"resized_video_{int(time.time())}.mp4"
+
+            # USE EXACT SAME PATTERN AS WORKING THUMBNAIL - just change the filter
+            ffmpeg_command = f"ffmpeg -y -v quiet -i ${{input_video}} -vf scale={width}:{height} ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={'input_video': input_video},
+                output_filename=output_filename
+            )
+
+            if result['success']:
+                return {
+                    "success": True,
+                    "message": f"Video resized successfully to {width}x{height}",
+                    "output_file": result.get('output_file', {}),
+                    "input_video": input_video,
+                    "execution_time": result['execution_time'],
+                    "final_dimensions": f"{width}x{height}"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Video resize failed: {result.get('error', 'Unknown error')}",
+                    "target_dimensions": f"{width}x{height}"
+                }
+
+        except Exception as e:
+            return {"success": False, "error": f"Resize error: {str(e)}"}
+
 
     def _parse_dimensions(self, dimensions: str, user_message: str) -> tuple:
         """Parse dimensions from preferences or message - ENHANCED with better regex"""
@@ -731,8 +772,6 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         # Default fallback
         return None, None
 
-    # IMPROVED ERROR HANDLING FOR RESIZE HANDLER
-    # Replace the existing _handle_video_resize method with this version
 
     async def _handle_video_resize(self, media_files: List[str], output_prefs: Dict[str, Any],
                                    user_message: str) -> str:
@@ -1342,56 +1381,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             return {"success": False, "error": str(e)}
 
     # FIXED: Video resize with proper scaling
-    async def _resize_video(self, input_video: str, width: int = None, height: int = None,
-                            maintain_aspect: bool = True, preset: str = "custom"):
-        """FIXED: Resize video with proper scaling syntax"""
-        try:
-            if not Path(input_video).exists():
-                return {"success": False, "error": f"Input video file not found: {input_video}"}
 
-            # Handle presets
-            if preset == "720p":
-                width, height = 1280, 720
-            elif preset == "1080p":
-                width, height = 1920, 1080
-            elif preset == "4k":
-                width, height = 3840, 2160
-            elif preset == "480p":
-                width, height = 854, 480
-
-            if not width or not height:
-                return {"success": False, "error": "Width and height must be specified"}
-
-            output_filename = f"resized_video_{int(time.time())}.mp4"
-
-            # FIXED: Proper scale filter syntax
-            if maintain_aspect:
-                scale_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease"
-            else:
-                scale_filter = f"scale={width}:{height}"
-
-            # FIXED: Simplified FFmpeg command
-            ffmpeg_command = f"ffmpeg -i ${{input_video}} -vf '{scale_filter}' -c:a copy ${{OUTPUT}}"
-
-            result = self.media_executor.execute_ffmpeg_command(
-                ffmpeg_command=ffmpeg_command,
-                input_files={'input_video': input_video},
-                output_filename=output_filename
-            )
-
-            if result['success']:
-                return {
-                    "success": True,
-                    "message": f"Video resized successfully to {width}x{height}",
-                    "output_file": result.get('output_file', {}),
-                    "input_video": input_video,
-                    "execution_time": result['execution_time']
-                }
-            else:
-                return result
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
 
 
 
@@ -1535,58 +1525,6 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _resize_video_orig(self, input_video: str, width: int = None, height: int = None,
-                            maintain_aspect: bool = True, preset: str = "custom"):
-        """Resize video"""
-        try:
-            if not Path(input_video).exists():
-                return {"success": False, "error": f"Input video file not found: {input_video}"}
-
-            # Handle presets
-            if preset == "720p":
-                width, height = 1280, 720
-            elif preset == "1080p":
-                width, height = 1920, 1080
-            elif preset == "4k":
-                width, height = 3840, 2160
-            elif preset == "480p":
-                width, height = 854, 480
-
-            if not width or not height:
-                return {"success": False, "error": "Width and height must be specified"}
-
-            output_filename = f"resized_video_{int(time.time())}.mp4"
-
-            scale_filter = f"scale={width}:{height}"
-            if maintain_aspect:
-                scale_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
-
-            ffmpeg_command = (
-                f"ffmpeg -i ${{input_video}} "
-                f"-vf \"{scale_filter}\" "
-                f"-c:a copy "
-                f"${{OUTPUT}}"
-            )
-
-            result = self.media_executor.execute_ffmpeg_command(
-                ffmpeg_command=ffmpeg_command,
-                input_files={'input_video': input_video},
-                output_filename=output_filename
-            )
-
-            if result['success']:
-                return {
-                    "success": True,
-                    "message": f"Video resized successfully to {width}x{height}",
-                    "output_file": result['output_file'],
-                    "input_video": input_video,
-                    "execution_time": result['execution_time']
-                }
-            else:
-                return result
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
 
 
     async def _create_video_thumbnail_orig(self, input_video: str, timestamp: str = "00:00:05",
