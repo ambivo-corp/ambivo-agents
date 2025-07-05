@@ -185,9 +185,17 @@ class QdrantServiceAdapter:
 class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
     """LLM-Aware Knowledge Base Agent with conversation context and intelligent routing"""
 
-    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, **kwargs):
+    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, system_message: str = None,**kwargs):
         if agent_id is None:
             agent_id = f"kb_{str(uuid.uuid4())[:8]}"
+
+        default_system = """You are a specialized knowledge base agent with the following capabilities:
+            - Ingest, store, and semantically search documents using vector databases
+            - Support multiple document formats (PDF, DOCX, TXT, HTML, etc.)
+            - Remember knowledge base operations and document references from conversations
+            - Understand context like "search in that document" or "add this to the knowledge base"
+            - Provide relevant, sourced answers from the knowledge base with citations
+            - Manage multiple knowledge bases and collections efficiently"""
 
         super().__init__(
             agent_id=agent_id,
@@ -196,6 +204,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             llm_service=llm_service,
             name="Knowledge Base Agent",
             description="LLM-aware knowledge base agent with conversation history",
+            system_message=system_message or default_system,
             **kwargs
         )
 
@@ -312,7 +321,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             # Update conversation state
             self.update_conversation_state(user_message)
 
-            # 🔥 FIX: Get conversation context AND conversation history
+            # Get conversation context AND conversation history
             conversation_context = self._get_kb_conversation_context_summary()
             conversation_history = []
 
@@ -520,7 +529,15 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_kb_conversation_context_summary()
-            conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+
+
+            llm_context_from_routing = message.metadata.get('llm_context', {})
+            conversation_history_from_routing = llm_context_from_routing.get('conversation_history', [])
+
+            if conversation_history_from_routing:
+                conversation_history = conversation_history_from_routing
+            else:
+                conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
             yield "🧠 Analyzing knowledge base request...\n"
 
@@ -528,7 +545,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             llm_context = {
                 'conversation_history': conversation_history,  # 🔥 KEY FIX
                 'conversation_id': message.conversation_id,
-                'streaming': True
+                'streaming': True,
+                'agent_type': 'knowledge_base',  # media_editor, web_scraper, etc.
+                'routed_from_moderator': bool(llm_context_from_routing)
             }
 
             intent_analysis = await self._llm_analyze_kb_intent(user_message, conversation_context)
@@ -564,11 +583,12 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 # Stream help or other responses with context
                 if self.llm_service:
                     help_prompt = f"As a knowledge base assistant, help with: {user_message}"
-
-                    # 🔥 FIX: Stream with conversation context
+                    enhanced_system_message = self.get_system_message_for_llm(llm_context)
+                    #  Stream with conversation context
                     async for chunk in self.llm_service.generate_response_stream(
                             help_prompt,
-                            context=llm_context  # 🔥 KEY: Context preserves memory
+                            context=llm_context,
+                            system_message=enhanced_system_message
                     ):
                         yield chunk
                 else:

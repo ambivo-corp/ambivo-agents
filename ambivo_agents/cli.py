@@ -67,23 +67,7 @@ try:
 except ImportError:
     SERVICE_AVAILABLE = False
 
-# MCP imports with availability checking
-try:
-    from .mcp import MCP_AVAILABLE
 
-    if MCP_AVAILABLE:
-        from .mcp.server import MCPAgentServer
-        from .mcp.client import MCPAgentClient
-        from .services.mcp_agent_service import create_mcp_agent_service
-    else:
-        MCPAgentServer = None
-        MCPAgentClient = None
-        create_mcp_agent_service = None
-except ImportError:
-    MCP_AVAILABLE = False
-    MCPAgentServer = None
-    MCPAgentClient = None
-    create_mcp_agent_service = None
 
 # Import ModeratorAgent for enhanced routing
 try:
@@ -859,7 +843,7 @@ def chat(message: str, conversation: Optional[str], format: str):
                 'session_source': session_source,
                 'config_source': cli_instance.config.config_source,
                 'paradigm': 'cached_agent_reuse_with_history',
-                'mcp_available': MCP_AVAILABLE,
+
                 'moderator_available': MODERATOR_AVAILABLE,
                 'loader_available': LOADER_AVAILABLE
             }
@@ -870,7 +854,7 @@ def chat(message: str, conversation: Optional[str], format: str):
                 click.echo(f"\n⏱️  Processing time: {processing_time:.2f}s")
                 click.echo(f"📋 Conversation: {conv_id}")
                 click.echo(f"🔄 Using cached agents with preserved history")
-                click.echo(f"🔌 MCP Available: {'✅' if MCP_AVAILABLE else '❌'}")
+
                 click.echo(f"🎯 ModeratorAgent: {'✅' if MODERATOR_AVAILABLE else '❌'}")
                 click.echo(f"⚙️  Config Source: {cli_instance.config.config_source}")
 
@@ -965,8 +949,7 @@ def shell():
 
     # Show feature availability
     features = []
-    if MCP_AVAILABLE:
-        features.append("🔌 MCP")
+
     if MODERATOR_AVAILABLE:
         features.append("🎯 ModeratorAgent")
     if LOADER_AVAILABLE:
@@ -1181,7 +1164,7 @@ def shell():
         click.echo("✅ CLI is working")
         click.echo(f"✅ Configuration: {cli_instance.config.config_source}")
         click.echo(f"✅ Loader: {'Enhanced' if LOADER_AVAILABLE else 'Fallback'}")
-        click.echo(f"🔌 MCP: {'Available' if MCP_AVAILABLE else 'Not Available'}")
+
         click.echo(f"🎯 ModeratorAgent: {'Available' if MODERATOR_AVAILABLE else 'Not Available'}")
 
         # Session and agent status
@@ -1231,7 +1214,7 @@ def shell():
 
         agents_info = cli_instance.get_cached_agents_info()
         click.echo(f"   Cached Agents: {agents_info['total_agents']}")
-        click.echo(f"   MCP: {'✅' if MCP_AVAILABLE else '❌'}")
+
         click.echo(f"   Loader: {'✅' if LOADER_AVAILABLE else '❌'}")
 
         return True
@@ -1314,7 +1297,7 @@ def shell():
         click.echo(f"\n4. 🌟 Available Features:")
         features = [
             ("Environment Variables", LOADER_AVAILABLE),
-            ("MCP Integration", MCP_AVAILABLE),
+
             ("ModeratorAgent", MODERATOR_AVAILABLE),
             ("Session History", True),
             ("Agent Caching", True)
@@ -1386,7 +1369,7 @@ def status():
         f"🔗 Current Session: {current_session[:8] + '...' if current_session and len(current_session) > 8 else current_session or 'None'}")
     click.echo(f"🤖 Cached Agents: {agents_info['total_agents']}")
     click.echo(f"⚙️  Configuration: {cli_instance.config.config_source}")
-    click.echo(f"🔌 MCP Available: {'✅' if MCP_AVAILABLE else '❌'}")
+
     click.echo(f"🎯 ModeratorAgent Available: {'✅' if MODERATOR_AVAILABLE else '❌'}")
     click.echo(f"📋 Loader Available: {'✅' if LOADER_AVAILABLE else '❌'}")
 
@@ -1485,7 +1468,7 @@ def demo():
     click.echo(f"\n4. 🌟 Available Features:")
     features = [
         ("Environment Variables", LOADER_AVAILABLE),
-        ("MCP Integration", MCP_AVAILABLE),
+
         ("ModeratorAgent", MODERATOR_AVAILABLE),
         ("Session History", True),
         ("Agent Caching", True)

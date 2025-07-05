@@ -15,10 +15,19 @@ from ..executors import DockerCodeExecutor
 class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
     """Agent specialized in code execution with execution history and code writing"""
 
-    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, **kwargs):
+    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, system_message: str = None, **kwargs):
         if agent_id is None:
             agent_id = f"code_executor_{str(uuid.uuid4())[:8]}"
 
+        default_system = """You are a code execution specialist with the following guidelines:
+                - Write clean, well-commented code that follows best practices
+                - Always explain what the code does before suggesting execution
+                - Include error handling and input validation where appropriate
+                - Prefer readable, maintainable code over clever one-liners
+                - When writing code to accomplish a task, break it down into logical steps
+                - If execution fails, analyze the error and suggest specific fixes
+                - Use appropriate libraries and avoid deprecated functions
+                - Consider security implications and avoid potentially harmful operations"""
         super().__init__(
             agent_id=agent_id,
             role=AgentRole.CODE_EXECUTOR,
@@ -26,6 +35,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
             llm_service=llm_service,
             name="Code Executor Agent",
             description="Agent for secure code execution using Docker containers",
+            system_message=system_message or default_system,
             **kwargs
         )
 
@@ -426,59 +436,63 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
             yield f"❌ **Code Executor Error:** {str(e)}"
 
     async def _handle_code_writing_request_with_context(self, user_message: str, language: str,
-                                                        llm_context: Dict[str, Any]) -> str:
-        """Handle code writing with context preservation"""
-        if not self.llm_service:
-            return "I can execute code, but I need an LLM service to write code."
+                                                            llm_context: Dict[str, Any]) -> str:
+            """Handle code writing with system message"""
 
-        task_description = self._extract_task_from_message(user_message)
+            if not self.llm_service:
+                return "I can execute code, but I need an LLM service to write code."
 
-        code_prompt = f"""Write {language} code to {task_description}. 
+            task_description = self._extract_task_from_message(user_message)
+
+            # 🆕 Code-specific prompt that works with system message
+            code_prompt = f"""Task: {task_description}
 
     Requirements:
-    - Write clean, well-commented code
-    - Include error handling if appropriate  
-    - Make the code executable
-    - If the task involves specific inputs (like numbers), use those values
+    - Write {language} code to accomplish this task
+    - Follow the coding guidelines in your system instructions
+    - Wrap the code in ```{language} code blocks
+    - Provide a brief explanation after the code
 
-    Respond with ONLY the code wrapped in ```{language} code blocks, followed by a brief explanation."""
+    Please write the code now:"""
 
-        try:
-            # 🔥 FIX: Use context-aware LLM service
-            llm_response = await self.llm_service.generate_response(
-                prompt=code_prompt,
-                context=llm_context  # 🔥 KEY: Context preserves memory across provider switches
-            )
+            try:
+                # 🆕 Get enhanced system message for code generation
+                enhanced_system_message = self.get_system_message_for_llm(llm_context)
 
-            # Extract and execute code (rest of method unchanged)
-            code_match = re.search(rf'```{language}\n?(.*?)\n?```', llm_response, re.DOTALL)
+                # Generate code with system message guidance
+                llm_response = await self.llm_service.generate_response(
+                    prompt=code_prompt,
+                    context=llm_context,
+                    system_message=enhanced_system_message  # 🆕 System message guides code style
+                )
 
-            if code_match:
-                generated_code = code_match.group(1).strip()
+                # Extract and execute code (existing logic)
+                code_match = re.search(rf'```{language}\n?(.*?)\n?```', llm_response, re.DOTALL)
 
-                # Execute the generated code
-                if language == "python":
-                    execution_result = await self._execute_python_code(generated_code)
-                elif language == "bash":
-                    execution_result = await self._execute_bash_code(generated_code)
+                if code_match:
+                    generated_code = code_match.group(1).strip()
+
+                    # Execute the code
+                    if language == "python":
+                        execution_result = await self._execute_python_code(generated_code)
+                    else:
+                        return f"Generated code:\n\n```{language}\n{generated_code}\n```"
+
+                    # Format response
+                    response = f"Here's the {language} code following best practices:\n\n```{language}\n{generated_code}\n```\n\n"
+
+                    if execution_result['success']:
+                        response += f"**Execution Result:**\n```\n{execution_result['output']}\n```\n\n"
+                        response += f"✅ Code executed successfully in {execution_result['execution_time']:.2f}s"
+                    else:
+                        response += f"**Execution Error:**\n```\n{execution_result['error']}\n```"
+
+                    return response
                 else:
-                    return f"Generated code:\n\n```{language}\n{generated_code}\n```\n\n(Execution not supported for {language})"
+                    return f"Generated response:\n\n{llm_response}"
 
-                # Format response with both generated code and execution result
-                response = f"Here's the {language} code I wrote for you:\n\n```{language}\n{generated_code}\n```\n\n"
-
-                if execution_result['success']:
-                    response += f"**Execution Result:**\n```\n{execution_result['output']}\n```\n\n"
-                    response += f"✅ Code executed successfully in {execution_result['execution_time']:.2f}s"
-                else:
-                    response += f"**Execution Error:**\n```\n{execution_result['error']}\n```"
-
-                return response
-            else:
-                return f"I wrote some code for you:\n\n{llm_response}"
-
-        except Exception as e:
-            return f"I had trouble generating the code: {str(e)}"
+            except Exception as e:
+                return f"I had trouble generating the code: {str(e)}"
     def _add_code_tools(self):
         """Add code execution tools"""
         self.add_tool(AgentTool(

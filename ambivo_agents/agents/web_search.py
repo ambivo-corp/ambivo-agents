@@ -338,9 +338,17 @@ class WebSearchServiceAdapter:
 class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
     """LLM-Aware Web Search Agent with conversation context and intelligent routing"""
 
-    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, **kwargs):
+    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, system_message: str = None,**kwargs):
         if agent_id is None:
             agent_id = f"search_{str(uuid.uuid4())[:8]}"
+
+        default_system = """You are a specialized web search agent with the following capabilities:
+            - Perform comprehensive web searches using multiple search engines and APIs
+            - Provide accurate, current information from reliable sources
+            - Remember search queries and results from previous conversations
+            - Understand context references like "search for more about that" or "find recent news on this topic"
+            - Synthesize information from multiple sources into coherent responses
+            - Cite sources appropriately and indicate information freshness"""
 
         super().__init__(
             agent_id=agent_id,
@@ -349,6 +357,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             llm_service=llm_service,
             name="Web Search Agent",
             description="LLM-aware web search agent with conversation history",
+            system_message=system_message or default_system,
             **kwargs
         )
 
@@ -575,10 +584,11 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         """
 
         try:
-            # 🔥 FIX: Pass conversation history through context
+            enhanced_system_message = self.get_system_message_for_llm(llm_context)
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                context=llm_context  # 🔥 KEY: Context preserves memory across provider switches
+                context=llm_context,
+                system_message=enhanced_system_message
             )
 
             import re
@@ -627,10 +637,11 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
     Consider the user's previous search queries and provide contextual assistance."""
 
             try:
-                # 🔥 FIX: Use LLM with conversation context
+                enhanced_system_message = self.get_system_message_for_llm(llm_context)
                 intelligent_help = await self.llm_service.generate_response(
                     prompt=help_prompt,
-                    context=llm_context  # 🔥 KEY: Context preserves memory
+                    context=llm_context,
+                    system_message=enhanced_system_message
                 )
                 return intelligent_help
             except Exception as e:

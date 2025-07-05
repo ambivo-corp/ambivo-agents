@@ -355,13 +355,13 @@ class MultiProviderLLMService(LLMServiceInterface):
 
         raise RuntimeError(f"All {max_retries} providers exhausted")
 
-    async def generate_response(self, prompt: str, context: Dict[str, Any] = None) -> str:
-        """Generate a response using the current LLM provider - FIXED: Preserves context across provider switches"""
+    async def generate_response(self, prompt: str, context: Dict[str, Any] = None, system_message: str = None) -> str:
+        """Generate a response using the current LLM provider Preserves context across provider switches"""
         if not self.current_llm:
             raise RuntimeError("No LLM provider available")
 
-        # 🔥 FIX: Build context-aware prompt BEFORE provider calls
-        final_prompt = self._build_context_aware_prompt(prompt, context)
+        # 🔥 Build context-aware prompt BEFORE provider calls
+        final_prompt = self._build_system_aware_prompt(prompt, context, system_message)
 
         def _generate():
             try:
@@ -398,6 +398,43 @@ class MultiProviderLLMService(LLMServiceInterface):
         except Exception as e:
             raise RuntimeError(f"Failed to generate response after retries: {str(e)}")
 
+    def _build_system_aware_prompt(self,
+                                   user_prompt: str,
+                                   context: Dict[str, Any] = None,
+                                   system_message: str = None) -> str:
+        """🆕 Build prompt with system message integration"""
+
+        prompt_parts = []
+
+        # 1. Add system message if provided
+        if system_message:
+            prompt_parts.append(f"SYSTEM INSTRUCTIONS:\n{system_message}\n")
+
+        # 2. Add conversation context (existing functionality enhanced)
+        if context and context.get('conversation_history'):
+            conversation_history = context['conversation_history']
+            prompt_parts.append("CONVERSATION HISTORY:")
+
+            for msg in conversation_history[-5:]:  # Last 5 messages
+                msg_type = msg.get('message_type', 'unknown')
+                content = msg.get('content', '')
+
+                if msg_type == 'user_input':
+                    prompt_parts.append(f"User: {content}")
+                elif msg_type == 'agent_response':
+                    prompt_parts.append(f"Assistant: {content}")
+
+            prompt_parts.append("")  # Empty line separator
+
+        # 3. Add current user prompt
+        prompt_parts.append(f"CURRENT REQUEST:\n{user_prompt}")
+
+        # 4. Add final instruction that respects system message
+        if system_message:
+            prompt_parts.append(
+                "\nRespond according to your system instructions above, considering the conversation history.")
+
+        return "\n".join(prompt_parts)
     def _build_context_aware_prompt(self, prompt: str, context: Dict[str, Any] = None) -> str:
         """🔥 NEW: Build context-aware prompt that preserves conversation history across provider switches"""
         if not context:
@@ -442,13 +479,13 @@ class MultiProviderLLMService(LLMServiceInterface):
 
         return enhanced_prompt
 
-    async def generate_response_stream(self, prompt: str, context: Dict[str, Any] = None) -> AsyncIterator[str]:
+    async def generate_response_stream(self, prompt: str, context: Dict[str, Any] = None, system_message: str = None) -> AsyncIterator[str]:
         """Generate a streaming response - FIXED: Preserves context across provider switches"""
         if not self.current_llm:
             raise RuntimeError("No LLM provider available")
 
-        # 🔥 FIX: Build context-aware prompt for streaming too
-        final_prompt = self._build_context_aware_prompt(prompt, context)
+
+        final_prompt = self._build_system_aware_prompt(prompt, context, system_message)
 
         async def _generate_stream():
             try:

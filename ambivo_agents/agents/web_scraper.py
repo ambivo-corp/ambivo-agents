@@ -19,6 +19,8 @@ from urllib.parse import urlparse, urljoin
 from dataclasses import dataclass
 from pathlib import Path
 
+from requests.adapters import HTTPAdapter
+
 from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
 from ..config.loader import load_config, get_config_section
 from ..core.history import WebAgentHistoryMixin, ContextType
@@ -182,10 +184,18 @@ asyncio.run(scrape_url())
 class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
     """Unified web scraper agent with proxy, Docker, and local execution modes"""
 
-    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, **kwargs):
+    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, system_message: str = None,**kwargs):
 
         if agent_id is None:
             agent_id = f"scraper_{str(uuid.uuid4())[:8]}"
+
+        default_system = """You are a specialized web scraping agent with the following capabilities:
+            - Extract content, links, and images from websites using multiple execution modes
+            - Support proxy, Docker, and local execution methods for robust scraping
+            - Remember URLs and scraping operations from previous conversations
+            - Understand context references like "that website" or "scrape it again"
+            - Handle batch scraping operations and accessibility checks
+            - Provide detailed scraping results with technical information"""
 
         super().__init__(
             agent_id=agent_id,
@@ -194,6 +204,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             llm_service=llm_service,
             name="Web Scraper Agent",
             description="Unified web scraper with proxy, Docker, and local execution modes",
+            system_message=system_message or default_system,
             **kwargs
         )
 
@@ -332,24 +343,27 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             # Update conversation state
             self.update_conversation_state(user_message)
 
-            # 🔥 FIX: Get conversation context AND conversation history
-            conversation_context = self._get_scraping_conversation_context_summary()
-            conversation_history = []
+            llm_context_from_routing = message.metadata.get('llm_context', {})
+            conversation_history_from_routing = llm_context_from_routing.get('conversation_history', [])
 
-            try:
+            if conversation_history_from_routing:
+                conversation_history = conversation_history_from_routing
+            else:
                 conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
-            except Exception as e:
-                logging.warning(f"Could not get conversation history: {e}")
 
-            # 🔥 FIX: Build LLM context with conversation history
+            #  Get conversation context AND conversation history
+            conversation_context = self._get_scraping_conversation_context_summary()
+
+
+            # Build LLM context with conversation history
             llm_context = {
-                'conversation_history': conversation_history,  # 🔥 KEY FIX
+                'conversation_history': conversation_history,
                 'conversation_id': message.conversation_id,
                 'user_id': message.sender_id,
                 'agent_type': 'web_scraper'
             }
 
-            # 🔥 FIX: Use LLM to analyze intent WITH CONTEXT
+            #Use LLM to analyze intent WITH CONTEXT
             intent_analysis = await self._llm_analyze_scraping_intent_with_context(user_message, conversation_context,
                                                                                    llm_context)
 
@@ -416,10 +430,11 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         """
 
         try:
-            # 🔥 FIX: Pass conversation history through context
+            enhanced_system_message = self.get_system_message_for_llm(llm_context)
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                context=llm_context  # 🔥 KEY: Context preserves memory across provider switches
+                context=llm_context,
+                system_message = enhanced_system_message
             )
 
             import re
@@ -465,15 +480,17 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
         # Use LLM for more intelligent help if available
         if self.llm_service and llm_context.get('conversation_history'):
+            enhanced_system_message = self.get_system_message_for_llm(llm_context)
             help_prompt = f"""As a web scraping assistant, provide helpful guidance for: {user_message}
 
     Consider the user's previous scraping operations and provide contextual assistance."""
 
             try:
-                # 🔥 FIX: Use LLM with conversation context
+                # Use LLM with conversation context
                 intelligent_help = await self.llm_service.generate_response(
                     prompt=help_prompt,
-                    context=llm_context  # 🔥 KEY: Context preserves memory
+                    context=llm_context,
+                    system_message=enhanced_system_message
                 )
                 return intelligent_help
             except Exception as e:
@@ -740,19 +757,32 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         }
 
     def _configure_ssl_for_proxy(self):
-        """Configure SSL settings for proxy usage"""
-        if REQUESTS_AVAILABLE:
-            try:
-                ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
+        """Configure SSL settings for proxy usage - FIXED VERSION"""
+        try:
+            # Disable SSL warnings globally for urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-                import requests.packages.urllib3.util.ssl_
-                requests.packages.urllib3.util.ssl_.DEFAULT_CIPHERS = 'ALL'
-            except Exception as e:
-                self.logger.warning(f"SSL configuration warning: {e}")
+            # Create a custom SSL context that's more permissive
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
 
-        self.logger.info("SSL verification disabled for proxy usage")
+            # For requests library - create a custom adapter
+            class SSLAdapter(HTTPAdapter):
+                def init_poolmanager(self, *args, **kwargs):
+                    context = ssl.create_default_context()
+                    context.check_hostname = False
+                    context.verify_mode = ssl.CERT_NONE
+                    kwargs['ssl_context'] = context
+                    return super().init_poolmanager(*args, **kwargs)
+
+            # Store the adapter for later use
+            self.ssl_adapter = SSLAdapter()
+
+            self.logger.info("SSL configuration updated for proxy usage")
+
+        except Exception as e:
+            self.logger.warning(f"SSL configuration warning: {e}")
 
     def _determine_execution_mode(self) -> str:
         """Determine execution mode from configuration"""
@@ -988,61 +1018,97 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
         start_time = time.time()
 
-        response = requests.get(
-            url,
-            headers=headers,
-            proxies=proxies,
-            timeout=self.scraper_config.get('timeout', 60),
-            verify=False,
-            allow_redirects=True
-        )
-        response_time = time.time() - start_time
+        # Create session with custom SSL adapter
+        session = requests.Session()
 
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # Only mount SSL adapter if it exists, otherwise use verify=False
+        if hasattr(self, 'ssl_adapter'):
+            session.mount('https://', self.ssl_adapter)
+            session.mount('http://', self.ssl_adapter)
 
-        # Extract content
-        title = soup.find('title')
-        title = title.get_text().strip() if title else "No title"
+        try:
+            response = session.get(
+                url,
+                headers=headers,
+                proxies=proxies,
+                timeout=self.scraper_config.get('timeout', 60),
+                verify=False,  # Disable SSL verification
+                allow_redirects=True
+            )
+            response.raise_for_status()  # Raise exception for bad status codes
+            response_time = time.time() - start_time
 
-        for script in soup(["script", "style"]):
-            script.decompose()
+            soup = BeautifulSoup(response.content, 'html.parser')
 
-        content = soup.get_text()
-        content = ' '.join(content.split())
+            # Extract content
+            title = soup.find('title')
+            title = title.get_text().strip() if title else "No title"
 
-        # Extract links and images based on config
-        links = []
-        images = []
+            # Remove script and style elements
+            for script in soup(["script", "style"]):
+                script.decompose()
 
-        if kwargs.get('extract_links', True):
-            max_links = self.scraper_config.get('max_links_per_page', 100)
-            for link in soup.find_all('a', href=True)[:max_links]:
-                links.append({
-                    "url": urljoin(url, link['href']),
-                    "text": link.get_text().strip()[:100]
-                })
+            content = soup.get_text()
+            content = ' '.join(content.split())
 
-        if kwargs.get('extract_images', True):
-            max_images = self.scraper_config.get('max_images_per_page', 50)
-            for img in soup.find_all('img', src=True)[:max_images]:
-                images.append({
-                    "url": urljoin(url, img['src']),
-                    "alt": img.get('alt', '')
-                })
+            # Extract links and images based on config
+            links = []
+            images = []
 
-        return {
-            "success": True,
-            "url": url,
-            "title": title,
-            "content": content[:5000],
-            "content_length": len(content),
-            "links": links,
-            "images": images,
-            "status_code": response.status_code,
-            "response_time": response_time,
-            "method": "proxy_requests",
-            "execution_mode": "proxy"
-        }
+            if kwargs.get('extract_links', True):
+                max_links = self.scraper_config.get('max_links_per_page', 100)
+                for link in soup.find_all('a', href=True)[:max_links]:
+                    href = link['href']
+                    text = link.get_text().strip()[:100]
+                    if href and text:  # Only add if both href and text exist
+                        links.append({
+                            "url": urljoin(url, href),
+                            "text": text
+                        })
+
+            if kwargs.get('extract_images', True):
+                max_images = self.scraper_config.get('max_images_per_page', 50)
+                for img in soup.find_all('img', src=True)[:max_images]:
+                    src = img['src']
+                    alt = img.get('alt', '')
+                    if src:  # Only add if src exists
+                        images.append({
+                            "url": urljoin(url, src),
+                            "alt": alt
+                        })
+
+            return {
+                "success": True,
+                "url": url,
+                "title": title,
+                "content": content[:5000],
+                "content_length": len(content),
+                "links": links,
+                "images": images,
+                "status_code": response.status_code,
+                "response_time": response_time,
+                "method": "proxy_requests",
+                "execution_mode": "proxy"
+            }
+
+        except requests.exceptions.RequestException as e:
+            return {
+                "success": False,
+                "url": url,
+                "error": f"Request failed: {str(e)}",
+                "method": "proxy_requests",
+                "execution_mode": "proxy"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "url": url,
+                "error": f"Parsing failed: {str(e)}",
+                "method": "proxy_requests",
+                "execution_mode": "proxy"
+            }
+        finally:
+            session.close()  # Always close the session
 
     async def _scrape_locally(self, url: str, method: str, **kwargs) -> Dict[str, Any]:
         """Scrape using local methods (no proxy, no Docker)"""
@@ -1194,11 +1260,11 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
             yield "🧠 Analyzing scraping request...\n"
 
-            # 🔥 FIX: Build LLM context for streaming
             llm_context = {
                 'conversation_history': conversation_history,  # 🔥 KEY FIX
                 'conversation_id': message.conversation_id,
-                'streaming': True
+                'streaming': True,
+
             }
 
             intent_analysis = await self._llm_analyze_scraping_intent(user_message, conversation_context)
@@ -1225,13 +1291,15 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
             else:
                 # Stream help response with context
+                enhanced_system_message = self.get_system_message_for_llm(llm_context)
                 if self.llm_service:
                     help_prompt = f"As a web scraping assistant, help with: {user_message}"
 
                     # 🔥 FIX: Stream with conversation context
                     async for chunk in self.llm_service.generate_response_stream(
                             help_prompt,
-                            context=llm_context  # 🔥 KEY: Context preserves memory
+                            context=llm_context,
+                            system_message=enhanced_system_message,
                     ):
                         yield chunk
                 else:
@@ -1242,6 +1310,53 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         except Exception as e:
             yield f"❌ **Web Scraper Error:** {str(e)}"
 
+    async def _stream_accessibility_check_with_context(self, urls: list, user_message: str,
+                                                       llm_context: Dict[str, Any]) -> AsyncIterator[str]:
+        """Stream accessibility checking with context preservation"""
+        try:
+            if not urls:
+                yield "⚠️ No URL provided. Please specify a website to check.\n"
+                return
+
+            url = urls[0]
+            yield f"🔍 **Checking Accessibility:** {url}\n\n"
+
+            yield "⏳ Testing connection...\n"
+
+            result = await self._check_accessibility(url)
+
+            if result['success']:
+                status = "✅ Accessible" if result.get('accessible', False) else "❌ Not Accessible"
+                yield f"🚦 **Status:** {status}\n"
+                yield f"📊 **HTTP Status:** {result.get('status_code', 'Unknown')}\n"
+                yield f"⏱️ **Response Time:** {result.get('response_time', 0):.2f}s\n"
+                yield f"📅 **Checked:** {result.get('timestamp', 'Unknown')}\n\n"
+
+                if result.get('accessible', False):
+                    yield "✅ The website is accessible and responding normally.\n"
+                else:
+                    yield "❌ The website is not accessible or not responding.\n"
+
+                # 🔥 FIX: Use LLM with context for intelligent follow-up suggestions
+                if self.llm_service and llm_context.get('conversation_history'):
+                    try:
+                        enhanced_system_message = self.get_system_message_for_llm(llm_context)
+                        follow_up_prompt = f"""Based on the accessibility check result for {url}, provide helpful next steps or troubleshooting suggestions."""
+
+                        yield "\n💡 **Suggestions:**\n"
+                        async for chunk in self.llm_service.generate_response_stream(
+                                follow_up_prompt,
+                                context=llm_context,
+                                system_message=enhanced_system_message
+                        ):
+                            yield chunk
+                    except Exception:
+                        pass
+            else:
+                yield f"❌ **Check failed:** {result['error']}\n"
+
+        except Exception as e:
+            yield f"❌ **Accessibility check error:** {str(e)}"
     async def _stream_single_scrape(self, urls: list, intent_analysis: dict, user_message: str) -> AsyncIterator[str]:
         """Stream single URL scraping with detailed progress"""
         try:

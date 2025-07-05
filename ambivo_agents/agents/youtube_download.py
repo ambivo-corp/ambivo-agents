@@ -24,7 +24,7 @@ from ..executors.youtube_executor import YouTubeDockerExecutor
 class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
     """YouTube Download Agent for downloading videos and audio from YouTube"""
 
-    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, **kwargs):
+    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, system_message: str = None,**kwargs):
         if agent_id is None:
             agent_id = f"youtube_{str(uuid.uuid4())[:8]}"
 

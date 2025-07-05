@@ -352,6 +352,7 @@ class BaseAgent(ABC):
                  auto_configure: bool = True,
                  session_id: str = None,
                  conversation_id: str = None,
+                 system_message: str = None,
                  **kwargs):
 
         # Auto-generate agent_id if not provided
@@ -362,6 +363,7 @@ class BaseAgent(ABC):
         self.role = role
         self.name = name or f"{role.value}_{agent_id[:8]}"
         self.description = description or f"Agent with role: {role.value}"
+        self.system_message = system_message or self._get_default_system_message()
 
         # Load config if not provided and auto-configure is enabled
         if config is None and auto_configure:
@@ -412,6 +414,47 @@ class BaseAgent(ABC):
         # Initialize executor
         self.executor = ThreadPoolExecutor(max_workers=4)
 
+    def _get_default_system_message(self) -> str:
+        """Get role-specific default system message"""
+        role_messages = {
+            AgentRole.ASSISTANT: """You are a helpful AI assistant. Provide accurate, thoughtful responses to user queries. 
+            Maintain conversation context and reference previous discussions when relevant. 
+            Be concise but thorough in explanations.""",
+
+            AgentRole.CODE_EXECUTOR: """You are a code execution specialist. Write clean, well-commented code. 
+            Always explain what the code does before execution. Handle errors gracefully and suggest fixes. 
+            Use best practices for security and efficiency.""",
+
+            AgentRole.RESEARCHER: """You are a research specialist. Provide thorough, well-sourced information. 
+            Verify facts when possible and clearly distinguish between verified information and analysis. 
+            Structure your research logically.""",
+
+            AgentRole.COORDINATOR: """You are an intelligent coordinator. Analyze user requests carefully and 
+            route them to the most appropriate specialized agent. Consider context, complexity, and agent 
+            capabilities when making routing decisions."""
+        }
+        return role_messages.get(self.role, "You are a helpful AI agent.")
+
+    def get_system_message_for_llm(self, context: Dict[str, Any] = None) -> str:
+        """🆕 Get context-enhanced system message for LLM calls"""
+        base_message = self.system_message
+
+        # Add context-specific instructions
+        if context:
+            conversation_history = context.get('conversation_history', [])
+            if conversation_history:
+                base_message += "\n\nIMPORTANT: This conversation has history. Consider previous messages when responding and maintain conversational continuity."
+
+            # Add agent-specific context
+            if self.role == AgentRole.CODE_EXECUTOR and context.get('streaming'):
+                base_message += "\n\nYou are in streaming mode. Provide step-by-step progress updates."
+
+            elif self.role == AgentRole.COORDINATOR:
+                available_agents = context.get('available_agents', [])
+                if available_agents:
+                    base_message += f"\n\nAvailable specialized agents: {', '.join(available_agents)}"
+
+        return base_message
 
     def _create_agent_context(self,
                               user_id: str = None,
@@ -563,7 +606,7 @@ class BaseAgent(ABC):
 
     def chat_sync(self, message: str, **kwargs) -> str:
         """
-        🌟 NEW: Synchronous version of chat() for easier use in non-async contexts
+        Synchronous version of chat() that properly handles event loops
 
         Args:
             message: User message as string
@@ -571,27 +614,31 @@ class BaseAgent(ABC):
 
         Returns:
             Agent response as string
-
-        Usage:
-            agent, context = YouTubeDownloadAgent.create(user_id="john")
-            response = agent.chat_sync("Download https://youtube.com/watch?v=abc123")
-            print(response)
         """
         try:
-            # Get or create event loop
+            # Check if we're already in an async context
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If loop is already running, we need to use run_in_executor
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.chat(message, **kwargs))
-                        return future.result()
-                else:
-                    # Loop exists but not running
-                    return loop.run_until_complete(self.chat(message, **kwargs))
+                # Try to get the current event loop
+                loop = asyncio.get_running_loop()
+                # If we get here, we're in an async context - use run_in_executor
+                import concurrent.futures
+                import threading
+
+                def run_chat():
+                    # Create new event loop in thread
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        return new_loop.run_until_complete(self.chat(message, **kwargs))
+                    finally:
+                        new_loop.close()
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_chat)
+                    return future.result(timeout=120)  # 2 minute timeout
+
             except RuntimeError:
-                # No event loop exists, create one
+                # No event loop running, safe to use asyncio.run()
                 return asyncio.run(self.chat(message, **kwargs))
 
         except Exception as e:
@@ -676,7 +723,7 @@ class BaseAgent(ABC):
         """Update context metadata"""
         self.context.update_metadata(**kwargs)
 
-    # 🧠 CONVERSATION HISTORY METHODS (Built into BaseAgent)
+
 
     async def get_conversation_history(self,
                                        limit: int = None,
@@ -1044,13 +1091,34 @@ async def quick_chat(agent_class, message: str, user_id: str = None, **kwargs) -
 
 def quick_chat_sync(agent_class, message: str, user_id: str = None, **kwargs) -> str:
     """
-    🌟 ULTRA-SIMPLIFIED: One-liner synchronous agent chat
+    🌟 FIXED: One-liner synchronous agent chat that properly handles event loops
 
     Usage:
         response = quick_chat_sync(YouTubeDownloadAgent, "Download https://youtube.com/watch?v=abc")
         print(response)
     """
     try:
-        return asyncio.run(quick_chat(agent_class, message, user_id, **kwargs))
+        # Check if we're in an async context
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in an async context - use thread executor
+            import concurrent.futures
+
+            def run_quick_chat():
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    return new_loop.run_until_complete(quick_chat(agent_class, message, user_id, **kwargs))
+                finally:
+                    new_loop.close()
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_quick_chat)
+                return future.result(timeout=120)
+
+        except RuntimeError:
+            # No event loop, safe to use asyncio.run
+            return asyncio.run(quick_chat(agent_class, message, user_id, **kwargs))
+
     except Exception as e:
         return f"Quick sync chat error: {str(e)}"

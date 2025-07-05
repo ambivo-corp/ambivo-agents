@@ -1,10 +1,10 @@
 # Core dependencies
-redis
+redis~=6.2.0
 redis[asyncio]
 docker>=6.0.0
 asyncio-mqtt>=0.11.0
-cachetools
-lz4
+cachetools~=6.1.0
+lz4~=4.4.4
 
 # LangChain and LLM dependencies
 openai==1.84.0
@@ -15,12 +15,12 @@ langchain-openai==0.3.19
 langchainhub==0.1.21
 langchain-text-splitters==0.3.8
 langchain-anthropic==0.3.15
-langchain-aws
+langchain-aws~=0.2.24
 langchain-voyageai
 huggingface-hub
 
 # LlamaIndex dependencies
-llama-index-core
+llama-index-core~=0.12.43
 llama-index-embeddings-langchain
 llama-index-llms-langchain
 llama-index-llms-openai
@@ -51,3 +51,8 @@ isort>=6.0.1
 # Document processing
 unstructured
 langchain-unstructured
+requests~=2.32.4
+setuptools~=80.9.0
+urllib3~=2.5.0
+beautifulsoup4~=4.13.4
+click~=8.2.1
