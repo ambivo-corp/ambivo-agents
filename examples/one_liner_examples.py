@@ -27,7 +27,7 @@ async def ultra_simple_examples():
     print(f"🐍 Python explanation: {response[:100]}...")
     await agent.cleanup_session()
 
-    # ✅ FIXED: Custom system message with async
+
     agent = AssistantAgent.create_simple(
         system_message="You are a friendly teacher. Use simple analogies."
     )
@@ -354,5 +354,5 @@ def sync_main():
 
 
 if __name__ == "__main__":
-    # ✅ FIXED: Use asyncio.run() only at the top level
+
     sync_main()

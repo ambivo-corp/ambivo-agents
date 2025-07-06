@@ -14,6 +14,7 @@ from typing import Dict, List, Any, Optional, Union, AsyncIterator
 from datetime import datetime
 from dataclasses import dataclass
 
+from ambivo_agents.core import WorkflowPatterns
 from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext
 from ..config.loader import load_config, get_config_section
 from ..core.history import BaseAgentHistoryMixin, ContextType
@@ -1510,3 +1511,375 @@ Please continue with the next step for {agent_type} processing."""
         moderator_cleanup = await super().cleanup_session()
 
         return success and moderator_cleanup
+
+
+# integration_guide.py
+"""
+Integration Guide: How to add workflow capabilities to your existing ambivo_agents system
+"""
+
+
+# 1. Simple Integration with Existing ModeratorAgent
+# Add this to your ambivo_agents/agents/moderator.py
+
+class EnhancedModeratorAgent(ModeratorAgent):
+    """ModeratorAgent enhanced with workflow capabilities"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..core.workflow import WorkflowPatterns
+
+        # Initialize workflows when agents are available
+        self.workflows = {}
+        self._setup_default_workflows()
+
+    def _setup_default_workflows(self):
+        """Setup default workflows using available specialized agents"""
+        try:
+            # Only create workflows for available agents
+            available_agents = list(self.specialized_agents.keys())
+
+            # Search -> Scrape -> Ingest workflow
+            if all(agent in available_agents for agent in ['web_search', 'web_scraper', 'knowledge_base']):
+                workflow = WorkflowPatterns.create_search_scrape_ingest_workflow(
+                    self.specialized_agents['web_search'],
+                    self.specialized_agents['web_scraper'],
+                    self.specialized_agents['knowledge_base']
+                )
+                self.workflows['search_scrape_ingest'] = workflow
+                self.logger.info("✅ Registered search_scrape_ingest workflow")
+
+            # Media processing workflow
+            if all(agent in available_agents for agent in ['youtube_download', 'media_editor']):
+                workflow = WorkflowPatterns.create_media_processing_workflow(
+                    self.specialized_agents['youtube_download'],
+                    self.specialized_agents['media_editor']
+                )
+                self.workflows['media_processing'] = workflow
+                self.logger.info("✅ Registered media_processing workflow")
+
+        except Exception as e:
+            self.logger.warning(f"Could not setup all workflows: {e}")
+
+    async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
+        """Enhanced message processing with workflow detection"""
+
+        # Check for workflow patterns in user message
+        content = message.content.lower()
+
+        # Detect workflow requests
+        if self._is_workflow_request(content):
+            return await self._handle_workflow_request(message, context)
+
+        # Fall back to standard moderator behavior
+        return await super().process_message(message, context)
+
+    def _is_workflow_request(self, content: str) -> bool:
+        """Detect if message requests a workflow"""
+        workflow_patterns = [
+            "search scrape ingest",
+            "search and scrape and ingest",
+            "find scrape store",
+            "research and store",
+            "download and process",
+            "youtube download convert",
+            "get video and edit"
+        ]
+
+        return any(pattern in content for pattern in workflow_patterns)
+
+    async def _handle_workflow_request(self, message: AgentMessage, context: ExecutionContext) -> AgentMessage:
+        """Handle workflow execution requests"""
+        content = message.content.lower()
+
+        try:
+            # Determine which workflow to run
+            if any(phrase in content for phrase in ["search scrape ingest", "research and store"]):
+                if 'search_scrape_ingest' in self.workflows:
+                    result = await self.workflows['search_scrape_ingest'].execute(
+                        message.content, context or self.get_execution_context()
+                    )
+                    return self._format_workflow_response(result, message, "Search → Scrape → Ingest")
+                else:
+                    return self.create_response(
+                        content="Search-Scrape-Ingest workflow not available. Missing required agents.",
+                        recipient_id=message.sender_id,
+                        session_id=message.session_id,
+                        conversation_id=message.conversation_id
+                    )
+
+            elif any(phrase in content for phrase in ["download and process", "youtube download"]):
+                if 'media_processing' in self.workflows:
+                    result = await self.workflows['media_processing'].execute(
+                        message.content, context or self.get_execution_context()
+                    )
+                    return self._format_workflow_response(result, message, "Download → Process")
+                else:
+                    return self.create_response(
+                        content="Media processing workflow not available. Missing required agents.",
+                        recipient_id=message.sender_id,
+                        session_id=message.session_id,
+                        conversation_id=message.conversation_id
+                    )
+
+            else:
+                # Generic workflow help
+                return self.create_response(
+                    content=self._get_workflow_help(),
+                    recipient_id=message.sender_id,
+                    session_id=message.session_id,
+                    conversation_id=message.conversation_id
+                )
+
+        except Exception as e:
+            return self.create_response(
+                content=f"Workflow execution failed: {str(e)}",
+                recipient_id=message.sender_id,
+                message_type=MessageType.ERROR,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id
+            )
+
+    def _format_workflow_response(self, result, original_message, workflow_name):
+        """Format workflow result into response message"""
+        if result.success:
+            content = f"🎉 **{workflow_name} Workflow Completed**\n\n"
+            content += f"⏱️ **Execution Time:** {result.execution_time:.2f} seconds\n"
+            content += f"🔧 **Steps Executed:** {' → '.join(result.nodes_executed)}\n"
+            content += f"💬 **Messages Generated:** {len(result.messages)}\n\n"
+
+            # Include final result
+            if result.messages:
+                final_msg = result.messages[-1]
+                content += f"**Final Result:**\n{final_msg.content[:500]}"
+                if len(final_msg.content) > 500:
+                    content += "... (truncated)"
+
+            return self.create_response(
+                content=content,
+                recipient_id=original_message.sender_id,
+                session_id=original_message.session_id,
+                conversation_id=original_message.conversation_id
+            )
+        else:
+            error_content = f"❌ **{workflow_name} Workflow Failed**\n\n"
+            error_content += f"**Errors:**\n" + "\n".join(result.errors)
+
+            return self.create_response(
+                content=error_content,
+                recipient_id=original_message.sender_id,
+                message_type=MessageType.ERROR,
+                session_id=original_message.session_id,
+                conversation_id=original_message.conversation_id
+            )
+
+    def _get_workflow_help(self) -> str:
+        """Get help text for available workflows"""
+        help_text = "🔄 **Available Workflows**\n\n"
+
+        if 'search_scrape_ingest' in self.workflows:
+            help_text += "🔍 **Search → Scrape → Ingest**\n"
+            help_text += "   Searches web, scrapes results, stores in knowledge base\n"
+            help_text += "   *Example: 'Search scrape ingest information about quantum computing into my_kb'*\n\n"
+
+        if 'media_processing' in self.workflows:
+            help_text += "🎬 **Download → Process**\n"
+            help_text += "   Downloads from YouTube and processes media\n"
+            help_text += "   *Example: 'Download and process https://youtube.com/watch?v=abc123 as MP3'*\n\n"
+
+        if not self.workflows:
+            help_text += "⚠️ No workflows available. Required agents may not be configured.\n\n"
+
+        help_text += "💡 **How to use:**\n"
+        help_text += "Simply describe what you want to do using natural language!\n"
+        help_text += "The moderator will detect workflow patterns and execute them automatically."
+
+        return help_text
+
+
+# 2. Easy Setup Script for Your Existing System
+
+async def setup_workflow_system():
+    """Easy setup script to add workflows to existing ambivo_agents"""
+
+    print("🚀 Setting up Ambivo Agents Workflow System...")
+
+    # Create enhanced moderator with all available agents
+    from ambivo_agents.agents import ModeratorAgent
+    from ambivo_agents.core.workflow import WorkflowPatterns
+
+    # Create moderator with auto-configuration
+    moderator = ModeratorAgent.create_simple(
+        user_id="workflow_setup",
+        enabled_agents=['web_search', 'web_scraper', 'knowledge_base',
+                        'youtube_download', 'media_editor', 'assistant', 'code_executor']
+    )
+
+    # Setup workflows if agents are available
+    workflows = {}
+
+    # Search-Scrape-Ingest workflow
+    if all(agent in moderator.specialized_agents for agent in ['web_search', 'web_scraper', 'knowledge_base']):
+        workflows['research'] = WorkflowPatterns.create_search_scrape_ingest_workflow(
+            moderator.specialized_agents['web_search'],
+            moderator.specialized_agents['web_scraper'],
+            moderator.specialized_agents['knowledge_base']
+        )
+        print("✅ Research workflow ready")
+
+    # Media processing workflow
+    if all(agent in moderator.specialized_agents for agent in ['youtube_download', 'media_editor']):
+        workflows['media'] = WorkflowPatterns.create_media_processing_workflow(
+            moderator.specialized_agents['youtube_download'],
+            moderator.specialized_agents['media_editor']
+        )
+        print("✅ Media workflow ready")
+
+    print(f"\n🎉 Workflow system ready with {len(workflows)} workflows!")
+    return moderator, workflows
+
+
+# 3. Simple Usage Examples
+
+async def quick_workflow_examples():
+    """Quick examples of using workflows"""
+
+    # Setup
+    moderator, workflows = await setup_workflow_system()
+
+    # Example 1: Research workflow
+    if 'research' in workflows:
+        print("\n🔍 Testing Research Workflow...")
+        response = await moderator.chat(
+            "Search scrape ingest information about renewable energy trends into energy_research knowledge base"
+        )
+        print(f"Response: {response[:200]}...")
+
+    # Example 2: Media workflow
+    if 'media' in workflows:
+        print("\n🎬 Testing Media Workflow...")
+        response = await moderator.chat(
+            "Download and process https://youtube.com/watch?v=example as high quality MP3"
+        )
+        print(f"Response: {response[:200]}...")
+
+    # Example 3: Two-agent conversation
+    print("\n💬 Testing Two-Agent Conversation...")
+
+    # Create two agents for conversation
+    researcher = moderator.specialized_agents.get('assistant')
+    if researcher:
+        # Simple back-and-forth
+        researcher.system_message = "You are a researcher. Ask questions and gather information."
+
+        response1 = await researcher.chat("What are the latest trends in AI safety?")
+        print(f"Researcher: {response1[:100]}...")
+
+        # Could continue conversation with another agent
+
+    print("\n✅ All examples completed!")
+
+
+# 4. Integration with Your Existing Chat Interface
+
+class WorkflowEnabledChat:
+    """Chat interface with workflow capabilities"""
+
+    def __init__(self):
+        self.moderator = None
+        self.workflows = {}
+        self.is_initialized = False
+
+    async def initialize(self):
+        """Initialize the workflow system"""
+        if not self.is_initialized:
+            self.moderator, self.workflows = await setup_workflow_system()
+            self.is_initialized = True
+
+    async def chat(self, message: str) -> str:
+        """Enhanced chat with workflow detection"""
+        await self.initialize()
+
+        # Check if this is a workflow request
+        if self._detect_workflow_intent(message):
+            # Use workflow-enabled moderator
+            return await self.moderator.chat(message)
+        else:
+            # Use regular agent behavior
+            assistant = self.moderator.specialized_agents.get('assistant')
+            if assistant:
+                return await assistant.chat(message)
+            else:
+                return await self.moderator.chat(message)
+
+    def _detect_workflow_intent(self, message: str) -> bool:
+        """Simple workflow intent detection"""
+        workflow_keywords = [
+            "search scrape ingest", "research and store", "find and save",
+            "download and process", "youtube download", "get video",
+            "workflow", "multi-step", "pipeline"
+        ]
+
+        content_lower = message.lower()
+        return any(keyword in content_lower for keyword in workflow_keywords)
+
+    async def list_workflows(self) -> str:
+        """List available workflows"""
+        await self.initialize()
+
+        if not self.workflows:
+            return "No workflows available. Check agent configuration."
+
+        response = "🔄 **Available Workflows:**\n\n"
+        for name, workflow in self.workflows.items():
+            response += f"• **{name.title()}**: {len(workflow.nodes)} steps\n"
+
+        response += "\n💡 Just describe what you want to do naturally!"
+        return response
+
+
+# 5. Example Usage in Your Application
+
+async def example_application_usage():
+    """Example of how to use workflows in your application"""
+
+    # Initialize workflow-enabled chat
+    chat = WorkflowEnabledChat()
+
+    # Example conversations
+    examples = [
+        "Search scrape ingest information about climate change into research_db",
+        "Download and convert https://youtube.com/watch?v=abc123 to MP3",
+        "What workflows are available?",
+        "How is quantum computing advancing?",  # Regular chat
+    ]
+
+    print("🎯 Example Application Usage:\n")
+
+    for i, example in enumerate(examples, 1):
+        print(f"👤 User: {example}")
+        response = await chat.chat(example)
+        print(f"🤖 Agent: {response[:150]}...\n")
+
+        if i < len(examples):
+            print("-" * 50)
+
+
+# Main demo
+if __name__ == "__main__":
+    import asyncio
+
+    print("🚀 Ambivo Agents Workflow Integration Demo\n")
+
+
+    async def main():
+        # Run quick examples
+        await quick_workflow_examples()
+
+        print("\n" + "=" * 60 + "\n")
+
+        # Run application example
+        await example_application_usage()
+
+
+    asyncio.run(main())

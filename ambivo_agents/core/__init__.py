@@ -12,6 +12,8 @@ from .base import (
 )
 from .memory import MemoryManagerInterface, RedisMemoryManager, create_redis_memory_manager
 from .llm import LLMServiceInterface, MultiProviderLLMService, create_multi_provider_llm_service
+from .workflow import WorkflowBuilder, AmbivoWorkflow, WorkflowPatterns, WorkflowResult
+
 
 __all__ = [
     "AgentRole",
@@ -28,6 +30,10 @@ __all__ = [
     "LLMServiceInterface",
     "MultiProviderLLMService",
     "create_multi_provider_llm_service",
-    "AgentSession"
+    "AgentSession",
+    "WorkflowBuilder",
+        "AmbivoWorkflow",
+        "WorkflowPatterns",
+        "WorkflowResult"
 ]
 
