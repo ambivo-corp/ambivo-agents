@@ -18,6 +18,8 @@ For production scenarios, we recommend:
 - [Agent Creation](#agent-creation)
 - [Features](#features)
 - [Available Agents](#available-agents)
+- [Workflow System](#workflow-system)
+- [System Messages](#system-messages)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Configuration](#configuration)
@@ -136,6 +138,8 @@ await agent.cleanup_session()
 - **Redis Memory**: Persistent conversation memory with compression
 - **Multi-Provider LLM**: Automatic failover between OpenAI, Anthropic, and AWS Bedrock
 - **Configuration-Driven**: All features controlled via `agent_config.yaml`
+- **Workflow System**: Multi-agent workflows with parallel and sequential execution
+- **System Messages**: Customizable system prompts for agent behavior control
 
 ## Available Agents
 
@@ -144,11 +148,13 @@ await agent.cleanup_session()
 - Context-aware multi-turn conversations
 - Automatic agent selection based on query analysis
 - Session management and cleanup
+- Workflow execution and coordination
 
 ### Assistant Agent
 - General purpose conversational AI
 - Context-aware responses
 - Multi-turn conversations
+- Customizable system messages
 
 ### Code Executor Agent
 - Secure Python and Bash execution in Docker
@@ -179,6 +185,134 @@ await agent.cleanup_session()
 - Download videos and audio from YouTube
 - Docker-based execution with pytubefix
 - Automatic title sanitization and metadata extraction
+
+## Workflow System
+
+The workflow system enables multi-agent orchestration with sequential and parallel execution patterns:
+
+### Basic Workflow Usage
+
+```python
+from ambivo_agents.core.workflow import WorkflowBuilder, WorkflowPatterns
+from ambivo_agents import ModeratorAgent
+
+async def workflow_example():
+    # Create moderator with agents
+    moderator, context = ModeratorAgent.create(
+        user_id="workflow_user",
+        enabled_agents=['web_search', 'web_scraper', 'knowledge_base']
+    )
+    
+    # Create search -> scrape -> ingest workflow
+    workflow = WorkflowPatterns.create_search_scrape_ingest_workflow(
+        moderator.specialized_agents['web_search'],
+        moderator.specialized_agents['web_scraper'], 
+        moderator.specialized_agents['knowledge_base']
+    )
+    
+    # Execute workflow
+    result = await workflow.execute(
+        "Research renewable energy trends and store in knowledge base",
+        context.to_execution_context()
+    )
+    
+    if result.success:
+        print(f"Workflow completed in {result.execution_time:.2f}s")
+        print(f"Nodes executed: {result.nodes_executed}")
+    
+    await moderator.cleanup_session()
+```
+
+### Advanced Workflow Features
+
+```python
+from ambivo_agents.core.enhanced_workflow import (
+    AdvancedWorkflowBuilder, EnhancedModeratorAgent
+)
+
+async def advanced_workflow():
+    # Create enhanced moderator
+    base_moderator, context = ModeratorAgent.create(user_id="advanced_user")
+    enhanced_moderator = EnhancedModeratorAgent(base_moderator)
+    
+    # Natural language workflow triggers
+    response1 = await enhanced_moderator.process_message_with_workflows(
+        "I need agents to reach consensus on climate solutions"
+    )
+    
+    response2 = await enhanced_moderator.process_message_with_workflows(
+        "Create a debate between agents about AI ethics"
+    )
+    
+    # Check workflow status
+    status = await enhanced_moderator.get_workflow_status()
+    print(f"Available workflows: {status['advanced_workflows']['registered']}")
+```
+
+### Workflow Patterns
+
+- **Sequential Workflows**: Execute agents in order, passing results between them
+- **Parallel Workflows**: Execute multiple agents simultaneously
+- **Consensus Workflows**: Agents collaborate to reach agreement
+- **Debate Workflows**: Structured multi-agent discussions
+- **Error Recovery**: Automatic fallback to backup agents
+- **Map-Reduce**: Parallel processing with result aggregation
+
+## System Messages
+
+System messages control agent behavior and responses. Each agent supports custom system prompts:
+
+### Default System Messages
+
+```python
+# Agents come with role-specific system messages
+assistant_agent = AssistantAgent.create_simple(user_id="user")
+# Default: "You are a helpful AI assistant. Provide accurate, thoughtful responses..."
+
+code_agent = CodeExecutorAgent.create_simple(user_id="user") 
+# Default: "You are a code execution specialist. Write clean, well-commented code..."
+```
+
+### Custom System Messages
+
+```python
+from ambivo_agents import AssistantAgent
+
+# Create agent with custom system message
+custom_system = """You are a technical documentation specialist. 
+Always provide detailed explanations with code examples. 
+Use professional terminology and structured responses."""
+
+agent, context = AssistantAgent.create(
+    user_id="doc_specialist",
+    system_message=custom_system
+)
+
+response = await agent.chat("Explain REST API design principles")
+```
+
+### Moderator System Messages
+
+```python
+from ambivo_agents import ModeratorAgent
+
+# Custom moderator behavior
+moderator_system = """You are a project management assistant.
+Route technical queries to appropriate agents and provide 
+executive summaries of complex multi-agent interactions."""
+
+moderator, context = ModeratorAgent.create(
+    user_id="pm_user",
+    system_message=moderator_system
+)
+```
+
+### System Message Features
+
+- **Context Integration**: System messages work with conversation history
+- **Agent-Specific**: Each agent type has optimized default prompts
+- **Workflow Aware**: System messages adapt to workflow contexts
+- **Provider Compatibility**: Works with all LLM providers (OpenAI, Anthropic, Bedrock)
 
 ## Prerequisites
 
@@ -297,7 +431,7 @@ docker:
   images: ["sgosain/amb-ubuntu-python-public-pod"]
 ```
 
-## Configuration
+## Configuration Methods
 
 The library supports two configuration methods:
 
@@ -352,74 +486,7 @@ curl -o agent_config_sample.yaml https://github.com/ambivo-corp/ambivo-agents/ra
 cp agent_config_sample.yaml agent_config.yaml
 ```
 
-**Replace ALL placeholder values** with your actual credentials, then create `agent_config.yaml` in your project root:
-
-```yaml
-# Redis Configuration (Required)
-redis:
-  host: "your-redis-cloud-endpoint.redis.cloud"
-  port: 6379
-  db: 0
-  password: "your-redis-password"
-
-# LLM Configuration (Required - at least one provider)
-llm:
-  preferred_provider: "openai"
-  temperature: 0.7
-  openai_api_key: "your-openai-key"
-  anthropic_api_key: "your-anthropic-key"
-  aws_access_key_id: "your-aws-key"
-  aws_secret_access_key: "your-aws-secret"
-  aws_region: "us-east-1"
-
-# Agent Capabilities
-agent_capabilities:
-  enable_knowledge_base: true
-  enable_web_search: true
-  enable_code_execution: true
-  enable_file_processing: true
-  enable_web_ingestion: true
-  enable_api_calls: true
-  enable_web_scraping: true
-  enable_proxy_mode: true
-  enable_media_editor: true
-  enable_youtube_download: true
-
-# ModeratorAgent default agents
-moderator:
-  default_enabled_agents:
-    - knowledge_base
-    - web_search
-    - assistant
-    - media_editor
-    - youtube_download
-    - code_executor
-    - web_scraper
-
-# Service-specific configurations
-web_search:
-  brave_api_key: "your-brave-api-key"
-  avesapi_api_key: "your-aves-api-key"
-
-knowledge_base:
-  qdrant_url: "https://your-cluster.qdrant.tech"
-  qdrant_api_key: "your-qdrant-api-key"
-  chunk_size: 1024
-  chunk_overlap: 20
-  similarity_top_k: 5
-
-youtube_download:
-  docker_image: "sgosain/amb-ubuntu-python-public-pod"
-  download_dir: "./youtube_downloads"
-  timeout: 600
-  memory_limit: "1g"
-  default_audio_only: true
-
-docker:
-  timeout: 60
-  memory_limit: "512m"
-  images: ["sgosain/amb-ubuntu-python-public-pod"]
-```
+**Replace ALL placeholder values** with your actual credentials, then create `agent_config.yaml` in your project root.
 
 ### Docker Deployment with Environment Variables
 
@@ -446,7 +513,7 @@ services:
       - "6379:6379"
 ```
 
-**Note:** Environment variables take precedence over YAML configuration. The `agent_config.yaml` file is  optional when using environment variables.
+**Note:** Environment variables take precedence over YAML configuration. The `agent_config.yaml` file is optional when using environment variables.
 
 ## Project Structure
 
@@ -466,7 +533,9 @@ ambivo_agents/
 ├── core/            # Core functionality
 │   ├── base.py
 │   ├── llm.py
-│   └── memory.py
+│   ├── memory.py
+│   ├── workflow.py       # Basic workflow system
+│   └── enhanced_workflow.py  # Advanced workflow patterns
 ├── executors/       # Execution environments
 ├── services/        # Service layer
 ├── __init__.py      # Package initialization
@@ -581,6 +650,35 @@ async def main():
     # Moderator automatically cleaned up
 
 asyncio.run(main())
+```
+
+### Workflow Examples
+
+```python
+from ambivo_agents.core.workflow import WorkflowBuilder
+
+async def custom_workflow():
+    # Create agents
+    moderator, context = ModeratorAgent.create(user_id="workflow_demo")
+    
+    # Build custom workflow
+    builder = WorkflowBuilder()
+    builder.add_agent(moderator.specialized_agents['web_search'], "search")
+    builder.add_agent(moderator.specialized_agents['assistant'], "analyze")
+    builder.add_edge("search", "analyze")
+    builder.set_start_node("search")
+    builder.set_end_node("analyze")
+    
+    workflow = builder.build()
+    
+    # Execute workflow
+    result = await workflow.execute(
+        "Research AI safety and provide analysis",
+        context.to_execution_context()
+    )
+    
+    print(f"Workflow result: {result.success}")
+    await moderator.cleanup_session()
 ```
 
 ## Session Management
@@ -707,6 +805,18 @@ The **ModeratorAgent** acts as an intelligent orchestrator:
 [Response] ← Combined and contextualized
      ↓
 [User]
+```
+
+### Workflow Architecture
+
+```
+[WorkflowBuilder] → [Workflow Definition]
+        ↓                    ↓
+[Workflow Executor] → [Sequential/Parallel Execution]
+        ↓                    ↓
+[State Management] → [Persistent Checkpoints]
+        ↓                    ↓
+[Result Aggregation] → [Final Response]
 ```
 
 ### Memory System
