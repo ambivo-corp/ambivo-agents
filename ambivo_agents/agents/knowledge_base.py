@@ -722,8 +722,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 else:
                     yield answer
 
-                yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
-                yield f"✅ **Query completed successfully!**\n"
+                #yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
+                #yield f"✅ **Query completed successfully!**\n"
+                yield f"\n"
             else:
                 yield f"❌ **Query failed:** {result['error']}\n"
 
@@ -1453,8 +1454,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 else:
                     yield answer
 
-                yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
-                yield f"✅ **Query completed successfully!**\n"
+                #yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
+                #yield f"✅ **Query completed successfully!**\n"
+                yield f"\n"
             else:
                 yield f"❌ **Query failed:** {result['error']}\n"
 

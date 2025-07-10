@@ -1310,10 +1310,10 @@ Please continue with the next step for {agent_type} processing."""
             # PHASE 4: Completion Summary
             reasoning = intent_analysis.get('reasoning', 'Standard routing')
             context_preserved = len(conversation_history) > 0
-            yield f"\n\n*✅ Completed by: {agent_name}*\n*🧠 Reasoning: {reasoning}*"
-            if context_preserved:
-                yield f"\n*💾 Context: {len(conversation_history)} messages preserved*"
-            yield f"\n*🎯 System Message: Active*"
+            # yield f"\n\n*✅ Completed by: {agent_name}*\n*🧠 Reasoning: {reasoning}*"
+            # if context_preserved:
+            #     yield f"\n*💾 Context: {len(conversation_history)} messages preserved*"
+            yield f"\n"
 
         except Exception as e:
             self.logger.error(f"ModeratorAgent streaming error: {e}")
