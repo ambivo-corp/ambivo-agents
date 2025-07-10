@@ -1627,7 +1627,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             user_message = message.content
             self.update_conversation_state(user_message)
 
-            yield "🎬 **Media Editor Agent**\n\n"
+            yield "x-amb-info:**Media Editor Agent**\n\n"
 
             # Get conversation context for streaming
             conversation_context = self._get_media_conversation_context_summary()

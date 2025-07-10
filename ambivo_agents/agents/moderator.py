@@ -1244,7 +1244,7 @@ Please continue with the next step for {agent_type} processing."""
                     self.logger.warning(f"Could not get conversation history for streaming: {e}")
 
             # PHASE 1: Analysis Phase with Progress
-            yield "🔍 **Analyzing your request...**\n\n"
+            yield "x-amb-info:**Analyzing your request...**\n\n"
             self.update_conversation_state(user_message)
 
             yield "🧠 Checking conversation context...\n"

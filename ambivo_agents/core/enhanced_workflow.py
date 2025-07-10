@@ -587,8 +587,8 @@ class WorkflowModerator(BaseAgent):
             for workflow_name in self.registered_workflows:
                 if workflow_name.replace('_', ' ') in content:
                     workflow_found = True
-                    yield f"🔄 Executing workflow: {workflow_name}\n"
-                    yield f"📊 Starting workflow execution...\n\n"
+                    yield f"x-amb-info:Executing workflow: {workflow_name}\n"
+                    yield f"x-amb-info:Starting workflow execution...\n\n"
 
                     try:
                         result = await self.execute_named_workflow(
@@ -596,26 +596,26 @@ class WorkflowModerator(BaseAgent):
                         )
 
                         if result.success:
-                            yield f"✅ Workflow '{workflow_name}' completed successfully!\n\n"
-                            yield f"⏱️ Execution time: {result.execution_time:.2f}s\n"
-                            yield f"🔧 Nodes executed: {', '.join(result.nodes_executed)}\n"
-                            yield f"💬 Messages generated: {len(result.messages)}\n\n"
+                            yield f"x-amb-info:Workflow '{workflow_name}' completed successfully!\n\n"
+                            yield f"x-amb-info:Execution time: {result.execution_time:.2f}s\n"
+                            yield f"x-amb-info:Nodes executed: {', '.join(result.nodes_executed)}\n"
+                            yield f"x-amb-info:Messages generated: {len(result.messages)}\n\n"
 
                             if result.messages:
                                 final_message = result.messages[-1]
-                                yield f"**Final result:**\n{final_message.content}"
+                                yield f"x-amb-info:Final result:**\n{final_message.content}"
                         else:
-                            yield f"❌ Workflow '{workflow_name}' failed:\n"
+                            yield f"x-amb-info:Workflow '{workflow_name}' failed:\n"
                             yield "\n".join(result.errors)
 
                     except Exception as e:
-                        yield f"❌ Error executing workflow: {str(e)}"
+                        yield f"x-amb-info:Error executing workflow: {str(e)}"
 
                     break  # Exit the loop, don't use return
 
             # If no workflow found, provide default response
             if not workflow_found:
-                yield "🔄 **Workflow Moderator**\n\n"
+                yield "x-amb-info:**Workflow Moderator**\n\n"
                 yield f"Available workflows: {', '.join(self.registered_workflows.keys())}\n\n"
                 yield "💡 **Commands:**\n"
                 yield "• `workflow list` - List available workflows\n"

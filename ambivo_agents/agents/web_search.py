@@ -1085,13 +1085,13 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             user_message = message.content
             self.update_conversation_state(user_message)
 
-            yield "🔍 **Web Search Agent**\n\n"
+            yield "x-amb-info:**Web Search Agent**\n\n"
 
             # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_conversation_context_summary()
             conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
-            yield "🧠 Analyzing search request...\n"
+            yield "x-amb-info:Analyzing search request...\n"
 
             # 🔥 FIX: Build LLM context for streaming
             llm_context = {
@@ -1107,46 +1107,46 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             search_type = intent_analysis.get("search_type", "web")
 
             if primary_intent == "search_news":
-                yield "📰 **News Search**\n\n"
+                yield "x-amb-info:**News Search**\n\n"
                 async for chunk in self._stream_news_search_with_context(search_query,
                                                                          intent_analysis.get("requirements", {}),
                                                                          llm_context):
                     yield chunk
 
             elif primary_intent == "search_academic":
-                yield "🎓 **Academic Search**\n\n"
+                yield "x-amb-info:**Academic Search**\n\n"
                 async for chunk in self._stream_academic_search_with_context(search_query,
                                                                              intent_analysis.get("requirements", {}),
                                                                              llm_context):
                     yield chunk
 
             else:
-                yield "🌐 **Web Search**\n\n"
+                yield "x-amb-info:**Web Search**\n\n"
                 async for chunk in self._stream_general_search_with_context(search_query,
                                                                             intent_analysis.get("requirements", {}),
                                                                             llm_context):
                     yield chunk
 
         except Exception as e:
-            yield f"❌ **Web Search Error:** {str(e)}"
+            yield f"x-amb-info:**Web Search Error:** {str(e)}"
 
     async def _stream_general_search_with_context(self, query: str, requirements: dict, llm_context: Dict[str, Any]) -> \
     AsyncIterator[str]:
         """Stream general web search with context preservation"""
         try:
             if not query:
-                yield "⚠️ Please provide a search query.\n"
+                yield "x-amb-info:Please provide a search query.\n"
                 return
 
-            yield f"🔍 **Searching for:** {query}\n\n"
-            yield "⏳ Contacting search providers...\n"
+            yield f"x-amb-info:**Searching for:** {query}\n\n"
+            yield "x-amb-info:Contacting search providers...\n"
 
             max_results = requirements.get("max_results", 5)
             provider_info = self.search_service.providers.get(self.search_service.current_provider, {})
             provider_name = provider_info.get('name', self.search_service.current_provider)
-            yield f"📡 **Using:** {provider_name}\n"
+            yield f"x-amb-info:**Using:** {provider_name}\n"
 
-            yield "🔄 Executing search...\n\n"
+            yield "x-amb-info:Executing search...\n\n"
 
             # Perform the search
             result = await self._search_web(query, max_results=max_results)
@@ -1155,17 +1155,17 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 results = result.get('results', [])
                 search_time = result.get('search_time', 0)
 
-                yield f"📊 **Found {len(results)} results in {search_time:.2f}s**\n\n"
+                yield f"x-amb-info:**Found {len(results)} results in {search_time:.2f}s**\n\n"
 
                 # Stream results one by one
                 for i, res in enumerate(results, 1):
-                    yield f"**{i}. {res.get('title', 'No title')}**\n"
-                    yield f"🔗 {res.get('url', 'No URL')}\n"
+                    yield f"x-amb-info:{i}. {res.get('title', 'No title')}**\n"
+                    yield f"x-amb-info:{res.get('url', 'No URL')}\n"
 
                     snippet = res.get('snippet', 'No description')
                     if len(snippet) > 150:
                         snippet = snippet[:150] + "..."
-                    yield f"📝 {snippet}\n\n"
+                    yield f"x-amb-info:{snippet}\n\n"
 
                     if i < len(results):
                         await asyncio.sleep(0.2)
@@ -1173,7 +1173,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 # 🔥 FIX: If context suggests follow-up questions, use LLM with context
                 conversation_history = llm_context.get('conversation_history', [])
                 if conversation_history and self.llm_service:
-                    yield "🤔 **Related to your search:**\n"
+                    yield "x-amb-info:**Related to your search:**\n"
 
                     context_prompt = f"""Based on the search results for "{query}" and our conversation history, suggest 2-3 helpful follow-up search queries that the user might find interesting."""
 
@@ -1302,6 +1302,118 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
 
                     if i < len(results):
                         await asyncio.sleep(0.3)
+
+                yield f"✅ **Academic search completed**\n"
+            else:
+                yield f"❌ **Academic search failed:** {result.get('error', 'Unknown error')}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during academic search:** {str(e)}"
+
+    async def _stream_news_search_with_context(self, query: str, requirements: dict, llm_context: Dict[str, Any]) -> AsyncIterator[str]:
+        """Stream news search with context preservation"""
+        try:
+            if not query:
+                yield "x-amb-info:Please provide a news topic to search for.\n"
+                return
+
+            yield f"x-amb-info:**Searching news for:** {query}\n\n"
+            yield "x-amb-info:Finding latest news articles...\n"
+
+            max_results = requirements.get("max_results", 5)
+
+            result = await self._search_news(query, max_results=max_results)
+
+            if result['success']:
+                results = result.get('results', [])
+                search_time = result.get('search_time', 0)
+
+                yield f"x-amb-info:**Found {len(results)} news articles in {search_time:.2f}s**\n\n"
+
+                # Stream news results one by one
+                for i, res in enumerate(results, 1):
+                    yield f"x-amb-info:{i}. {res.get('title', 'No title')}**\n"
+                    yield f"x-amb-info:{res.get('url', 'No URL')}\n"
+
+                    snippet = res.get('snippet', 'No description')
+                    if len(snippet) > 150:
+                        snippet = snippet[:150] + "..."
+                    yield f"x-amb-info:{snippet}\n\n"
+
+                    if i < len(results):
+                        await asyncio.sleep(0.2)
+
+                # Context-aware follow-up suggestions
+                conversation_history = llm_context.get('conversation_history', [])
+                if conversation_history and self.llm_service:
+                    yield "x-amb-info:**Related news you might find interesting:**\n"
+
+                    context_prompt = f"""Based on the news search results for "{query}" and our conversation history, suggest 2-3 related news topics or follow-up searches that the user might find interesting."""
+
+                    try:
+                        suggestions = await self.llm_service.generate_response(
+                            prompt=context_prompt,
+                            context=llm_context
+                        )
+                        yield f"{suggestions}\n\n"
+                    except:
+                        pass
+
+                yield f"✅ **News search completed**\n"
+            else:
+                yield f"❌ **News search failed:** {result.get('error', 'Unknown error')}\n"
+
+        except Exception as e:
+            yield f"❌ **Error during news search:** {str(e)}"
+
+    async def _stream_academic_search_with_context(self, query: str, requirements: dict, llm_context: Dict[str, Any]) -> AsyncIterator[str]:
+        """Stream academic search with context preservation"""
+        try:
+            if not query:
+                yield "x-amb-info:Please provide an academic topic to search for.\n"
+                return
+
+            yield f"x-amb-info:**Searching academic content for:** {query}\n\n"
+            yield "x-amb-info:Finding research papers and studies...\n"
+
+            max_results = requirements.get("max_results", 5)
+
+            result = await self._search_academic(query, max_results=max_results)
+
+            if result['success']:
+                results = result.get('results', [])
+                search_time = result.get('search_time', 0)
+
+                yield f"x-amb-info:**Found {len(results)} academic sources in {search_time:.2f}s**\n\n"
+
+                # Stream academic results one by one
+                for i, res in enumerate(results, 1):
+                    yield f"x-amb-info:{i}. {res.get('title', 'No title')}**\n"
+                    yield f"x-amb-info:{res.get('url', 'No URL')}\n"
+
+                    snippet = res.get('snippet', 'No description')
+                    if len(snippet) > 150:
+                        snippet = snippet[:150] + "..."
+                    yield f"x-amb-info:{snippet}\n\n"
+
+                    if i < len(results):
+                        await asyncio.sleep(0.2)
+
+                # Context-aware academic follow-up suggestions
+                conversation_history = llm_context.get('conversation_history', [])
+                if conversation_history and self.llm_service:
+                    yield "x-amb-info:**Related research areas you might explore:**\n"
+
+                    context_prompt = f"""Based on the academic search results for "{query}" and our conversation history, suggest 2-3 related research topics, methodologies, or follow-up academic searches that would be valuable."""
+
+                    try:
+                        suggestions = await self.llm_service.generate_response(
+                            prompt=context_prompt,
+                            context=llm_context
+                        )
+                        yield f"{suggestions}\n\n"
+                    except:
+                        pass
 
                 yield f"✅ **Academic search completed**\n"
             else:

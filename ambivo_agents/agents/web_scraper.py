@@ -1252,13 +1252,13 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             user_message = message.content
             self.update_conversation_state(user_message)
 
-            yield "🕷️ **Web Scraper Agent**\n\n"
+            yield "x-amb-info:**Web Scraper Agent**\n\n"
 
             # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_scraping_conversation_context_summary()
             conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
-            yield "🧠 Analyzing scraping request...\n"
+            yield "x-amb-info:Analyzing scraping request...\n"
 
             llm_context = {
                 'conversation_history': conversation_history,  # 🔥 KEY FIX
@@ -1273,19 +1273,19 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             urls = intent_analysis.get("urls", [])
 
             if primary_intent == "scrape_single":
-                yield "🌐 **Single URL Scraping**\n\n"
+                yield "x-amb-info:**Single URL Scraping**\n\n"
                 async for chunk in self._stream_single_scrape_with_context(urls, intent_analysis, user_message,
                                                                            llm_context):
                     yield chunk
 
             elif primary_intent == "scrape_batch":
-                yield "📦 **Batch URL Scraping**\n\n"
+                yield "x-amb-info:**Batch URL Scraping**\n\n"
                 async for chunk in self._stream_batch_scrape_with_context(urls, intent_analysis, user_message,
                                                                           llm_context):
                     yield chunk
 
             elif primary_intent == "check_accessibility":
-                yield "🔍 **Accessibility Check**\n\n"
+                yield "x-amb-info:**Accessibility Check**\n\n"
                 async for chunk in self._stream_accessibility_check_with_context(urls, user_message, llm_context):
                     yield chunk
 
@@ -1308,29 +1308,29 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                     yield response_content
 
         except Exception as e:
-            yield f"❌ **Web Scraper Error:** {str(e)}"
+            yield f"x-amb-info:**Web Scraper Error:** {str(e)}"
 
     async def _stream_accessibility_check_with_context(self, urls: list, user_message: str,
                                                        llm_context: Dict[str, Any]) -> AsyncIterator[str]:
         """Stream accessibility checking with context preservation"""
         try:
             if not urls:
-                yield "⚠️ No URL provided. Please specify a website to check.\n"
+                yield "x-amb-info:No URL provided. Please specify a website to check.\n"
                 return
 
             url = urls[0]
-            yield f"🔍 **Checking Accessibility:** {url}\n\n"
+            yield f"x-amb-info:**Checking Accessibility:** {url}\n\n"
 
-            yield "⏳ Testing connection...\n"
+            yield "x-amb-info:Testing connection...\n"
 
             result = await self._check_accessibility(url)
 
             if result['success']:
                 status = "✅ Accessible" if result.get('accessible', False) else "❌ Not Accessible"
-                yield f"🚦 **Status:** {status}\n"
-                yield f"📊 **HTTP Status:** {result.get('status_code', 'Unknown')}\n"
-                yield f"⏱️ **Response Time:** {result.get('response_time', 0):.2f}s\n"
-                yield f"📅 **Checked:** {result.get('timestamp', 'Unknown')}\n\n"
+                yield f"x-amb-info:**Status:** {status}\n"
+                yield f"x-amb-info:**HTTP Status:** {result.get('status_code', 'Unknown')}\n"
+                yield f"x-amb-info:**Response Time:** {result.get('response_time', 0):.2f}s\n"
+                yield f"x-amb-info:**Checked:** {result.get('timestamp', 'Unknown')}\n\n"
 
                 if result.get('accessible', False):
                     yield "✅ The website is accessible and responding normally.\n"

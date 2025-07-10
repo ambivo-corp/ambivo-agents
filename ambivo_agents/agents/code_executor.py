@@ -388,13 +388,13 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
             user_message = message.content
             self.update_conversation_state(user_message)
 
-            yield "💻 **Code Executor Agent**\n\n"
+            yield "x-amb-info:**Code Executor Agent**\n\n"
 
             # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_conversation_context_summary()
             conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
-            yield "🧠 Analyzing code request...\n"
+            yield "x-amb-info:Analyzing code request...\n"
 
             # Use LLM to analyze intent with context
             intent_analysis = await self._analyze_intent(user_message, conversation_context)
@@ -409,15 +409,15 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
             }
 
             if primary_intent == "write_and_execute_code":
-                yield "✍️ **Writing and Executing Code**\n\n"
+                yield "x-amb-info:**Writing and Executing Code**\n\n"
 
                 language = intent_analysis.get("language", "python")
-                yield f"📝 **Language:** {language.upper()}\n"
+                yield f"x-amb-info:**Language:** {language.upper()}\n"
 
                 task_description = self._extract_task_from_message(user_message)
-                yield f"🎯 **Task:** {task_description}\n\n"
+                yield f"x-amb-info:**Task:** {task_description}\n\n"
 
-                yield "⏳ Generating code...\n"
+                yield "x-amb-info:Generating code...\n"
 
                 # 🔥 FIX: Generate and execute code with context preservation
                 response_content = await self._handle_code_writing_request_with_context(user_message, language,
