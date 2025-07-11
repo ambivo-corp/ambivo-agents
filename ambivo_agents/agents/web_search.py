@@ -123,6 +123,8 @@ class WebSearchServiceAdapter:
         if 'last_request_time' in provider_config:
             elapsed = time.time() - provider_config['last_request_time']
             delay = provider_config.get('rate_limit_delay', 1.0)
+            if delay is None:
+                delay = 1.0
             if elapsed < delay:
                 await asyncio.sleep(delay - elapsed)
 
@@ -1135,7 +1137,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         """Stream general web search with context preservation"""
         try:
             if not query:
-                yield "x-amb-info:Please provide a search query.\n"
+                yield "Please provide a search query.\n"
                 return
 
             yield f"x-amb-info:**Searching for:** {query}\n\n"
@@ -1180,7 +1182,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     try:
                         suggestions = await self.llm_service.generate_response(
                             prompt=context_prompt,
-                            context=llm_context  # 🔥 KEY: Use conversation context
+                            context=llm_context
                         )
                         yield f"{suggestions}\n\n"
                     except:
@@ -1200,17 +1202,17 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 yield "⚠️ Please provide a search query.\n"
                 return
 
-            yield f"🔍 **Searching for:** {query}\n\n"
-            yield "⏳ Contacting search providers...\n"
+            yield f"x-amb-info:**Searching for:** {query}\n\n"
+            yield "x-amb-info:Contacting search providers...\n"
 
             max_results = requirements.get("max_results", 5)
 
             # Show which provider we're using
             provider_info = self.search_service.providers.get(self.search_service.current_provider, {})
             provider_name = provider_info.get('name', self.search_service.current_provider)
-            yield f"📡 **Using:** {provider_name}\n"
+            #yield f"x-amb-info:**Using:** {provider_name}\n"
 
-            yield "🔄 Executing search...\n\n"
+            yield "x-amb-info:Executing search...\n\n"
 
             # Perform the search
             result = await self._search_web(query, max_results=max_results)
@@ -1219,7 +1221,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 results = result.get('results', [])
                 search_time = result.get('search_time', 0)
 
-                yield f"📊 **Found {len(results)} results in {search_time:.2f}s**\n\n"
+                yield f"x-amb-info:**Found {len(results)} results in {search_time:.2f}s**\n\n"
 
                 # Stream results one by one
                 for i, res in enumerate(results, 1):
