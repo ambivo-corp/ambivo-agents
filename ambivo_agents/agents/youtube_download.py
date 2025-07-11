@@ -15,7 +15,7 @@ from typing import Dict, List, Any, Optional, AsyncIterator
 from datetime import datetime
 import logging
 
-from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
+from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool, StreamChunk, StreamSubType
 from ..config.loader import load_config, get_config_section
 from ..core.history import WebAgentHistoryMixin, ContextType
 from ..executors.youtube_executor import YouTubeDockerExecutor
@@ -200,7 +200,7 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
             return error_response
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        str]:
+        StreamChunk]:
         """Stream processing for YouTube operations"""
         self.memory.store_message(message)
 
@@ -212,29 +212,49 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
             conversation_context = self._get_youtube_conversation_context_summary()
 
             # Use LLM to analyze intent
-            yield "x-amb-info:Analyzing YouTube request...\n\n"
+            yield StreamChunk(
+                text="Analyzing YouTube request...\n\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'phase': 'analysis'}
+            )
             intent_analysis = await self._llm_analyze_youtube_intent(user_message, conversation_context)
 
             # Route and stream response based on intent
             primary_intent = intent_analysis.get("primary_intent", "help_request")
 
             if primary_intent == "download_audio":
-                yield "x-amb-info:**Preparing Audio Download**\n\n"
+                yield StreamChunk(
+                    text="**Preparing Audio Download**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'download_audio'}
+                )
                 response_content = await self._handle_audio_download(
                     intent_analysis.get("youtube_urls", []),
                     intent_analysis.get("output_preferences", {}),
                     user_message
                 )
-                yield response_content
+                yield StreamChunk(
+                    text=response_content,
+                    sub_type=StreamSubType.RESULT,
+                    metadata={'operation': 'audio_download', 'content_type': 'download_result'}
+                )
 
             elif primary_intent == "download_video":
-                yield "x-amb-info:**Preparing Video Download**\n\n"
+                yield StreamChunk(
+                    text="**Preparing Video Download**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'download_video'}
+                )
                 response_content = await self._handle_video_download(
                     intent_analysis.get("youtube_urls", []),
                     intent_analysis.get("output_preferences", {}),
                     user_message
                 )
-                yield response_content
+                yield StreamChunk(
+                    text=response_content,
+                    sub_type=StreamSubType.RESULT,
+                    metadata={'operation': 'video_download', 'content_type': 'download_result'}
+                )
 
             else:
                 # For other intents, stream LLM response if available
@@ -242,14 +262,26 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
                     async for chunk in self.llm_service.generate_response_stream(
                             f"As a YouTube download assistant, help with: {user_message}"
                     ):
-                        yield chunk
+                        yield StreamChunk(
+                            text=chunk,
+                            sub_type=StreamSubType.CONTENT,
+                            metadata={'type': 'help_response'}
+                        )
                 else:
                     response_content = await self._route_youtube_with_llm_analysis(intent_analysis, user_message,
                                                                                    context)
-                    yield response_content
+                    yield StreamChunk(
+                        text=response_content,
+                        sub_type=StreamSubType.CONTENT,
+                        metadata={'fallback_response': True}
+                    )
 
         except Exception as e:
-            yield f"YouTube agent error: {str(e)}"
+            yield StreamChunk(
+                text=f"YouTube agent error: {str(e)}",
+                sub_type=StreamSubType.ERROR,
+                metadata={'error': str(e)}
+            )
 
     def _get_youtube_conversation_context_summary(self) -> str:
         """Get YouTube conversation context summary"""

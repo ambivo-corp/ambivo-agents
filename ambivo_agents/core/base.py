@@ -332,6 +332,34 @@ class DockerCodeExecutor:
             }
 
 
+class StreamSubType(Enum):
+    """Types of streaming content to distinguish between actual results vs interim status"""
+    CONTENT = "content"        # Actual response content
+    STATUS = "status"          # Status updates, thinking, interim info
+    RESULT = "result"          # Search results, data outputs
+    ERROR = "error"            # Error messages
+    METADATA = "metadata"      # Additional metadata or context
+
+
+@dataclass
+class StreamChunk:
+    """Structured streaming chunk with sub-type information"""
+    text: str
+    sub_type: StreamSubType = StreamSubType.CONTENT
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=datetime.now)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary format for JSON serialization"""
+        return {
+            "type": "stream_chunk",
+            "text": self.text,
+            "sub_type": self.sub_type.value,
+            "metadata": self.metadata,
+            "timestamp": self.timestamp.isoformat()
+        }
+
+
 class BaseAgent(ABC):
     """
     Enhanced BaseAgent with built-in auto-context session management and simplified chat interface
@@ -646,7 +674,7 @@ class BaseAgent(ABC):
             logging.error(f"Agent {self.agent_id} sync chat error: {e}")
             return error_msg
 
-    async def chat_stream(self, message: str, **kwargs) -> AsyncIterator[str]:
+    async def chat_stream(self, message: str, **kwargs) -> AsyncIterator[StreamChunk]:
         """
         🌟 NEW: Streaming chat interface that yields response chunks
 
@@ -655,12 +683,13 @@ class BaseAgent(ABC):
             **kwargs: Optional metadata to add to the message
 
         Yields:
-            Response chunks as strings
+            StreamChunk objects with structured data and sub_type information
 
         Usage:
             agent, context = YouTubeDownloadAgent.create(user_id="john")
             async for chunk in agent.chat_stream("Download https://youtube.com/watch?v=abc123"):
-                print(chunk, end='', flush=True)
+                print(chunk.text, end='', flush=True)
+                print(f"Sub-type: {chunk.sub_type.value}")
         """
         try:
             # Create AgentMessage from string using auto-context
@@ -690,11 +719,15 @@ class BaseAgent(ABC):
         except Exception as e:
             error_msg = f"Streaming chat error: {str(e)}"
             logging.error(f"Agent {self.agent_id} streaming chat error: {e}")
-            yield error_msg
+            yield StreamChunk(
+                text=error_msg,
+                sub_type=StreamSubType.ERROR,
+                metadata={'error': True, 'agent_id': self.agent_id}
+            )
 
     @abstractmethod
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        str]:
+        StreamChunk]:
         """
         🌟 NEW: Stream processing method - must be implemented by subclasses
 
@@ -703,7 +736,7 @@ class BaseAgent(ABC):
             context: Execution context (uses auto-context if None)
 
         Yields:
-            Response chunks as strings
+            StreamChunk objects with structured data and sub_type information
         """
         if context is None:
             context = self.get_execution_context()

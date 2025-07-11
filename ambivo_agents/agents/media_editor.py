@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Union, AsyncIterator
 from datetime import datetime, timedelta
 
-from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
+from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool, StreamChunk, StreamSubType
 from ..config.loader import load_config, get_config_section
 from ..core.history import MediaAgentHistoryMixin, ContextType
 from ..executors.media_executor import MediaDockerExecutor
@@ -1619,7 +1619,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        str]:
+        StreamChunk]:
         """Stream processing for MediaEditorAgent - COMPLETE IMPLEMENTATION"""
         self.memory.store_message(message)
 
@@ -1627,13 +1627,21 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             user_message = message.content
             self.update_conversation_state(user_message)
 
-            yield "x-amb-info:**Media Editor Agent**\n\n"
+            yield StreamChunk(
+                text="**Media Editor Agent**\n\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'agent': 'media_editor', 'phase': 'initialization'}
+            )
 
             # Get conversation context for streaming
             conversation_context = self._get_media_conversation_context_summary()
             conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
-            yield "x-amb-info:Analyzing media processing request...\n"
+            yield StreamChunk(
+                text="Analyzing media processing request...\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'phase': 'analysis'}
+            )
 
             # Build LLM context for streaming
             llm_context = {
@@ -1647,30 +1655,54 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             intent_analysis = await self._llm_analyze_media_intent(user_message, conversation_context)
             primary_intent = intent_analysis.get("primary_intent", "help_request")
 
-            yield f"x-amb-info:**Detected Intent:** {primary_intent.replace('_', ' ').title()}\n\n"
+            yield StreamChunk(
+                text=f"**Detected Intent:** {primary_intent.replace('_', ' ').title()}\n\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'intent': primary_intent}
+            )
 
             if primary_intent == "extract_audio":
-                yield "🎵 **Audio Extraction**\n\n"
+                yield StreamChunk(
+                    text="🎵 **Audio Extraction**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'operation': 'extract_audio'}
+                )
                 response_content = await self._handle_audio_extraction_with_context(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),
                     user_message,
                     llm_context
                 )
-                yield response_content
+                yield StreamChunk(
+                    text=response_content,
+                    sub_type=StreamSubType.RESULT,
+                    metadata={'operation': 'extract_audio', 'content_type': 'processing_result'}
+                )
 
             elif primary_intent == "convert_video":
-                yield "🎬 **Video Conversion**\n\n"
+                yield StreamChunk(
+                    text="🎬 **Video Conversion**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'operation': 'convert_video'}
+                )
                 response_content = await self._handle_video_conversion_with_context(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),
                     user_message,
                     llm_context
                 )
-                yield response_content
+                yield StreamChunk(
+                    text=response_content,
+                    sub_type=StreamSubType.RESULT,
+                    metadata={'operation': 'convert_video', 'content_type': 'processing_result'}
+                )
 
             elif primary_intent == "resize_video":
-                yield "📏 **Video Resize**\n\n"
+                yield StreamChunk(
+                    text="📏 **Video Resize**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'operation': 'resize_video'}
+                )
                 response_content = await self._handle_video_resize(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Coroutine, AsyncIterator
 from datetime import datetime
 
-from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
+from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool, StreamChunk, StreamSubType
 from ..config.loader import load_config, get_config_section
 from ..core.history import KnowledgeBaseAgentHistoryMixin, ContextType
 
@@ -517,7 +517,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         return response
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        str]:
+        StreamChunk]:
         """Stream processing for Knowledge Base operations - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
@@ -525,7 +525,11 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             user_message = message.content
             self.update_conversation_state(user_message)
 
-            yield "x-amb-info:**Knowledge Base Assistant**\n\n"
+            yield StreamChunk(
+                text="**Knowledge Base Assistant**\n\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'agent': 'knowledge_base', 'phase': 'initialization'}
+            )
 
             # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_kb_conversation_context_summary()
@@ -539,7 +543,11 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             else:
                 conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
-            yield "x-amb-info:Analyzing knowledge base request...\n"
+            yield StreamChunk(
+                text="Analyzing knowledge base request...\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'phase': 'analysis'}
+            )
 
             # 🔥 FIX: Build LLM context for streaming
             llm_context = {
@@ -558,23 +566,43 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             # Route based on intent with streaming
             if primary_intent == "ingest_document":
-                yield f"x-amb-info**Document Ingestion**\n\n"
+                yield StreamChunk(
+                    text="**Document Ingestion**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'ingest_document'}
+                )
                 if not kb_name:
-                    yield "x-amb-info:Determining knowledge base...\n"
+                    yield StreamChunk(
+                        text="Determining knowledge base...\n",
+                        sub_type=StreamSubType.STATUS,
+                        metadata={'phase': 'determining_kb'}
+                    )
                 if not documents:
-                    yield "x-amb-info:Identifying documents...\n"
+                    yield StreamChunk(
+                        text="Identifying documents...\n",
+                        sub_type=StreamSubType.STATUS,
+                        metadata={'phase': 'identifying_docs'}
+                    )
 
                 async for chunk in self._stream_document_ingestion_with_context(kb_name, documents, user_message,
                                                                                 llm_context):
                     yield chunk
 
             elif primary_intent == "ingest_text":
-                yield f"x-amb-info:**Text Ingestion**\n\n"
+                yield StreamChunk(
+                    text="**Text Ingestion**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'ingest_text'}
+                )
                 async for chunk in self._stream_text_ingestion_with_context(kb_name, user_message, llm_context):
                     yield chunk
 
             elif primary_intent == "query_kb":
-                yield f"x-amb-info:**Knowledge Base Query**\n\n"
+                yield StreamChunk(
+                    text="**Knowledge Base Query**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'query_kb'}
+                )
                 async for chunk in self._stream_kb_query_with_context(kb_name, intent_analysis.get("query_content"),
                                                                       user_message, llm_context):
                     yield chunk
@@ -593,10 +621,18 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                         yield chunk
                 else:
                     response_content = await self._route_kb_with_llm_analysis(intent_analysis, user_message, context)
-                    yield response_content
+                    yield StreamChunk(
+                        text=response_content,
+                        sub_type=StreamSubType.CONTENT,
+                        metadata={'intent': 'general_response'}
+                    )
 
         except Exception as e:
-            yield f"x-amb-info:**Knowledge Base Error:** {str(e)}"
+            yield StreamChunk(
+                text=f"**Knowledge Base Error:** {str(e)}",
+                sub_type=StreamSubType.ERROR,
+                metadata={'error': str(e)}
+            )
 
     async def _stream_document_ingestion_with_context(self, kb_name: str, documents: list, user_message: str,
                                                       llm_context: Dict[str, Any]) -> AsyncIterator[str]:
@@ -605,7 +641,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             if not kb_name or not documents:
                 # Resolve missing parameters with streaming feedback
                 if not kb_name:
-                    yield "x-amb-info:No knowledge base specified. "
+                    yield "No knowledge base specified. "
                     if self.llm_service:
                         # 🔥 FIX: Use context-aware LLM for help
                         async for chunk in self.llm_service.generate_response_stream(
@@ -616,10 +652,10 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     return
 
             document_path = documents[0]
-            yield f"x-amb-info:**Processing:** {document_path}\n"
-            yield f"x-amb-info:**Target KB:** {kb_name}\n\n"
+            yield f"**Processing:** {document_path}\n"
+            yield f"**Target KB:** {kb_name}\n\n"
 
-            yield "x-amb-info:Starting ingestion process...\n"
+            yield "Starting ingestion process...\n"
 
             # Simulate progress updates during ingestion
             start_time = time.time()
@@ -630,17 +666,17 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             processing_time = time.time() - start_time
 
             if result['success']:
-                yield f"x-amb-info:**Ingestion Completed Successfully!**\n\n"
-                yield f"x-amb-info:**Summary:**\n"
-                yield f"x-amb-info:Document: {document_path}\n"
-                yield f"x-amb-info:Knowledge Base: {kb_name}\n"
-                yield f"x-amb-info:Processing Time: {processing_time:.2f}s\n"
-                yield f"x-amb-info:Status: Ready for queries! 🎉\n"
+                yield f"**Ingestion Completed Successfully!**\n\n"
+                yield f"**Summary:**\n"
+                yield f"Document: {document_path}\n"
+                yield f"Knowledge Base: {kb_name}\n"
+                yield f"Processing Time: {processing_time:.2f}s\n"
+                yield f"Status: Ready for queries! 🎉\n"
             else:
-                yield f"x-amb-info:**Ingestion Failed:** {result['error']}\n"
+                yield f"**Ingestion Failed:** {result['error']}\n"
 
         except Exception as e:
-            yield f"x-amb-info:**Error during document ingestion:** {str(e)}"
+            yield f"**Error during document ingestion:** {str(e)}"
 
     async def _stream_text_ingestion_with_context(self, kb_name: str, user_message: str, llm_context: Dict[str, Any]) -> \
     AsyncIterator[str]:
@@ -657,20 +693,20 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 yield f"📝 Ready to add text to **{kb_name}**. What text would you like me to ingest?\n"
                 return
 
-            yield f"x-amb-info:**Processing text for {kb_name}**\n"
-            yield f"x-amb-info:**Text length:** {len(text_content)} characters\n\n"
+            yield f"**Processing text for {kb_name}**\n"
+            yield f"**Text length:** {len(text_content)} characters\n\n"
 
-            yield "x-amb-info:Processing and indexing text...\n"
+            yield "Processing and indexing text...\n"
 
             result = await self._ingest_text(kb_name, text_content)
 
             if result['success']:
                 preview = text_content[:100] + "..." if len(text_content) > 100 else text_content
-                yield f"x-amb-info:**Text Ingestion Completed**\n\n"
-                yield f"x-amb-info:**Preview:** {preview}\n"
-                yield f"x-amb-info:**Knowledge Base:** {kb_name}\n"
-                yield f"x-amb-info:**Length:** {len(text_content)} characters\n"
-                yield f"x-amb-info:**Status:** Text successfully indexed!\n"
+                yield f"**Text Ingestion Completed**\n\n"
+                yield f"**Preview:** {preview}\n"
+                yield f"**Knowledge Base:** {kb_name}\n"
+                yield f"**Length:** {len(text_content)} characters\n"
+                yield f"**Status:** Text successfully indexed!\n"
             else:
                 yield f"❌ **Text ingestion failed:** {result['error']}\n"
 
@@ -687,7 +723,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 if available_kbs:
                     yield "**Available Knowledge Bases:**\n"
                     for kb in available_kbs:
-                        yield f"x-amb-info:{kb}\n"
+                        yield f"{kb}\n"
                     yield f"\nWhich knowledge base would you like to search?\n"
                 else:
                     yield "No knowledge bases found. Please create one first.\n"
@@ -697,8 +733,8 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 yield f"🔍 **Searching {kb_name}**\n\nWhat would you like me to find?\n"
                 return
 
-            yield f"x-amb-info:**Searching Knowledge Base:** {kb_name}\n"
-            yield f"x-amb-info:**Query:** {query_content}\n\n"
+            yield f"**Searching Knowledge Base:** {kb_name}\n"
+            yield f"**Query:** {query_content}\n\n"
 
             yield "⏳ Performing semantic search...\n"
 
@@ -709,7 +745,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 answer = result['answer']
                 source_count = len(result.get('source_details', []))
 
-                yield f"x-amb-info:**Search Results:**\n\n"
+                yield f"**Search Results:**\n\n"
 
                 # Stream the answer progressively if it's long
                 if len(answer) > 200:

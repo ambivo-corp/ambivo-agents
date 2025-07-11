@@ -6,7 +6,7 @@ import asyncio
 from typing import Dict, Any, AsyncIterator
 
 # FIXED IMPORTS - No circular dependency
-from ..core.base import BaseAgent, AgentRole, ExecutionContext, AgentMessage, MessageType, AgentTool
+from ..core.base import BaseAgent, AgentRole, ExecutionContext, AgentMessage, MessageType, AgentTool, StreamChunk, StreamSubType
 from ..config.loader import load_config
 from ..core.history import BaseAgentHistoryMixin, ContextType
 from ..executors import DockerCodeExecutor
@@ -380,7 +380,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
             return error_response
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        str]:
+        StreamChunk]:
         """Stream processing for CodeExecutorAgent - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
@@ -388,13 +388,21 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
             user_message = message.content
             self.update_conversation_state(user_message)
 
-            yield "x-amb-info:**Code Executor Agent**\n\n"
+            yield StreamChunk(
+                text="**Code Executor Agent**\n\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'agent': 'code_executor', 'phase': 'initialization'}
+            )
 
             # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_conversation_context_summary()
             conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
-            yield "x-amb-info:Analyzing code request...\n"
+            yield StreamChunk(
+                text="Analyzing code request...\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'phase': 'analysis'}
+            )
 
             # Use LLM to analyze intent with context
             intent_analysis = await self._analyze_intent(user_message, conversation_context)
@@ -409,31 +417,63 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
             }
 
             if primary_intent == "write_and_execute_code":
-                yield "x-amb-info:**Writing and Executing Code**\n\n"
+                yield StreamChunk(
+                    text="**Writing and Executing Code**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'write_and_execute_code'}
+                )
 
                 language = intent_analysis.get("language", "python")
-                yield f"x-amb-info:**Language:** {language.upper()}\n"
+                yield StreamChunk(
+                    text=f"**Language:** {language.upper()}\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'language': language}
+                )
 
                 task_description = self._extract_task_from_message(user_message)
-                yield f"x-amb-info:**Task:** {task_description}\n\n"
+                yield StreamChunk(
+                    text=f"**Task:** {task_description}\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'task': task_description}
+                )
 
-                yield "x-amb-info:Generating code...\n"
+                yield StreamChunk(
+                    text="Generating code...\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'phase': 'code_generation'}
+                )
 
                 # 🔥 FIX: Generate and execute code with context preservation
                 response_content = await self._handle_code_writing_request_with_context(user_message, language,
                                                                                         llm_context)
-                yield response_content
+                yield StreamChunk(
+                    text=response_content,
+                    sub_type=StreamSubType.RESULT,
+                    metadata={'language': language, 'content_type': 'code_execution_result'}
+                )
 
             elif "```python" in user_message or "```bash" in user_message:
-                yield "🐍 **Code Execution Detected**\n\n"
+                yield StreamChunk(
+                    text="🐍 **Code Execution Detected**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'execute_existing_code'}
+                )
                 # ... existing code execution logic ...
 
             else:
-                yield "⚠️ **No executable code detected**\n\n"
+                yield StreamChunk(
+                    text="⚠️ **No executable code detected**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'no_code_detected'}
+                )
                 # ... existing help logic ...
 
         except Exception as e:
-            yield f"x-amb-info:**Code Executor Error:** {str(e)}"
+            yield StreamChunk(
+                text=f"**Code Executor Error:** {str(e)}",
+                sub_type=StreamSubType.ERROR,
+                metadata={'error': str(e)}
+            )
 
     async def _handle_code_writing_request_with_context(self, user_message: str, language: str,
                                                             llm_context: Dict[str, Any]) -> str:

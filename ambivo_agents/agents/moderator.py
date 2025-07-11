@@ -15,7 +15,7 @@ from datetime import datetime
 from dataclasses import dataclass
 
 from ambivo_agents.core import WorkflowPatterns
-from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext
+from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, StreamChunk, StreamSubType
 from ..config.loader import load_config, get_config_section
 from ..core.history import BaseAgentHistoryMixin, ContextType
 
@@ -355,9 +355,13 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 )
 
             async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> \
-            AsyncIterator[str]:
+            AsyncIterator[StreamChunk]:
                 """Stream processing fallback"""
-                yield f"I'm a basic assistant. You said: '{message.content}'. How can I help you?"
+                yield StreamChunk(
+                    text=f"I'm a basic assistant. You said: '{message.content}'. How can I help you?",
+                    sub_type=StreamSubType.CONTENT,
+                    metadata={'fallback_agent': True}
+                )
 
         return FallbackAssistantAgent
 
@@ -908,8 +912,8 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             return {'error': 'No memory available'}
 
         try:
-            current_workflow = self.memory.get_context('current_workflow') if self.memory else {}
-            last_operation = self.memory.get_context('last_operation') if self.memory else {}
+            current_workflow = self.memory.get_context('current_workflow') if self.memory else None
+            last_operation = self.memory.get_context('last_operation') if self.memory else None
 
             conversation_history = self.memory.get_recent_messages(
                 limit=5,
@@ -918,18 +922,18 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
             context_summary = []
 
-            if current_workflow:
+            if current_workflow and isinstance(current_workflow, dict):
                 context_summary.append(f"Active workflow: {current_workflow.get('workflow_description', 'Unknown')}")
                 context_summary.append(
                     f"Workflow step: {current_workflow.get('current_step', 0)} of {len(current_workflow.get('agent_chain', []))}")
 
-            if last_operation:
+            if last_operation and isinstance(last_operation, dict):
                 context_summary.append(
                     f"Last operation: {last_operation.get('agent_used')} - {last_operation.get('user_request', '')[:50]}")
 
             return {
-                'workflow_active': bool(current_workflow.get('status') == 'in_progress'),
-                'last_agent': last_operation.get('agent_used'),
+                'workflow_active': bool(current_workflow and isinstance(current_workflow, dict) and current_workflow.get('status') == 'in_progress'),
+                'last_agent': last_operation.get('agent_used') if last_operation and isinstance(last_operation, dict) else None,
                 'context_summary': ' | '.join(context_summary),
                 'conversation_length': len(conversation_history),
                 'session_id': self.context.session_id,
@@ -1209,7 +1213,7 @@ Please continue with the next step for {agent_type} processing."""
         return "".join(response_parts).strip()
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        str]:
+        StreamChunk]:
         """Stream processing with system message support and memory preservation"""
 
         # Ensure message uses moderator's session context
@@ -1248,11 +1252,23 @@ Please continue with the next step for {agent_type} processing."""
                     self.logger.warning(f"Could not get conversation history for streaming: {e}")
 
             # PHASE 1: Analysis Phase with Progress
-            yield "x-amb-info:**Analyzing your request...**\n\n"
+            yield StreamChunk(
+                text="**Analyzing your request...**\n\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'agent': 'moderator', 'phase': 'analysis'}
+            )
             self.update_conversation_state(user_message)
 
-            yield "x-amb-info:Checking conversation context...\n"
-            yield "x-amb-info:Determining the best approach...\n\n"
+            yield StreamChunk(
+                text="Checking conversation context...\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'phase': 'context_check'}
+            )
+            yield StreamChunk(
+                text="Determining the best approach...\n\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'phase': 'route_determination'}
+            )
 
             # Analyze intent with conversation context
             intent_analysis = await self._analyze_query_intent(user_message, conversation_context)
@@ -1262,8 +1278,16 @@ Please continue with the next step for {agent_type} processing."""
             confidence = intent_analysis.get('confidence', 0)
             workflow_type = intent_analysis.get('workflow_type', 'single')
 
-            yield f"x-amb-info:**Routing to {agent_name}** (confidence: {confidence:.1f})\n"
-            yield f"x-amb-info:**Workflow:** {workflow_type.title()}\n\n"
+            yield StreamChunk(
+                text=f"**Routing to {agent_name}** (confidence: {confidence:.1f})\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'routing_to': intent_analysis['primary_agent'], 'confidence': confidence}
+            )
+            yield StreamChunk(
+                text=f"**Workflow:** {workflow_type.title()}\n\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'workflow_type': workflow_type}
+            )
 
             await asyncio.sleep(0.1)
 
@@ -1325,7 +1349,7 @@ Please continue with the next step for {agent_type} processing."""
 
     async def _route_to_agent_stream_with_context(self, agent_type: str, user_message: str,
                                                   context: ExecutionContext = None,
-                                                  llm_context: Dict[str, Any] = None) -> AsyncIterator[str]:
+                                                  llm_context: Dict[str, Any] = None) -> AsyncIterator[StreamChunk]:
         """Stream routing to a specific agent with context preservation"""
         if agent_type not in self.specialized_agents:
             yield f"❌ Agent {agent_type} not available"
@@ -1364,36 +1388,68 @@ Please continue with the next step for {agent_type} processing."""
                 async for chunk in agent.process_message_stream(agent_message, context):
                     yield chunk
             else:
-                yield f"⚠️ {agent_type} doesn't support streaming, using standard processing...\n\n"
+                yield StreamChunk(
+                    text=f"⚠️ {agent_type} doesn't support streaming, using standard processing...\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'agent_type': agent_type, 'fallback': True}
+                )
                 response = await self._route_to_agent_with_context(agent_type, user_message, context, llm_context)
-                yield response.content
+                yield StreamChunk(
+                    text=response.content,
+                    sub_type=StreamSubType.CONTENT,
+                    metadata={'agent_type': agent_type, 'non_streaming_response': True}
+                )
 
         except Exception as e:
-            yield f"❌ Error routing to {agent_type}: {str(e)}"
+            yield StreamChunk(
+                text=f"❌ Error routing to {agent_type}: {str(e)}",
+                sub_type=StreamSubType.ERROR,
+                metadata={'error': str(e), 'agent_type': agent_type}
+            )
 
     async def _coordinate_multiple_agents_stream_with_context(self, agents: List[str], user_message: str,
                                                               context: ExecutionContext = None,
-                                                              llm_context: Dict[str, Any] = None) -> AsyncIterator[str]:
+                                                              llm_context: Dict[str, Any] = None) -> AsyncIterator[StreamChunk]:
         """Stream coordination of multiple agents with context preservation"""
         successful_responses = 0
 
         for i, agent_type in enumerate(agents, 1):
             try:
-                yield f"**🤖 Agent {i}: {agent_type.replace('_', ' ').title()}**\n"
-                yield "─" * 50 + "\n"
+                yield StreamChunk(
+                    text=f"**🤖 Agent {i}: {agent_type.replace('_', ' ').title()}**\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'agent_sequence': i, 'agent_type': agent_type}
+                )
+                yield StreamChunk(
+                    text="─" * 50 + "\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'separator': True}
+                )
 
                 async for chunk in self._route_to_agent_stream_with_context(agent_type, user_message, context,
                                                                             llm_context):
                     yield chunk
 
-                yield "\n" + "─" * 50 + "\n\n"
+                yield StreamChunk(
+                    text="\n" + "─" * 50 + "\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'separator': True, 'agent_completed': agent_type}
+                )
                 successful_responses += 1
                 await asyncio.sleep(0.1)
 
             except Exception as e:
-                yield f"❌ Error with {agent_type}: {str(e)}\n\n"
+                yield StreamChunk(
+                    text=f"❌ Error with {agent_type}: {str(e)}\n\n",
+                    sub_type=StreamSubType.ERROR,
+                    metadata={'agent_type': agent_type, 'error': str(e)}
+                )
 
-        yield f"✅ {successful_responses}/{len(agents)} agents completed with context preserved"
+        yield StreamChunk(
+            text=f"✅ {successful_responses}/{len(agents)} agents completed with context preserved",
+            sub_type=StreamSubType.STATUS,
+            metadata={'summary': True, 'successful_agents': successful_responses, 'total_agents': len(agents)}
+        )
 
     async def get_agent_status(self) -> Dict[str, Any]:
         """Get status of all managed agents"""

@@ -10,6 +10,7 @@ from typing import Dict, Any, AsyncIterator
 from datetime import datetime
 
 from ambivo_agents import BaseAgent, AgentRole, ExecutionContext, AgentMessage, MessageType
+from ambivo_agents.core.base import StreamChunk, StreamSubType
 from ambivo_agents.core.history import BaseAgentHistoryMixin
 
 
@@ -335,7 +336,7 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
             return error_response
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        str]:
+        StreamChunk]:
         """Stream processing with complete system message and context support"""
 
         # Store incoming message
@@ -389,13 +390,25 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
 
             if primary_intent == "greeting":
                 if llm_context.get('conversation_history'):
-                    yield "Hello again! How can I assist you today?"
+                    yield StreamChunk(
+                        text="Hello again! How can I assist you today?",
+                        sub_type=StreamSubType.CONTENT,
+                        metadata={'intent': 'greeting', 'returning_user': True}
+                    )
                 else:
-                    yield "Hello! How can I assist you today?"
+                    yield StreamChunk(
+                        text="Hello! How can I assist you today?",
+                        sub_type=StreamSubType.CONTENT,
+                        metadata={'intent': 'greeting', 'returning_user': False}
+                    )
                 return
 
             elif primary_intent == "farewell":
-                yield "Thank you for our conversation. Feel free to return anytime if you need help!"
+                yield StreamChunk(
+                    text="Thank you for our conversation. Feel free to return anytime if you need help!",
+                    sub_type=StreamSubType.CONTENT,
+                    metadata={'intent': 'farewell'}
+                )
                 return
 
             # Stream complex responses with system message
@@ -420,7 +433,11 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                             context=llm_context,
                             system_message=enhanced_system_message
                     ):
-                        yield chunk
+                        yield StreamChunk(
+                            text=chunk,
+                            sub_type=StreamSubType.CONTENT,
+                            metadata={'with_context': True, 'intent': primary_intent}
+                        )
                 else:
                     # Standard streaming with system message
                     async for chunk in self.llm_service.generate_response_stream(
@@ -428,17 +445,33 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                             context=llm_context,
                             system_message=enhanced_system_message
                     ):
-                        yield chunk
+                        yield StreamChunk(
+                            text=chunk,
+                            sub_type=StreamSubType.CONTENT,
+                            metadata={'with_context': False, 'intent': primary_intent}
+                        )
             else:
                 # Fallback for no LLM service
                 if intent_analysis.get("requires_context"):
-                    yield f"I understand you're referring to something from our previous conversation. However, I need an LLM service for context-aware responses. How else can I help?"
+                    yield StreamChunk(
+                        text="I understand you're referring to something from our previous conversation. However, I need an LLM service for context-aware responses. How else can I help?",
+                        sub_type=StreamSubType.ERROR,
+                        metadata={'error': 'no_llm_service', 'requires_context': True}
+                    )
                 else:
-                    yield f"I understand you said: '{user_message}'. How can I help you with that?"
+                    yield StreamChunk(
+                        text=f"I understand you said: '{user_message}'. How can I help you with that?",
+                        sub_type=StreamSubType.CONTENT,
+                        metadata={'fallback': True, 'requires_context': False}
+                    )
 
         except Exception as e:
             self.logger.error(f"Streaming error: {e}")
-            yield f"I encountered an error while processing your request: {str(e)}"
+            yield StreamChunk(
+                text=f"I encountered an error while processing your request: {str(e)}",
+                sub_type=StreamSubType.ERROR,
+                metadata={'error': str(e)}
+            )
 
     def get_agent_status(self) -> Dict[str, Any]:
         """Get current agent status and configuration"""

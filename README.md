@@ -26,6 +26,7 @@ For production scenarios, we recommend:
 - [Configuration Methods](#configuration-methods)
 - [Project Structure](#project-structure)
 - [Usage Examples](#usage-examples)
+- [Streaming System](#streaming-system)
 - [Session Management](#session-management)
 - [Web API Integration](#web-api-integration)
 - [Command Line Interface](#command-line-interface)
@@ -679,6 +680,184 @@ async def custom_workflow():
     
     print(f"Workflow result: {result.success}")
     await moderator.cleanup_session()
+```
+
+## Streaming System
+
+The library features a modern **StreamChunk** system that provides structured, type-safe streaming responses with rich metadata.
+
+### StreamChunk Overview
+
+All agents now return `StreamChunk` objects instead of raw strings, enabling:
+- **Type-safe content classification** with `StreamSubType` enum
+- **Rich metadata** for debugging, analytics, and context
+- **Programmatic filtering** without string parsing
+- **Consistent interface** across all agents
+
+### StreamSubType Categories
+
+```python
+from ambivo_agents.core.base import StreamSubType
+
+# Available sub-types:
+StreamSubType.CONTENT    # Actual response content from LLMs
+StreamSubType.STATUS     # Progress updates, thinking, interim info  
+StreamSubType.RESULT     # Search results, processing outputs
+StreamSubType.ERROR      # Error messages and failures
+StreamSubType.METADATA   # Additional context and metadata
+```
+
+### Basic Streaming Usage
+
+```python
+from ambivo_agents import ModeratorAgent
+from ambivo_agents.core.base import StreamSubType
+
+async def streaming_example():
+    moderator, context = ModeratorAgent.create(user_id="stream_user")
+    
+    # Stream with filtering
+    print("🤖 Assistant: ", end='', flush=True)
+    
+    async for chunk in moderator.chat_stream("Search for Python tutorials"):
+        # Filter by content type
+        if chunk.sub_type == StreamSubType.CONTENT:
+            print(chunk.text, end='', flush=True)
+        elif chunk.sub_type == StreamSubType.STATUS:
+            print(f"\n[{chunk.text.strip()}]", end='', flush=True)
+        elif chunk.sub_type == StreamSubType.ERROR:
+            print(f"\n[ERROR: {chunk.text}]", end='', flush=True)
+    
+    await moderator.cleanup_session()
+```
+
+### Advanced Streaming with Metadata
+
+```python
+async def advanced_streaming():
+    moderator, context = ModeratorAgent.create(user_id="advanced_user")
+    
+    # Collect and analyze stream
+    content_chunks = []
+    status_chunks = []
+    result_chunks = []
+    
+    async for chunk in moderator.chat_stream("Download audio from YouTube"):
+        # Categorize by type
+        if chunk.sub_type == StreamSubType.CONTENT:
+            content_chunks.append(chunk)
+        elif chunk.sub_type == StreamSubType.STATUS:
+            status_chunks.append(chunk)
+        elif chunk.sub_type == StreamSubType.RESULT:
+            result_chunks.append(chunk)
+        
+        # Access metadata
+        agent_info = chunk.metadata.get('agent')
+        operation = chunk.metadata.get('operation')
+        phase = chunk.metadata.get('phase')
+        
+        print(f"[{chunk.sub_type.value}] {chunk.text[:50]}...")
+        if agent_info:
+            print(f"  Agent: {agent_info}")
+        if operation:
+            print(f"  Operation: {operation}")
+    
+    # Analysis
+    print(f"\nStream Analysis:")
+    print(f"Content chunks: {len(content_chunks)}")
+    print(f"Status updates: {len(status_chunks)}")
+    print(f"Results: {len(result_chunks)}")
+    
+    await moderator.cleanup_session()
+```
+
+### Streaming in Web APIs
+
+```python
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import json
+
+app = FastAPI()
+
+@app.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    moderator, context = ModeratorAgent.create(user_id=request.user_id)
+    
+    async def generate_stream():
+        async for chunk in moderator.chat_stream(request.message):
+            # Convert StreamChunk to JSON
+            chunk_data = {
+                'type': 'chunk',
+                'sub_type': chunk.sub_type.value,
+                'text': chunk.text,
+                'metadata': chunk.metadata,
+                'timestamp': chunk.timestamp.isoformat()
+            }
+            yield f"data: {json.dumps(chunk_data)}\n\n"
+        
+        yield "data: {\"type\": \"done\"}\n\n"
+    
+    return StreamingResponse(generate_stream(), media_type="text/stream")
+```
+
+### Real-time UI Integration
+
+```javascript
+// Frontend streaming handler
+const eventSource = new EventSource('/chat/stream');
+
+eventSource.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    
+    if (data.type === 'chunk') {
+        switch(data.sub_type) {
+            case 'content':
+                // Display main response content
+                appendToChat(data.text);
+                break;
+            case 'status':
+                // Show progress indicator
+                updateStatus(data.text);
+                break;
+            case 'result':
+                // Display search results/outputs
+                addResult(data.text, data.metadata);
+                break;
+            case 'error':
+                // Handle errors
+                showError(data.text);
+                break;
+        }
+    }
+};
+```
+
+### StreamChunk Benefits
+
+**For Developers:**
+- **Type Safety** - No string parsing for content classification
+- **Rich Context** - Access agent info, operation details, timing
+- **Easy Filtering** - Filter streams by content type programmatically
+- **Debugging** - Detailed metadata for troubleshooting
+
+**For Applications:**
+- **Smart UIs** - Show different content types appropriately
+- **Progress Tracking** - Real-time operation status updates
+- **Error Handling** - Structured error information
+- **Analytics** - Performance metrics and usage tracking
+
+**Migration from Old System:**
+```python
+# Old way (deprecated)
+if chunk.startswith("x-amb-info:"):
+    status_text = chunk[11:]  # String manipulation
+
+# New way (recommended)
+if chunk.sub_type == StreamSubType.STATUS:
+    status_text = chunk.text
+    phase = chunk.metadata.get('phase')
+    agent = chunk.metadata.get('agent')
 ```
 
 ## Session Management

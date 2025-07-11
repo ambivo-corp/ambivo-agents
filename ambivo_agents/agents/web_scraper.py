@@ -21,7 +21,7 @@ from pathlib import Path
 
 from requests.adapters import HTTPAdapter
 
-from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool
+from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool, StreamChunk, StreamSubType
 from ..config.loader import load_config, get_config_section
 from ..core.history import WebAgentHistoryMixin, ContextType
 
@@ -1244,7 +1244,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         return re.findall(url_pattern, text)
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        str]:
+        StreamChunk]:
         """Stream web scraping operations - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
@@ -1252,13 +1252,21 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             user_message = message.content
             self.update_conversation_state(user_message)
 
-            yield "x-amb-info:**Web Scraper Agent**\n\n"
+            yield StreamChunk(
+                text="**Web Scraper Agent**\n\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'agent': 'web_scraper', 'phase': 'initialization'}
+            )
 
             # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_scraping_conversation_context_summary()
             conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
-            yield "x-amb-info:Analyzing scraping request...\n"
+            yield StreamChunk(
+                text="Analyzing scraping request...\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={'phase': 'analysis'}
+            )
 
             llm_context = {
                 'conversation_history': conversation_history,  # 🔥 KEY FIX
@@ -1273,19 +1281,31 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             urls = intent_analysis.get("urls", [])
 
             if primary_intent == "scrape_single":
-                yield "x-amb-info:**Single URL Scraping**\n\n"
+                yield StreamChunk(
+                    text="**Single URL Scraping**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'scrape_single'}
+                )
                 async for chunk in self._stream_single_scrape_with_context(urls, intent_analysis, user_message,
                                                                            llm_context):
                     yield chunk
 
             elif primary_intent == "scrape_batch":
-                yield "x-amb-info:**Batch URL Scraping**\n\n"
+                yield StreamChunk(
+                    text="**Batch URL Scraping**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'scrape_batch'}
+                )
                 async for chunk in self._stream_batch_scrape_with_context(urls, intent_analysis, user_message,
                                                                           llm_context):
                     yield chunk
 
             elif primary_intent == "check_accessibility":
-                yield "x-amb-info:**Accessibility Check**\n\n"
+                yield StreamChunk(
+                    text="**Accessibility Check**\n\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'intent': 'check_accessibility'}
+                )
                 async for chunk in self._stream_accessibility_check_with_context(urls, user_message, llm_context):
                     yield chunk
 
@@ -1301,36 +1321,48 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                             context=llm_context,
                             system_message=enhanced_system_message,
                     ):
-                        yield chunk
+                        yield StreamChunk(
+                            text=chunk,
+                            sub_type=StreamSubType.CONTENT,
+                            metadata={'type': 'help_response'}
+                        )
                 else:
                     response_content = await self._route_scraping_with_llm_analysis(intent_analysis, user_message,
                                                                                     context)
-                    yield response_content
+                    yield StreamChunk(
+                        text=response_content,
+                        sub_type=StreamSubType.CONTENT,
+                        metadata={'fallback_response': True}
+                    )
 
         except Exception as e:
-            yield f"x-amb-info:**Web Scraper Error:** {str(e)}"
+            yield StreamChunk(
+                text=f"**Web Scraper Error:** {str(e)}",
+                sub_type=StreamSubType.ERROR,
+                metadata={'error': str(e)}
+            )
 
     async def _stream_accessibility_check_with_context(self, urls: list, user_message: str,
                                                        llm_context: Dict[str, Any]) -> AsyncIterator[str]:
         """Stream accessibility checking with context preservation"""
         try:
             if not urls:
-                yield "x-amb-info:No URL provided. Please specify a website to check.\n"
+                yield "No URL provided. Please specify a website to check.\n"
                 return
 
             url = urls[0]
-            yield f"x-amb-info:**Checking Accessibility:** {url}\n\n"
+            yield f"**Checking Accessibility:** {url}\n\n"
 
-            yield "x-amb-info:Testing connection...\n"
+            yield "Testing connection...\n"
 
             result = await self._check_accessibility(url)
 
             if result['success']:
                 status = "✅ Accessible" if result.get('accessible', False) else "❌ Not Accessible"
-                yield f"x-amb-info:**Status:** {status}\n"
-                yield f"x-amb-info:**HTTP Status:** {result.get('status_code', 'Unknown')}\n"
-                yield f"x-amb-info:**Response Time:** {result.get('response_time', 0):.2f}s\n"
-                yield f"x-amb-info:**Checked:** {result.get('timestamp', 'Unknown')}\n\n"
+                yield f"**Status:** {status}\n"
+                yield f"**HTTP Status:** {result.get('status_code', 'Unknown')}\n"
+                yield f"**Response Time:** {result.get('response_time', 0):.2f}s\n"
+                yield f"**Checked:** {result.get('timestamp', 'Unknown')}\n\n"
 
                 if result.get('accessible', False):
                     yield "✅ The website is accessible and responding normally.\n"
@@ -1367,17 +1399,17 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             url = urls[0]
             extraction_prefs = intent_analysis.get("extraction_preferences", {})
 
-            yield f"x-amb-info:**Target URL:** {url}\n"
-            yield f"x-amb-info:**Method:** {self.execution_mode.upper()}\n"
-            yield f"x-amb-info:**Proxy:** {'✅ Enabled' if self.proxy_config else '❌ Disabled'}\n\n"
+            yield f"**Target URL:** {url}\n"
+            yield f"**Method:** {self.execution_mode.upper()}\n"
+            yield f"**Proxy:** {'✅ Enabled' if self.proxy_config else '❌ Disabled'}\n\n"
 
-            yield "x-amb-info:Initializing scraper...\n"
+            yield "Initializing scraper...\n"
             await asyncio.sleep(0.2)
 
-            yield "x-amb-info:Connecting to website...\n"
+            yield "Connecting to website...\n"
             await asyncio.sleep(0.3)
 
-            yield "x-amb-info:Downloading content...\n"
+            yield "Downloading content...\n"
             await asyncio.sleep(0.5)
 
             # Perform actual scraping
@@ -1389,8 +1421,8 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             )
 
             if result['success']:
-                yield "x-amb-info:**Scraping Completed Successfully!**\n\n"
-                yield f"x-amb-info:**Results Summary:**\n"
+                yield "**Scraping Completed Successfully!**\n\n"
+                yield f"**Results Summary:**\n"
                 yield f"• **URL:** {result['url']}\n"
                 yield f"• **Title:** {result.get('title', 'No title')}\n"
                 yield f"• **Content:** {result['content_length']:,} characters\n"
