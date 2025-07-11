@@ -212,14 +212,14 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
             conversation_context = self._get_youtube_conversation_context_summary()
 
             # Use LLM to analyze intent
-            yield "🎬 Analyzing YouTube request...\n\n"
+            yield "x-amb-info:Analyzing YouTube request...\n\n"
             intent_analysis = await self._llm_analyze_youtube_intent(user_message, conversation_context)
 
             # Route and stream response based on intent
             primary_intent = intent_analysis.get("primary_intent", "help_request")
 
             if primary_intent == "download_audio":
-                yield "🎵 **Preparing Audio Download**\n\n"
+                yield "x-amb-info:**Preparing Audio Download**\n\n"
                 response_content = await self._handle_audio_download(
                     intent_analysis.get("youtube_urls", []),
                     intent_analysis.get("output_preferences", {}),
@@ -228,7 +228,7 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
                 yield response_content
 
             elif primary_intent == "download_video":
-                yield "🎬 **Preparing Video Download**\n\n"
+                yield "x-amb-info:**Preparing Video Download**\n\n"
                 response_content = await self._handle_video_download(
                     intent_analysis.get("youtube_urls", []),
                     intent_analysis.get("output_preferences", {}),

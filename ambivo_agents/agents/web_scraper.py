@@ -1367,17 +1367,17 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             url = urls[0]
             extraction_prefs = intent_analysis.get("extraction_preferences", {})
 
-            yield f"🌐 **Target URL:** {url}\n"
-            yield f"🔧 **Method:** {self.execution_mode.upper()}\n"
-            yield f"📡 **Proxy:** {'✅ Enabled' if self.proxy_config else '❌ Disabled'}\n\n"
+            yield f"x-amb-info:**Target URL:** {url}\n"
+            yield f"x-amb-info:**Method:** {self.execution_mode.upper()}\n"
+            yield f"x-amb-info:**Proxy:** {'✅ Enabled' if self.proxy_config else '❌ Disabled'}\n\n"
 
-            yield "⏳ Initializing scraper...\n"
+            yield "x-amb-info:Initializing scraper...\n"
             await asyncio.sleep(0.2)
 
-            yield "🌐 Connecting to website...\n"
+            yield "x-amb-info:Connecting to website...\n"
             await asyncio.sleep(0.3)
 
-            yield "📄 Downloading content...\n"
+            yield "x-amb-info:Downloading content...\n"
             await asyncio.sleep(0.5)
 
             # Perform actual scraping
@@ -1389,8 +1389,8 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             )
 
             if result['success']:
-                yield "✅ **Scraping Completed Successfully!**\n\n"
-                yield f"📊 **Results Summary:**\n"
+                yield "x-amb-info:**Scraping Completed Successfully!**\n\n"
+                yield f"x-amb-info:**Results Summary:**\n"
                 yield f"• **URL:** {result['url']}\n"
                 yield f"• **Title:** {result.get('title', 'No title')}\n"
                 yield f"• **Content:** {result['content_length']:,} characters\n"

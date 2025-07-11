@@ -467,7 +467,11 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             return self._keyword_based_analysis(user_message, conversation_context)
 
         # Get session context for workflow continuity
-        session_context = self._get_session_context()
+        try:
+            session_context = self._get_session_context()
+        except Exception as e:
+            self.logger.error(f"Failed to get session context: {e}")
+            session_context = {}
 
         # Build available agents list dynamically
         available_agents_list = list(self.specialized_agents.keys())
@@ -1247,8 +1251,8 @@ Please continue with the next step for {agent_type} processing."""
             yield "x-amb-info:**Analyzing your request...**\n\n"
             self.update_conversation_state(user_message)
 
-            yield "🧠 Checking conversation context...\n"
-            yield "🎯 Determining the best approach...\n\n"
+            yield "x-amb-info:Checking conversation context...\n"
+            yield "x-amb-info:Determining the best approach...\n\n"
 
             # Analyze intent with conversation context
             intent_analysis = await self._analyze_query_intent(user_message, conversation_context)
@@ -1258,8 +1262,8 @@ Please continue with the next step for {agent_type} processing."""
             confidence = intent_analysis.get('confidence', 0)
             workflow_type = intent_analysis.get('workflow_type', 'single')
 
-            yield f"📋 **Routing to {agent_name}** (confidence: {confidence:.1f})\n"
-            yield f"🔄 **Workflow:** {workflow_type.title()}\n\n"
+            yield f"x-amb-info:**Routing to {agent_name}** (confidence: {confidence:.1f})\n"
+            yield f"x-amb-info:**Workflow:** {workflow_type.title()}\n\n"
 
             await asyncio.sleep(0.1)
 

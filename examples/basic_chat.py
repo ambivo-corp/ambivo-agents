@@ -119,9 +119,9 @@ async def test_direct_agent_interaction():
         print(f"   ✅ Context response: {response2[:100]}...")
 
         # ✅ Test 3: Conversation history
-        print("\n   📚 Test 3: Checking conversation history...")
+        print("\nx-amb-info:Test 3: Checking conversation history...")
         history = await agent.get_conversation_history()
-        print(f"   ✅ History retrieved: {len(history)} messages")
+        print(f"x-amb-info:History retrieved: {len(history)} messages")
 
         # ✅ Test 4: Conversation summary
         print("\n   📊 Test 4: Getting conversation summary...")

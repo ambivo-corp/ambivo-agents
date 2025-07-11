@@ -631,16 +631,16 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             if result['success']:
                 yield f"x-amb-info:**Ingestion Completed Successfully!**\n\n"
-                yield f"📊 **Summary:**\n"
-                yield f"• Document: {document_path}\n"
-                yield f"• Knowledge Base: {kb_name}\n"
-                yield f"• Processing Time: {processing_time:.2f}s\n"
-                yield f"• Status: Ready for queries! 🎉\n"
+                yield f"x-amb-info:**Summary:**\n"
+                yield f"x-amb-info:Document: {document_path}\n"
+                yield f"x-amb-info:Knowledge Base: {kb_name}\n"
+                yield f"x-amb-info:Processing Time: {processing_time:.2f}s\n"
+                yield f"x-amb-info:Status: Ready for queries! 🎉\n"
             else:
-                yield f"❌ **Ingestion Failed:** {result['error']}\n"
+                yield f"x-amb-info:**Ingestion Failed:** {result['error']}\n"
 
         except Exception as e:
-            yield f"❌ **Error during document ingestion:** {str(e)}"
+            yield f"x-amb-info:**Error during document ingestion:** {str(e)}"
 
     async def _stream_text_ingestion_with_context(self, kb_name: str, user_message: str, llm_context: Dict[str, Any]) -> \
     AsyncIterator[str]:
@@ -657,20 +657,20 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 yield f"📝 Ready to add text to **{kb_name}**. What text would you like me to ingest?\n"
                 return
 
-            yield f"📝 **Processing text for {kb_name}**\n"
-            yield f"📊 **Text length:** {len(text_content)} characters\n\n"
+            yield f"x-amb-info:**Processing text for {kb_name}**\n"
+            yield f"x-amb-info:**Text length:** {len(text_content)} characters\n\n"
 
-            yield "⏳ Processing and indexing text...\n"
+            yield "x-amb-info:Processing and indexing text...\n"
 
             result = await self._ingest_text(kb_name, text_content)
 
             if result['success']:
                 preview = text_content[:100] + "..." if len(text_content) > 100 else text_content
-                yield f"✅ **Text Ingestion Completed**\n\n"
-                yield f"📄 **Preview:** {preview}\n"
-                yield f"🗃️ **Knowledge Base:** {kb_name}\n"
-                yield f"📊 **Length:** {len(text_content)} characters\n"
-                yield f"🎉 **Status:** Text successfully indexed!\n"
+                yield f"x-amb-info:**Text Ingestion Completed**\n\n"
+                yield f"x-amb-info:**Preview:** {preview}\n"
+                yield f"x-amb-info:**Knowledge Base:** {kb_name}\n"
+                yield f"x-amb-info:**Length:** {len(text_content)} characters\n"
+                yield f"x-amb-info:**Status:** Text successfully indexed!\n"
             else:
                 yield f"❌ **Text ingestion failed:** {result['error']}\n"
 
@@ -687,7 +687,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 if available_kbs:
                     yield "**Available Knowledge Bases:**\n"
                     for kb in available_kbs:
-                        yield f"• {kb}\n"
+                        yield f"x-amb-info:{kb}\n"
                     yield f"\nWhich knowledge base would you like to search?\n"
                 else:
                     yield "No knowledge bases found. Please create one first.\n"
@@ -697,8 +697,8 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 yield f"🔍 **Searching {kb_name}**\n\nWhat would you like me to find?\n"
                 return
 
-            yield f"🔍 **Searching Knowledge Base:** {kb_name}\n"
-            yield f"❓ **Query:** {query_content}\n\n"
+            yield f"x-amb-info:**Searching Knowledge Base:** {kb_name}\n"
+            yield f"x-amb-info:**Query:** {query_content}\n\n"
 
             yield "⏳ Performing semantic search...\n"
 
@@ -709,7 +709,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 answer = result['answer']
                 source_count = len(result.get('source_details', []))
 
-                yield f"📋 **Search Results:**\n\n"
+                yield f"x-amb-info:**Search Results:**\n\n"
 
                 # Stream the answer progressively if it's long
                 if len(answer) > 200:

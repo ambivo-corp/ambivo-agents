@@ -433,7 +433,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
                 # ... existing help logic ...
 
         except Exception as e:
-            yield f"❌ **Code Executor Error:** {str(e)}"
+            yield f"x-amb-info:**Code Executor Error:** {str(e)}"
 
     async def _handle_code_writing_request_with_context(self, user_message: str, language: str,
                                                             llm_context: Dict[str, Any]) -> str:

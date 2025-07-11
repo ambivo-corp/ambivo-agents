@@ -1186,7 +1186,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     except:
                         pass
 
-                yield f"✅ **Search completed using {provider_name}**\n"
+                yield f"x-amb-info:**Search completed using {provider_name}**\n"
             else:
                 yield f"❌ **Search failed:** {result.get('error', 'Unknown error')}\n"
 
@@ -1235,7 +1235,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     if i < len(results):
                         await asyncio.sleep(0.2)
 
-                yield f"✅ **Search completed using {provider_name}**\n"
+                yield f"x-amb-info:**Search completed using {provider_name}**\n"
             else:
                 yield f"❌ **Search failed:** {result.get('error', 'Unknown error')}\n"
 
@@ -1269,7 +1269,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     if i < len(results):
                         await asyncio.sleep(0.3)
 
-                yield f"✅ **News search completed**\n"
+                yield f"x-amb-info:**News search completed**\n"
             else:
                 yield f"❌ **News search failed:** {result.get('error', 'Unknown error')}\n"
 
@@ -1303,7 +1303,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     if i < len(results):
                         await asyncio.sleep(0.3)
 
-                yield f"✅ **Academic search completed**\n"
+                yield f"x-amb-info:**Academic search completed**\n"
             else:
                 yield f"❌ **Academic search failed:** {result.get('error', 'Unknown error')}\n"
 
@@ -1359,7 +1359,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     except:
                         pass
 
-                yield f"✅ **News search completed**\n"
+                yield f"x-amb-info:**News search completed**\n"
             else:
                 yield f"❌ **News search failed:** {result.get('error', 'Unknown error')}\n"
 
@@ -1415,7 +1415,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     except:
                         pass
 
-                yield f"✅ **Academic search completed**\n"
+                yield f"x-amb-info:**Academic search completed**\n"
             else:
                 yield f"❌ **Academic search failed:** {result.get('error', 'Unknown error')}\n"
 

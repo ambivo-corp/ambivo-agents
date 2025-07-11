@@ -1647,7 +1647,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             intent_analysis = await self._llm_analyze_media_intent(user_message, conversation_context)
             primary_intent = intent_analysis.get("primary_intent", "help_request")
 
-            yield f"🎯 **Detected Intent:** {primary_intent.replace('_', ' ').title()}\n\n"
+            yield f"x-amb-info:**Detected Intent:** {primary_intent.replace('_', ' ').title()}\n\n"
 
             if primary_intent == "extract_audio":
                 yield "🎵 **Audio Extraction**\n\n"
