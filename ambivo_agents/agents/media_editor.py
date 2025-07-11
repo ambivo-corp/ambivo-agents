@@ -1633,7 +1633,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             conversation_context = self._get_media_conversation_context_summary()
             conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
 
-            yield "🧠 Analyzing media processing request...\n"
+            yield "x-amb-info:Analyzing media processing request...\n"
 
             # Build LLM context for streaming
             llm_context = {

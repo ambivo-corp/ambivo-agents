@@ -1157,25 +1157,25 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 results = result.get('results', [])
                 search_time = result.get('search_time', 0)
 
-                yield f"x-amb-info:**Found {len(results)} results in {search_time:.2f}s**\n\n"
+                yield f"**Found {len(results)} results in {search_time:.2f}s**\n\n"
 
                 # Stream results one by one
                 for i, res in enumerate(results, 1):
-                    yield f"x-amb-info:{i}. {res.get('title', 'No title')}**\n"
-                    yield f"x-amb-info:{res.get('url', 'No URL')}\n"
+                    yield f"{i}. {res.get('title', 'No title')}**\n"
+                    yield f"{res.get('url', 'No URL')}\n"
 
                     snippet = res.get('snippet', 'No description')
                     if len(snippet) > 150:
                         snippet = snippet[:150] + "..."
-                    yield f"x-amb-info:{snippet}\n\n"
+                    yield f"{snippet}\n\n"
 
                     if i < len(results):
                         await asyncio.sleep(0.2)
 
-                # 🔥 FIX: If context suggests follow-up questions, use LLM with context
+
                 conversation_history = llm_context.get('conversation_history', [])
                 if conversation_history and self.llm_service:
-                    yield "x-amb-info:**Related to your search:**\n"
+                    yield "**Related to your search:**\n"
 
                     context_prompt = f"""Based on the search results for "{query}" and our conversation history, suggest 2-3 helpful follow-up search queries that the user might find interesting."""
 
@@ -1221,7 +1221,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 results = result.get('results', [])
                 search_time = result.get('search_time', 0)
 
-                yield f"x-amb-info:**Found {len(results)} results in {search_time:.2f}s**\n\n"
+                yield f"**Found {len(results)} results in {search_time:.2f}s**\n\n"
 
                 # Stream results one by one
                 for i, res in enumerate(results, 1):
