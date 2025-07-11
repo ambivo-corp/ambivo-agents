@@ -121,12 +121,14 @@ class WebSearchServiceAdapter:
         # Rate limiting
         provider_config = self.providers[self.current_provider]
         if 'last_request_time' in provider_config:
-            elapsed = time.time() - provider_config['last_request_time']
-            delay = provider_config.get('rate_limit_delay', 1.0)
-            if delay is None:
-                delay = 1.0
-            if elapsed < delay:
-                await asyncio.sleep(delay - elapsed)
+            last_request_time = provider_config['last_request_time']
+            if last_request_time is not None:
+                elapsed = time.time() - last_request_time
+                delay = provider_config.get('rate_limit_delay', 1.0)
+                if delay is None or not isinstance(delay, (int, float)):
+                    delay = 1.0
+                if isinstance(elapsed, (int, float)) and elapsed < delay:
+                    await asyncio.sleep(delay - elapsed)
 
         provider_config['last_request_time'] = time.time()
 
@@ -1198,17 +1200,33 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 results = result.get('results', [])
                 search_time = result.get('search_time', 0)
 
-                yield f"**Found {len(results)} results in {search_time:.2f}s**\n\n"
+                yield StreamChunk(
+                    text=f"**Found {len(results)} results in {search_time:.2f}s**\n\n",
+                    sub_type=StreamSubType.RESULT,
+                    metadata={'result_count': len(results), 'search_time': search_time}
+                )
 
                 # Stream results one by one
                 for i, res in enumerate(results, 1):
-                    yield f"{i}. {res.get('title', 'No title')}**\n"
-                    yield f"{res.get('url', 'No URL')}\n"
+                    yield StreamChunk(
+                        text=f"{i}. {res.get('title', 'No title')}**\n",
+                        sub_type=StreamSubType.RESULT,
+                        metadata={'result_index': i, 'title': res.get('title')}
+                    )
+                    yield StreamChunk(
+                        text=f"{res.get('url', 'No URL')}\n",
+                        sub_type=StreamSubType.RESULT,
+                        metadata={'url': res.get('url')}
+                    )
 
                     snippet = res.get('snippet', 'No description')
                     if len(snippet) > 150:
                         snippet = snippet[:150] + "..."
-                    yield f"{snippet}\n\n"
+                    yield StreamChunk(
+                        text=f"{snippet}\n\n",
+                        sub_type=StreamSubType.RESULT,
+                        metadata={'snippet': snippet}
+                    )
 
                     if i < len(results):
                         await asyncio.sleep(0.2)
@@ -1618,17 +1636,33 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 results = result.get('results', [])
                 search_time = result.get('search_time', 0)
 
-                yield f"**Found {len(results)} academic sources in {search_time:.2f}s**\n\n"
+                yield StreamChunk(
+                    text=f"**Found {len(results)} academic sources in {search_time:.2f}s**\n\n",
+                    sub_type=StreamSubType.RESULT,
+                    metadata={'result_count': len(results), 'search_time': search_time}
+                )
 
                 # Stream academic results one by one
                 for i, res in enumerate(results, 1):
-                    yield f"{i}. {res.get('title', 'No title')}**\n"
-                    yield f"{res.get('url', 'No URL')}\n"
+                    yield StreamChunk(
+                        text=f"{i}. {res.get('title', 'No title')}**\n",
+                        sub_type=StreamSubType.RESULT,
+                        metadata={'result_index': i, 'title': res.get('title')}
+                    )
+                    yield StreamChunk(
+                        text=f"{res.get('url', 'No URL')}\n",
+                        sub_type=StreamSubType.RESULT,
+                        metadata={'url': res.get('url')}
+                    )
 
                     snippet = res.get('snippet', 'No description')
                     if len(snippet) > 150:
                         snippet = snippet[:150] + "..."
-                    yield f"{snippet}\n\n"
+                    yield StreamChunk(
+                        text=f"{snippet}\n\n",
+                        sub_type=StreamSubType.RESULT,
+                        metadata={'snippet': snippet}
+                    )
 
                     if i < len(results):
                         await asyncio.sleep(0.2)
@@ -1636,7 +1670,10 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 # Context-aware academic follow-up suggestions
                 conversation_history = llm_context.get('conversation_history', [])
                 if conversation_history and self.llm_service:
-                    yield "**Related research areas you might explore:**\n"
+                    yield StreamChunk(
+                        text="**Related research areas you might explore:**\n",
+                        sub_type=StreamSubType.STATUS
+                    )
 
                     context_prompt = f"""Based on the academic search results for "{query}" and our conversation history, suggest 2-3 related research topics, methodologies, or follow-up academic searches that would be valuable."""
 
@@ -1645,14 +1682,30 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                             prompt=context_prompt,
                             context=llm_context
                         )
-                        yield f"{suggestions}\n\n"
+                        yield StreamChunk(
+                            text=f"{suggestions}\n\n",
+                            sub_type=StreamSubType.CONTENT,
+                            metadata={'type': 'suggestions'}
+                        )
                     except:
                         pass
 
-                yield f"**Academic search completed**\n"
+                yield StreamChunk(
+                    text="**Academic search completed**\n",
+                    sub_type=StreamSubType.STATUS,
+                    metadata={'completed': True, 'search_type': 'academic'}
+                )
             else:
-                yield f"❌ **Academic search failed:** {result.get('error', 'Unknown error')}\n"
+                yield StreamChunk(
+                    text=f"❌ **Academic search failed:** {result.get('error', 'Unknown error')}\n",
+                    sub_type=StreamSubType.ERROR,
+                    metadata={'error': result.get('error')}
+                )
 
         except Exception as e:
-            yield f"❌ **Error during academic search:** {str(e)}"
+            yield StreamChunk(
+                text=f"❌ **Error during academic search:** {str(e)}",
+                sub_type=StreamSubType.ERROR,
+                metadata={'error': str(e)}
+            )
 

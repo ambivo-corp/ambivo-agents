@@ -51,7 +51,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         # Extract system_message from kwargs to avoid conflict
         system_message = kwargs.pop('system_message', None)
 
-        # Enhanced system message for ModeratorAgent with context awareness
+        # Enhanced system message for ModeratorAgent with context awareness and Markdown formatting
         moderator_system = system_message or """You are an intelligent request coordinator and conversation orchestrator with these responsibilities:
 
     CORE RESPONSIBILITIES:
@@ -85,7 +85,26 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     - Remember previous interactions and reference them when relevant
     - Understand when users are referring to previous responses or asking follow-up questions
     - Maintain conversation flow even when switching between different specialized agents
-    - Use conversation history to provide better routing decisions"""
+    - Use conversation history to provide better routing decisions
+
+    FORMATTING REQUIREMENTS:
+    - ALWAYS format your responses using proper Markdown syntax
+    - Use **bold** for important information, headings, and emphasis
+    - Use `code blocks` for technical terms, file names, and commands
+    - Use numbered lists (1. 2. 3.) and bullet points (- •) for organized information
+    - Use > blockquotes for highlighting key information or quotes
+    - Use headers (## ###) to structure long responses
+    - When delegating to other agents, explicitly instruct them to use Markdown formatting
+    - Ensure all agent responses maintain consistent professional Markdown formatting
+
+    AGENT DELEGATION INSTRUCTIONS:
+    When routing to specialized agents, always include this instruction: "Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
+
+    OUTPUT STYLE:
+    - Professional, well-structured Markdown formatting
+    - Clear visual hierarchy using headers and emphasis
+    - Organized information with lists and code blocks
+    - Consistent formatting across all interactions"""
 
         super().__init__(
             agent_id=agent_id,
@@ -797,12 +816,14 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 'session_synced': True
             }
 
-            # Create message with COMPLETE context package
+            # Create message with COMPLETE context package and Markdown formatting instruction
+            enhanced_user_message = f"{user_message}\n\n**Formatting Instruction:** Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
+            
             agent_message = AgentMessage(
                 id=f"msg_{str(uuid.uuid4())[:8]}",
                 sender_id=user_id,
                 recipient_id=agent.agent_id,
-                content=user_message,
+                content=enhanced_user_message,
                 message_type=MessageType.USER_INPUT,
                 session_id=session_id,
                 conversation_id=conversation_id,
@@ -812,7 +833,8 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     'routing_reason': f'Moderator analysis selected {agent_type}',
                     'conversation_history_count': len(full_conversation_history),
                     'context_transfer': True,
-                    'memory_shared': True
+                    'memory_shared': True,
+                    'formatting_requested': 'markdown'
                 }
             )
 
@@ -1359,18 +1381,22 @@ Please continue with the next step for {agent_type} processing."""
             agent = self.specialized_agents[agent_type]
 
             if hasattr(agent, 'process_message_stream'):
+                # Add Markdown formatting instruction for streaming
+                enhanced_user_message = f"{user_message}\n\n**Formatting Instruction:** Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
+                
                 agent_message = AgentMessage(
                     id=str(uuid.uuid4()),
                     sender_id=self.context.user_id,
                     recipient_id=agent.agent_id,
-                    content=user_message,
+                    content=enhanced_user_message,
                     message_type=MessageType.USER_INPUT,
                     session_id=self.context.session_id,
                     conversation_id=self.context.conversation_id,
                     metadata={
                         'llm_context': llm_context,
                         'routed_by': self.agent_id,
-                        'streaming': True
+                        'streaming': True,
+                        'formatting_requested': 'markdown'
                     }
                 )
 
