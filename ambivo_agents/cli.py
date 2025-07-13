@@ -12,27 +12,29 @@ License: MIT
 """
 
 import asyncio
-import click
 import json
+import logging
+import os
 import sys
 import time
-import yaml
-import os
 import uuid
-import logging
-from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any, Union, Tuple
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple, Union
+
+import click
+import yaml
 
 # Import agents directly using clean imports
 from ambivo_agents import (
+    APIAgent,
     AssistantAgent,
+    CodeExecutorAgent,
     KnowledgeBaseAgent,
-    YouTubeDownloadAgent,
     MediaEditorAgent,
-    WebSearchAgent,
     WebScraperAgent,
-    CodeExecutorAgent
+    WebSearchAgent,
+    YouTubeDownloadAgent,
 )
 
 # Import AgentSession with fallback
@@ -51,7 +53,7 @@ except ImportError:
 
 # ✅ ENHANCED: Import your loader.py for proper ENV support
 try:
-    from ambivo_agents.config.loader import load_config, ConfigurationError, get_config_section
+    from ambivo_agents.config.loader import ConfigurationError, get_config_section, load_config
 
     LOADER_AVAILABLE = True
     print("✅ Using ambivo_agents configuration loader with environment variable support")
@@ -66,7 +68,6 @@ try:
     SERVICE_AVAILABLE = True
 except ImportError:
     SERVICE_AVAILABLE = False
-
 
 
 # Import ModeratorAgent for enhanced routing
@@ -98,19 +99,18 @@ class EnhancedConfigManager:
             # ✅ USE YOUR LOADER.PY - Supports ENV vars + YAML + defaults
             try:
                 self.config = load_config(
-                    config_path=self.config_path,
-                    use_env_vars=self.use_env_vars
+                    config_path=self.config_path, use_env_vars=self.use_env_vars
                 )
-                self.config_source = self.config.get('_config_source', 'loader.py')
+                self.config_source = self.config.get("_config_source", "loader.py")
 
                 print(f"✅ Configuration loaded via loader.py from: {self.config_source}")
 
                 # Show what type of config was loaded
-                if 'environment variables' in self.config_source:
+                if "environment variables" in self.config_source:
                     print("🌍 Using environment variables (AMBIVO_AGENTS_ prefix)")
-                elif 'YAML' in self.config_source:
+                elif "YAML" in self.config_source:
                     print(f"📄 Using YAML file: {self.config_path or 'auto-detected'}")
-                elif 'defaults' in self.config_source:
+                elif "defaults" in self.config_source:
                     print("⚙️  Using minimal defaults")
 
                 return
@@ -135,16 +135,16 @@ class EnhancedConfigManager:
 
         # Try to load agent_config.yaml if it exists
         possible_paths = [
-            './agent_config.yaml',
-            './agent_config.yml',
-            '~/.ambivo/agent_config.yaml'
+            "./agent_config.yaml",
+            "./agent_config.yml",
+            "~/.ambivo/agent_config.yaml",
         ]
 
         for path_str in possible_paths:
             path = Path(path_str).expanduser()
             if path.exists():
                 try:
-                    with open(path, 'r') as f:
+                    with open(path, "r") as f:
                         file_config = yaml.safe_load(f)
                         if file_config:
                             self._merge_config(self.config, file_config)
@@ -161,53 +161,37 @@ class EnhancedConfigManager:
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration structure"""
         return {
-            'cli': {
-                'version': '1.1.0',
-                'default_mode': 'shell',
-                'auto_session': True,
-                'session_prefix': 'ambivo',
-                'verbose': False,
-                'theme': 'default'
+            "cli": {
+                "version": "1.1.0",
+                "default_mode": "shell",
+                "auto_session": True,
+                "session_prefix": "ambivo",
+                "verbose": False,
+                "theme": "default",
             },
-            'agents': {
-                'youtube': {
-                    'default_audio_only': True,
-                    'output_directory': './downloads'
-                },
-                'media': {
-                    'supported_formats': ['mp4', 'avi', 'mov', 'mp3', 'wav']
-                },
-                'web_search': {
-                    'default_max_results': 5
-                },
-                'moderator': {
-                    'enabled': MODERATOR_AVAILABLE
-                }
+            "agents": {
+                "youtube": {"default_audio_only": True, "output_directory": "./downloads"},
+                "media": {"supported_formats": ["mp4", "avi", "mov", "mp3", "wav"]},
+                "web_search": {"default_max_results": 5},
+                "moderator": {"enabled": MODERATOR_AVAILABLE},
             },
-            'agent_capabilities': {
-                'enable_knowledge_base': True,
-                'enable_web_search': True,
-                'enable_code_execution': True,
-                'enable_media_editor': True,
-                'enable_youtube_download': True,
-                'enable_web_scraping': True,
-                'enable_proxy_mode': True
+            "agent_capabilities": {
+                "enable_knowledge_base": True,
+                "enable_web_search": True,
+                "enable_code_execution": True,
+                "enable_media_editor": True,
+                "enable_youtube_download": True,
+                "enable_web_scraping": True,
+                "enable_proxy_mode": True,
+                "enable_api_agent": True,
             },
-            'session': {
-                'auto_cleanup': True,
-                'session_timeout': 3600
+            "session": {"auto_cleanup": True, "session_timeout": 3600},
+            "mcp": {
+                "enabled": False,
+                "server": {"enabled": False, "name": "ambivo-agents"},
+                "client": {"enabled": False},
             },
-            'mcp': {
-                'enabled': False,
-                'server': {
-                    'enabled': False,
-                    'name': 'ambivo-agents'
-                },
-                'client': {
-                    'enabled': False
-                }
-            },
-            '_config_source': 'defaults'
+            "_config_source": "defaults",
         }
 
     def _prompt_for_config_creation(self):
@@ -237,7 +221,7 @@ class EnhancedConfigManager:
                 if LOADER_AVAILABLE:
                     try:
                         self.config = load_config(config_path)
-                        self.config_source = self.config.get('_config_source', 'created_yaml')
+                        self.config_source = self.config.get("_config_source", "created_yaml")
                     except:
                         pass
             else:
@@ -259,7 +243,7 @@ class EnhancedConfigManager:
         if not self.config:
             return default
 
-        keys = path.split('.')
+        keys = path.split(".")
         current = self.config
 
         for key in keys:
@@ -273,84 +257,68 @@ class EnhancedConfigManager:
     def save_sample_config(self, path: str):
         """Save a sample configuration file with MCP support"""
         sample_config = {
-            'redis': {
-                'host': 'localhost',
-                'port': 6379,
-                'db': 0,
-                'password': None
+            "redis": {"host": "localhost", "port": 6379, "db": 0, "password": None},
+            "llm": {
+                "preferred_provider": "openai",
+                "temperature": 0.7,
+                "max_tokens": 4000,
+                "openai_api_key": "your_openai_api_key_here",
+                "anthropic_api_key": "your_anthropic_api_key_here",
             },
-
-            'llm': {
-                'preferred_provider': 'openai',
-                'temperature': 0.7,
-                'max_tokens': 4000,
-                'openai_api_key': 'your_openai_api_key_here',
-                'anthropic_api_key': 'your_anthropic_api_key_here'
+            "agent_capabilities": {
+                "enable_knowledge_base": True,
+                "enable_web_search": True,
+                "enable_code_execution": True,
+                "enable_media_editor": True,
+                "enable_youtube_download": True,
+                "enable_web_scraping": True,
+                "enable_proxy_mode": True,
+                "enable_api_agent": True,
             },
-
-            'agent_capabilities': {
-                'enable_knowledge_base': True,
-                'enable_web_search': True,
-                'enable_code_execution': True,
-                'enable_media_editor': True,
-                'enable_youtube_download': True,
-                'enable_web_scraping': True,
-                'enable_proxy_mode': True
+            "web_search": {"brave_api_key": "your_brave_api_key_here", "default_max_results": 10},
+            "knowledge_base": {
+                "qdrant_url": "your_qdrant_url_here",
+                "qdrant_api_key": "your_qdrant_api_key_here",
+                "chunk_size": 1024,
+                "similarity_top_k": 5,
             },
-
-            'web_search': {
-                'brave_api_key': 'your_brave_api_key_here',
-                'default_max_results': 10
-            },
-
-            'knowledge_base': {
-                'qdrant_url': 'your_qdrant_url_here',
-                'qdrant_api_key': 'your_qdrant_api_key_here',
-                'chunk_size': 1024,
-                'similarity_top_k': 5
-            },
-
-            'mcp': {
-                'enabled': False,
-                'server': {
-                    'enabled': False,
-                    'name': 'ambivo-agents',
-                    'version': '1.0.0',
-                    'stdio': True
+            "mcp": {
+                "enabled": False,
+                "server": {
+                    "enabled": False,
+                    "name": "ambivo-agents",
+                    "version": "1.0.0",
+                    "stdio": True,
                 },
-                'client': {
-                    'enabled': False,
-                    'auto_connect_servers': ['filesystem', 'github', 'sqlite']
+                "client": {
+                    "enabled": False,
+                    "auto_connect_servers": ["filesystem", "github", "sqlite"],
                 },
-                'external_servers': {
-                    'filesystem': {
-                        'command': 'npx',
-                        'args': ['@modelcontextprotocol/server-filesystem', '/allowed/path'],
-                        'capabilities': ['file_read', 'file_write']
+                "external_servers": {
+                    "filesystem": {
+                        "command": "npx",
+                        "args": ["@modelcontextprotocol/server-filesystem", "/allowed/path"],
+                        "capabilities": ["file_read", "file_write"],
                     },
-                    'github': {
-                        'command': 'npx',
-                        'args': ['@modelcontextprotocol/server-github'],
-                        'capabilities': ['repo_access', 'issue_management'],
-                        'env': {
-                            'GITHUB_PERSONAL_ACCESS_TOKEN': '${GITHUB_TOKEN}'
-                        }
-                    }
-                }
+                    "github": {
+                        "command": "npx",
+                        "args": ["@modelcontextprotocol/server-github"],
+                        "capabilities": ["repo_access", "issue_management"],
+                        "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"},
+                    },
+                },
             },
-
-            'service': {
-                'max_sessions': 100,
-                'log_level': 'INFO'
-            }
+            "service": {"max_sessions": 100, "log_level": "INFO"},
         }
 
         try:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-            with open(path, 'w') as f:
+            with open(path, "w") as f:
                 # Write comments and config
                 f.write("# Ambivo Agents Configuration\n")
-                f.write("# Environment variables with AMBIVO_AGENTS_ prefix will override these settings\n")
+                f.write(
+                    "# Environment variables with AMBIVO_AGENTS_ prefix will override these settings\n"
+                )
                 f.write("# Example: export AMBIVO_AGENTS_REDIS_HOST=localhost\n")
                 f.write("# Example: export AMBIVO_AGENTS_OPENAI_API_KEY=your_key_here\n\n")
 
@@ -370,9 +338,9 @@ class AmbivoAgentsCLI:
         self.tenant_id = "cli_tenant"
         self.session_metadata = {
             "cli_session": True,
-            "version": self.config.get('cli.version', '1.1.0'),
+            "version": self.config.get("cli.version", "1.1.0"),
             "mode": "shell_default",
-            "config_source": self.config.config_source
+            "config_source": self.config.config_source,
         }
         self.session_file = Path.home() / ".ambivo_agents_session"
 
@@ -388,17 +356,17 @@ class AmbivoAgentsCLI:
 
         # Check import status
         if not AGENT_SESSION_AVAILABLE:
-            if self.config.get('cli.verbose', False):
+            if self.config.get("cli.verbose", False):
                 print("⚠️  Warning: AgentSession not available - some features may be limited")
 
     def _ensure_auto_session(self):
         """Automatically create a session if none exists and auto_session is enabled"""
-        if self.config.get('cli.auto_session', True):
+        if self.config.get("cli.auto_session", True):
             current_session = self.get_current_session()
             if not current_session:
                 session_id = str(uuid.uuid4())
                 self.set_current_session(session_id)
-                if self.config.get('cli.verbose', False):
+                if self.config.get("cli.verbose", False):
                     print(f"🔄 Auto-created session: {session_id}")
 
     def get_current_session(self) -> Optional[str]:
@@ -429,8 +397,9 @@ class AmbivoAgentsCLI:
             print(f"❌ Failed to clear session: {e}")
             return False
 
-    async def get_or_create_agent(self, agent_class, session_id: str = None,
-                                  additional_metadata: Dict[str, Any] = None):
+    async def get_or_create_agent(
+        self, agent_class, session_id: str = None, additional_metadata: Dict[str, Any] = None
+    ):
         """
         ✅ ENHANCED: Get existing agent from cache or create new one
         This ensures agents are reused within sessions, preserving conversation history
@@ -448,25 +417,25 @@ class AmbivoAgentsCLI:
             # ✅ CHECK CACHE FIRST - Reuses existing agents
             if cache_key in self._session_agents:
                 agent, context = self._session_agents[cache_key]
-                if self.config.get('cli.verbose', False):
+                if self.config.get("cli.verbose", False):
                     print(f"🔄 Reusing cached {agent_class.__name__} (ID: {agent.agent_id})")
                     print(f"   📚 Agent retains conversation history and memory")
                 return agent, context
 
             # Create new agent only if not in cache
-            if self.config.get('cli.verbose', False):
+            if self.config.get("cli.verbose", False):
                 print(f"🆕 Creating new {agent_class.__name__} for session {session_id[:8]}...")
 
             metadata = {**self.session_metadata}
             if additional_metadata:
                 metadata.update(additional_metadata)
 
-            metadata['config'] = {
-                'agent_type': agent_class.__name__,
-                'configured': True,
-                'cached': True,
-                'session_id': session_id,
-                'config_source': self.config.config_source
+            metadata["config"] = {
+                "agent_type": agent_class.__name__,
+                "configured": True,
+                "cached": True,
+                "session_id": session_id,
+                "config_source": self.config.config_source,
             }
 
             # Use consistent agent_id based on session + agent type
@@ -478,13 +447,13 @@ class AmbivoAgentsCLI:
                 tenant_id=self.tenant_id,
                 session_metadata=metadata,
                 session_id=session_id,
-                conversation_id=session_id
+                conversation_id=session_id,
             )
 
             # ✅ CACHE THE AGENT - Will be reused for subsequent calls
             self._session_agents[cache_key] = (agent, context)
 
-            if self.config.get('cli.verbose', False):
+            if self.config.get("cli.verbose", False):
                 print(f"✅ Cached {agent_class.__name__} (ID: {agent.agent_id})")
                 print(f"📊 Total cached agents: {len(self._session_agents)}")
                 print(f"💾 Agent will retain memory across commands")
@@ -504,7 +473,7 @@ class AmbivoAgentsCLI:
         for key in keys_to_remove:
             agent, context = self._session_agents[key]
 
-            if self.config.get('cli.verbose', False):
+            if self.config.get("cli.verbose", False):
                 print(f"🗑️  Removing cached agent: {agent.agent_id}")
 
             try:
@@ -514,12 +483,12 @@ class AmbivoAgentsCLI:
 
             del self._session_agents[key]
 
-        if keys_to_remove and self.config.get('cli.verbose', False):
+        if keys_to_remove and self.config.get("cli.verbose", False):
             print(f"🧹 Cleared {len(keys_to_remove)} agents for session {session_id[:8]}...")
 
     def clear_all_agents(self):
         """Clear all cached agents"""
-        if self.config.get('cli.verbose', False):
+        if self.config.get("cli.verbose", False):
             print(f"🧹 Clearing all {len(self._session_agents)} cached agents...")
 
         for key, (agent, context) in self._session_agents.items():
@@ -532,22 +501,19 @@ class AmbivoAgentsCLI:
 
     def get_cached_agents_info(self) -> Dict[str, Any]:
         """Get information about cached agents"""
-        info = {
-            'total_agents': len(self._session_agents),
-            'agents': []
-        }
+        info = {"total_agents": len(self._session_agents), "agents": []}
 
         for key, (agent, context) in self._session_agents.items():
             agent_info = {
-                'cache_key': key,
-                'agent_id': agent.agent_id,
-                'agent_type': agent.__class__.__name__,
-                'session_id': context.session_id,
-                'created_at': context.created_at.isoformat(),
-                'memory_available': hasattr(agent, 'memory') and agent.memory is not None,
-                'config_source': self.config.config_source
+                "cache_key": key,
+                "agent_id": agent.agent_id,
+                "agent_type": agent.__class__.__name__,
+                "session_id": context.session_id,
+                "created_at": context.created_at.isoformat(),
+                "memory_available": hasattr(agent, "memory") and agent.memory is not None,
+                "config_source": self.config.config_source,
             }
-            info['agents'].append(agent_info)
+            info["agents"].append(agent_info)
 
         return info
 
@@ -563,7 +529,7 @@ class AmbivoAgentsCLI:
             raise ValueError("No active session for message processing")
 
         # If ModeratorAgent is available and enabled, use it for routing
-        if MODERATOR_AVAILABLE and self.config.get('agents.moderator.enabled', False):
+        if MODERATOR_AVAILABLE and self.config.get("agents.moderator.enabled", False):
             return await self._route_with_moderator(message, current_session)
 
         # Otherwise use built-in routing logic with cached agents
@@ -573,8 +539,9 @@ class AmbivoAgentsCLI:
         """Route message using ModeratorAgent (cached)"""
         try:
             # ✅ USE CACHED MODERATOR AGENT
-            agent, context = await self.get_or_create_agent(ModeratorAgent, session_id,
-                                                            {"operation": "moderated_routing"})
+            agent, context = await self.get_or_create_agent(
+                ModeratorAgent, session_id, {"operation": "moderated_routing"}
+            )
 
             response = await agent.chat(message)
             return response
@@ -594,27 +561,84 @@ class AmbivoAgentsCLI:
 
         # Strong code execution indicators with regex
         strong_patterns = [
-            r'write.*code.*(?:execute|run)',  # "write code to ... then execute"
-            r'(?:execute|run).*code',  # "execute code" or "run code"
-            r'code.*(?:then|and).*(?:execute|run)',  # "code then execute"
-            r'python.*(?:execute|run)',  # "python ... execute"
-            r'write.*python.*(?:execute|run)',  # "write python ... execute"
-            r'create.*code.*(?:execute|run)'  # "create code ... execute"
+            r"write.*code.*(?:execute|run)",  # "write code to ... then execute"
+            r"(?:execute|run).*code",  # "execute code" or "run code"
+            r"code.*(?:then|and).*(?:execute|run)",  # "code then execute"
+            r"python.*(?:execute|run)",  # "python ... execute"
+            r"write.*python.*(?:execute|run)",  # "write python ... execute"
+            r"create.*code.*(?:execute|run)",  # "create code ... execute"
         ]
 
         # Check regex patterns first (strongest indicators)
         import re
+
         for pattern in strong_patterns:
             if re.search(pattern, message_lower):
                 return True
 
         # Check keyword combinations (moderate indicators)
-        has_write = any(word in message_lower for word in ['write', 'create', 'generate', 'make'])
-        has_code = any(word in message_lower for word in ['code', 'script', 'python', 'program'])
-        has_execute = any(word in message_lower for word in ['execute', 'run', 'test', 'show result'])
+        has_write = any(word in message_lower for word in ["write", "create", "generate", "make"])
+        has_code = any(word in message_lower for word in ["code", "script", "python", "program"])
+        has_execute = any(
+            word in message_lower for word in ["execute", "run", "test", "show result"]
+        )
 
         # If all three present, it's definitely a code execution request
         return has_write and has_code and has_execute
+
+    def _detect_api_request(self, message: str) -> bool:
+        """
+        Enhanced detection for API requests and documentation parsing
+        
+        Called by: _route_with_builtin_logic()
+        Returns: True if message indicates API request intent
+        """
+        message_lower = message.lower()
+        
+        # Strong API indicators with regex
+        strong_patterns = [
+            r"(?:get|post|put|patch|delete|head|options)\s+https?://",  # HTTP method + URL
+            r"api\s+call",  # "api call"
+            r"call.*api",  # "call ... api"
+            r"make.*(?:api|request)",  # "make api" or "make request"
+            r"(?:read|parse).*(?:documentation|docs).*(?:api|call)",  # documentation parsing
+            r"(?:documentation|docs).*(?:then|and).*(?:call|api|get)",  # docs then call
+            r"postman.*collection",  # Postman collection
+            r"openapi|swagger",  # OpenAPI/Swagger documentation
+            r"rest.*api",  # REST API
+            r"http.*(?:request|call)",  # HTTP request/call
+        ]
+        
+        # Check regex patterns first (strongest indicators)
+        import re
+        
+        for pattern in strong_patterns:
+            if re.search(pattern, message_lower):
+                return True
+        
+        # Check for URLs (moderate indicator)
+        url_patterns = [
+            r"https?://[^\s]+",  # Any HTTP/HTTPS URL
+        ]
+        
+        has_url = any(re.search(pattern, message_lower) for pattern in url_patterns)
+        
+        # Check keyword combinations
+        has_api = any(word in message_lower for word in ["api", "endpoint", "request", "call"])
+        has_doc = any(word in message_lower for word in ["documentation", "docs", "postman", "swagger", "openapi"])
+        has_http = any(word in message_lower for word in ["get", "post", "put", "patch", "delete", "http", "https"])
+        has_action = any(word in message_lower for word in ["call", "invoke", "use", "fetch", "retrieve"])
+        
+        # Strong combinations that indicate API intent
+        if has_doc and (has_api or has_action):  # Documentation + API/action
+            return True
+        if has_url and (has_api or has_http):  # URL + API/HTTP method
+            return True
+        if has_api and has_action:  # API + action word
+            return True
+        
+        return False
+
     async def _route_with_builtin_logic(self, message: str, session_id: str) -> str:
         """Built-in routing logic using cached agents"""
         """Built-in routing logic using cached agents - ENHANCED WITH CODE DETECTION"""
@@ -622,8 +646,9 @@ class AmbivoAgentsCLI:
 
         if self._detect_code_execution_request(message):
             # ✅ ROUTE TO CODE EXECUTOR AGENT
-            agent, context = await self.get_or_create_agent(CodeExecutorAgent, session_id,
-                                                            {"operation": "code_execution"})
+            agent, context = await self.get_or_create_agent(
+                CodeExecutorAgent, session_id, {"operation": "code_execution"}
+            )
 
             try:
                 # Let CodeExecutorAgent handle both writing AND executing
@@ -636,27 +661,60 @@ class AmbivoAgentsCLI:
                     content=message,
                     message_type=MessageType.USER_INPUT,
                     session_id=context.session_id,
-                    conversation_id=context.conversation_id
+                    conversation_id=context.conversation_id,
                 )
 
-                response_message = await agent.process_message(agent_message, context.to_execution_context())
+                response_message = await agent.process_message(
+                    agent_message, context.to_execution_context()
+                )
                 return f"{response_message.content}\n\n🔧 *Processed by CodeExecutorAgent with code execution capabilities*"
 
             except Exception as e:
                 return f"❌ Error in code execution: {str(e)}"
 
+        # API Agent Detection - for API calls and documentation parsing
+        elif self._detect_api_request(message):
+            # ✅ ROUTE TO API AGENT
+            agent, context = await self.get_or_create_agent(
+                APIAgent, session_id, {"operation": "api_request"}
+            )
+
+            try:
+                from ambivo_agents.core.base import AgentMessage, MessageType
+
+                agent_message = AgentMessage(
+                    id=f"msg_{str(uuid.uuid4())[:8]}",
+                    sender_id="cli_user",
+                    recipient_id=agent.agent_id,
+                    content=message,
+                    message_type=MessageType.USER_INPUT,
+                    session_id=context.session_id,
+                    conversation_id=context.conversation_id,
+                )
+
+                response_message = await agent.process_message(
+                    agent_message, context.to_execution_context()
+                )
+                return f"{response_message.content}\n\n🌐 *Processed by APIAgent with intelligent documentation parsing*"
+
+            except Exception as e:
+                return f"❌ Error in API request: {str(e)}"
+
         # YouTube Download Detection
-        elif any(keyword in message_lower for keyword in ['youtube', 'download', 'youtu.be']) and (
-                'http' in message or 'www.' in message):
+        elif any(keyword in message_lower for keyword in ["youtube", "download", "youtu.be"]) and (
+            "http" in message or "www." in message
+        ):
             # ✅ REUSE CACHED YOUTUBE AGENT - Preserves download history
-            agent, context = await self.get_or_create_agent(YouTubeDownloadAgent, session_id,
-                                                            {"operation": "youtube_download"})
+            agent, context = await self.get_or_create_agent(
+                YouTubeDownloadAgent, session_id, {"operation": "youtube_download"}
+            )
 
             try:
                 import re
+
                 youtube_patterns = [
-                    r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-                    r'https?://(?:www\.)?youtu\.be/[\w-]+',
+                    r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
+                    r"https?://(?:www\.)?youtu\.be/[\w-]+",
                 ]
 
                 urls = []
@@ -665,17 +723,19 @@ class AmbivoAgentsCLI:
 
                 if urls:
                     url = urls[0]
-                    default_audio_only = self.config.get('agents.youtube.default_audio_only', True)
-                    wants_video = any(keyword in message_lower for keyword in ['video', 'mp4', 'watch', 'visual'])
+                    default_audio_only = self.config.get("agents.youtube.default_audio_only", True)
+                    wants_video = any(
+                        keyword in message_lower for keyword in ["video", "mp4", "watch", "visual"]
+                    )
                     audio_only = default_audio_only if not wants_video else False
 
-                    if 'info' in message_lower or 'information' in message_lower:
+                    if "info" in message_lower or "information" in message_lower:
                         result = await agent._get_youtube_info(url)
                     else:
                         result = await agent._download_youtube(url, audio_only=audio_only)
 
                     # ✅ AGENT STAYS CACHED - No cleanup_session() call
-                    if result['success']:
+                    if result["success"]:
                         return f"✅ YouTube operation completed!\n{result.get('message', '')}\nSession: {context.session_id}\nAgent: {agent.agent_id}\n🔄 Agent cached for future use"
                     else:
                         return f"❌ YouTube operation failed: {result['error']}"
@@ -688,8 +748,9 @@ class AmbivoAgentsCLI:
         # General Assistant (fallback)
         else:
             # ✅ REUSE CACHED ASSISTANT AGENT - Preserves full conversation history
-            agent, context = await self.get_or_create_agent(AssistantAgent, session_id,
-                                                            {"operation": "general_assistance"})
+            agent, context = await self.get_or_create_agent(
+                AssistantAgent, session_id, {"operation": "general_assistance"}
+            )
 
             try:
                 from ambivo_agents.core.base import AgentMessage, MessageType
@@ -701,10 +762,12 @@ class AmbivoAgentsCLI:
                     content=message,
                     message_type=MessageType.USER_INPUT,
                     session_id=context.session_id,
-                    conversation_id=context.conversation_id
+                    conversation_id=context.conversation_id,
                 )
 
-                response_message = await agent.process_message(agent_message, context.to_execution_context())
+                response_message = await agent.process_message(
+                    agent_message, context.to_execution_context()
+                )
                 return f"{response_message.content}"
 
             except Exception as e:
@@ -716,7 +779,9 @@ config_manager = None
 cli_instance = None
 
 
-def initialize_cli(config_path: Optional[str] = None, verbose: bool = False, use_env_vars: Optional[bool] = None):
+def initialize_cli(
+    config_path: Optional[str] = None, verbose: bool = False, use_env_vars: Optional[bool] = None
+):
     """
     ✅ ENHANCED: Initialize CLI with full environment variable support
 
@@ -730,7 +795,7 @@ def initialize_cli(config_path: Optional[str] = None, verbose: bool = False, use
     # ✅ USE ENHANCED CONFIG MANAGER with ENV support
     config_manager = EnhancedConfigManager(config_path, use_env_vars)
     if verbose:
-        config_manager.config['cli']['verbose'] = True
+        config_manager.config["cli"]["verbose"] = True
 
     cli_instance = AmbivoAgentsCLI(config_manager)
     return cli_instance
@@ -740,11 +805,12 @@ def initialize_cli(config_path: Optional[str] = None, verbose: bool = False, use
 # MAIN CLI GROUP
 # ============================================================================
 
+
 @click.group(invoke_without_command=True)
 @click.version_option(version="1.1.0", prog_name="Ambivo Agents")
-@click.option('--config', '-c', help='Configuration file path')
-@click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
-@click.option('--env-vars', is_flag=True, help='Force use of environment variables')
+@click.option("--config", "-c", help="Configuration file path")
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
+@click.option("--env-vars", is_flag=True, help="Force use of environment variables")
 @click.pass_context
 def cli(ctx, config: Optional[str], verbose: bool, env_vars: bool):
     """
@@ -769,6 +835,7 @@ def cli(ctx, config: Optional[str], verbose: bool, env_vars: bool):
     export AMBIVO_AGENTS_REDIS_HOST=localhost
     export AMBIVO_AGENTS_OPENAI_API_KEY=your_key
     export AMBIVO_AGENTS_ENABLE_WEB_SEARCH=true
+    export AMBIVO_AGENTS_ENABLE_API_AGENT=true
     export AMBIVO_AGENTS_MCP_ENABLED=true
 
     Author: Hemant Gosain 'Sunny'
@@ -789,8 +856,8 @@ def cli(ctx, config: Optional[str], verbose: bool, env_vars: bool):
 
     # If no command was provided, start shell mode by default
     if ctx.invoked_subcommand is None:
-        default_mode = cli_instance.config.get('cli.default_mode', 'shell')
-        if default_mode == 'shell':
+        default_mode = cli_instance.config.get("cli.default_mode", "shell")
+        if default_mode == "shell":
             ctx.invoke(shell)
         else:
             click.echo(ctx.get_help())
@@ -800,10 +867,13 @@ def cli(ctx, config: Optional[str], verbose: bool, env_vars: bool):
 # CHAT COMMANDS (Enhanced with session persistence)
 # ============================================================================
 
+
 @cli.command()
-@click.argument('message')
-@click.option('--conversation', '-conv', help='Conversation ID (overrides active session)')
-@click.option('--format', '-f', type=click.Choice(['text', 'json']), default='text', help='Output format')
+@click.argument("message")
+@click.option("--conversation", "-conv", help="Conversation ID (overrides active session)")
+@click.option(
+    "--format", "-f", type=click.Choice(["text", "json"]), default="text", help="Output format"
+)
 def chat(message: str, conversation: Optional[str], format: str):
     """Send a message using smart agent routing with session history preservation"""
 
@@ -820,7 +890,7 @@ def chat(message: str, conversation: Optional[str], format: str):
             conv_id = "cli"
             session_source = "default: cli"
 
-    verbose = cli_instance.config.get('cli.verbose', False)
+    verbose = cli_instance.config.get("cli.verbose", False)
     if verbose:
         click.echo(f"💬 Processing: {message}")
         click.echo(f"📋 Session: {session_source}")
@@ -833,19 +903,18 @@ def chat(message: str, conversation: Optional[str], format: str):
         response = await cli_instance.smart_message_routing(message)
         processing_time = time.time() - start_time
 
-        if format == 'json':
+        if format == "json":
             result = {
-                'success': True,
-                'response': response,
-                'processing_time': processing_time,
-                'message': message,
-                'conversation_id': conv_id,
-                'session_source': session_source,
-                'config_source': cli_instance.config.config_source,
-                'paradigm': 'cached_agent_reuse_with_history',
-
-                'moderator_available': MODERATOR_AVAILABLE,
-                'loader_available': LOADER_AVAILABLE
+                "success": True,
+                "response": response,
+                "processing_time": processing_time,
+                "message": message,
+                "conversation_id": conv_id,
+                "session_source": session_source,
+                "config_source": cli_instance.config.config_source,
+                "paradigm": "cached_agent_reuse_with_history",
+                "moderator_available": MODERATOR_AVAILABLE,
+                "loader_available": LOADER_AVAILABLE,
             }
             click.echo(json.dumps(result, indent=2))
         else:
@@ -860,9 +929,9 @@ def chat(message: str, conversation: Optional[str], format: str):
 
                 # Show cached agent info if available
                 agents_info = cli_instance.get_cached_agents_info()
-                if agents_info['total_agents'] > 0:
+                if agents_info["total_agents"] > 0:
                     click.echo(f"🤖 Cached Agents: {agents_info['total_agents']}")
-                    memory_count = sum(1 for a in agents_info['agents'] if a['memory_available'])
+                    memory_count = sum(1 for a in agents_info["agents"] if a["memory_available"])
                     click.echo(f"📚 Agents with Memory: {memory_count}")
 
     asyncio.run(process())
@@ -899,7 +968,7 @@ def interactive():
             try:
                 user_input = click.prompt("\n🗣️  You", type=str)
 
-                if user_input.lower() in ['quit', 'exit', 'bye']:
+                if user_input.lower() in ["quit", "exit", "bye"]:
                     click.echo("👋 Goodbye!")
                     break
 
@@ -907,7 +976,9 @@ def interactive():
                 response = await cli_instance.smart_message_routing(user_input)
 
                 click.echo(f"🤖 Agent: {response}")
-                session_display = conversation_id[:8] + "..." if len(conversation_id) > 8 else conversation_id
+                session_display = (
+                    conversation_id[:8] + "..." if len(conversation_id) > 8 else conversation_id
+                )
                 click.echo(f"📋 Session: {session_display}")
 
             except KeyboardInterrupt:
@@ -938,13 +1009,15 @@ def shell():
     # Show current session
     current_session = cli_instance.get_current_session()
     if current_session:
-        session_display = current_session[:8] + "..." if len(current_session) > 8 else current_session
+        session_display = (
+            current_session[:8] + "..." if len(current_session) > 8 else current_session
+        )
         click.echo(f"🔗 Session: {session_display}")
 
     # Show cached agents
-    if hasattr(cli_instance, '_session_agents'):
+    if hasattr(cli_instance, "_session_agents"):
         agents_info = cli_instance.get_cached_agents_info()
-        if agents_info['total_agents'] > 0:
+        if agents_info["total_agents"] > 0:
             click.echo(f"🤖 Cached agents: {agents_info['total_agents']} (with preserved memory)")
 
     # Show feature availability
@@ -964,17 +1037,17 @@ def shell():
     def get_prompt():
         """Generate dynamic prompt based on session state and theme"""
         current_session = cli_instance.get_current_session()
-        theme = cli_instance.config.get('cli.theme', 'default')
+        theme = cli_instance.config.get("cli.theme", "default")
 
         if current_session:
             # Show shortened session ID in prompt
             session_short = current_session[:8] if len(current_session) > 8 else current_session
-            if theme == 'minimal':
+            if theme == "minimal":
                 return f"({session_short})> "
             else:
                 return f"ambivo-agents ({session_short})> "
         else:
-            if theme == 'minimal':
+            if theme == "minimal":
                 return "> "
             else:
                 return "ambivo-agents> "
@@ -986,7 +1059,7 @@ def shell():
 
         # Clean up command line - remove leading colons and extra whitespace
         cleaned_command = command_line.strip()
-        if cleaned_command.startswith(':'):
+        if cleaned_command.startswith(":"):
             cleaned_command = cleaned_command[1:].strip()
 
         # Parse command line
@@ -998,12 +1071,13 @@ def shell():
         args = parts[1:] if len(parts) > 1 else []
 
         # Handle shell-specific commands
-        if cmd in ['exit', 'quit', 'bye']:
+        if cmd in ["exit", "quit", "bye"]:
             click.echo("👋 Goodbye!")
             return False
 
-        elif cmd == 'help':
-            click.echo("""
+        elif cmd == "help":
+            click.echo(
+                """
 🌟 Ambivo Agents Enhanced Shell Commands:
 
 📋 **Configuration (Environment Variable Support):**
@@ -1063,26 +1137,27 @@ def shell():
    export AMBIVO_AGENTS_OPENAI_API_KEY=your_key
    export AMBIVO_AGENTS_ENABLE_WEB_SEARCH=true
    export AMBIVO_AGENTS_MCP_ENABLED=true
-            """)
+            """
+            )
             return True
 
-        elif cmd == 'clear':
+        elif cmd == "clear":
             click.clear()
             return True
 
-        elif cmd == 'chat':
+        elif cmd == "chat":
             return handle_chat_command(args)
-        elif cmd == 'interactive':
+        elif cmd == "interactive":
             return handle_interactive_command()
-        elif cmd == 'health':
+        elif cmd == "health":
             return handle_health_command()
-        elif cmd == 'agents':
+        elif cmd == "agents":
             return handle_agents_command()
-        elif cmd == 'status':
+        elif cmd == "status":
             return handle_status_command()
-        elif cmd == 'env-check':
+        elif cmd == "env-check":
             return handle_env_check_command()
-        elif cmd == 'demo':
+        elif cmd == "demo":
             return handle_demo_command()
         else:
             # Try to interpret as chat message
@@ -1094,11 +1169,11 @@ def shell():
             click.echo("❌ Usage: chat <message>")
             return True
 
-        message = ' '.join(args)
+        message = " ".join(args)
 
         async def process_chat():
             active_session = cli_instance.get_current_session()
-            verbose = cli_instance.config.get('cli.verbose', False)
+            verbose = cli_instance.config.get("cli.verbose", False)
 
             if verbose:
                 click.echo(f"💬 Processing: {message}")
@@ -1133,14 +1208,16 @@ def shell():
             while True:
                 try:
                     if current_session:
-                        session_short = current_session[:8] if len(current_session) > 8 else current_session
+                        session_short = (
+                            current_session[:8] if len(current_session) > 8 else current_session
+                        )
                         prompt_text = f"🗣️  You ({session_short})"
                     else:
                         prompt_text = "🗣️  You"
 
                     user_input = click.prompt(f"\n{prompt_text}", type=str)
 
-                    if user_input.lower() in ['quit', 'exit', 'bye']:
+                    if user_input.lower() in ["quit", "exit", "bye"]:
                         click.echo("🔄 Returning to shell...")
                         break
 
@@ -1174,8 +1251,8 @@ def shell():
         click.echo(f"📋 Session: {'Active' if current_session else 'None'}")
         click.echo(f"🤖 Cached agents: {agents_info['total_agents']}")
 
-        if agents_info['agents']:
-            memory_count = sum(1 for a in agents_info['agents'] if a['memory_available'])
+        if agents_info["agents"]:
+            memory_count = sum(1 for a in agents_info["agents"] if a["memory_available"])
             click.echo(f"📚 Agents with memory: {memory_count}")
 
         return True
@@ -1185,19 +1262,22 @@ def shell():
         agents_info = cli_instance.get_cached_agents_info()
         current_session = cli_instance.get_current_session()
 
-        session_display = current_session[:8] + "..." if current_session and len(
-            current_session) > 8 else current_session or 'None'
+        session_display = (
+            current_session[:8] + "..."
+            if current_session and len(current_session) > 8
+            else current_session or "None"
+        )
         click.echo(f"🤖 Cached Agents (Session: {session_display})")
         click.echo(f"📊 Total: {agents_info['total_agents']}")
         click.echo("-" * 40)
 
-        if agents_info['agents']:
-            for agent_info in agents_info['agents']:
-                memory_icon = "📚" if agent_info['memory_available'] else "📭"
+        if agents_info["agents"]:
+            for agent_info in agents_info["agents"]:
+                memory_icon = "📚" if agent_info["memory_available"] else "📭"
                 click.echo(f"{memory_icon} {agent_info['agent_type']}")
                 click.echo(f"   ID: {agent_info['agent_id']}")
                 click.echo(f"   Created: {agent_info['created_at']}")
-                if 'config_source' in agent_info:
+                if "config_source" in agent_info:
                     click.echo(f"   Config: {agent_info['config_source']}")
         else:
             click.echo("📭 No cached agents")
@@ -1210,7 +1290,8 @@ def shell():
         click.echo("📊 System Status:")
         click.echo(f"   Configuration: {cli_instance.config.config_source}")
         click.echo(
-            f"   Session: {cli_instance.get_current_session()[:8] + '...' if cli_instance.get_current_session() else 'None'}")
+            f"   Session: {cli_instance.get_current_session()[:8] + '...' if cli_instance.get_current_session() else 'None'}"
+        )
 
         agents_info = cli_instance.get_cached_agents_info()
         click.echo(f"   Cached Agents: {agents_info['total_agents']}")
@@ -1226,12 +1307,12 @@ def shell():
 
         # Check for key environment variables
         key_env_vars = [
-            'AMBIVO_AGENTS_REDIS_HOST',
-            'AMBIVO_AGENTS_REDIS_PORT',
-            'AMBIVO_AGENTS_OPENAI_API_KEY',
-            'AMBIVO_AGENTS_ANTHROPIC_API_KEY',
-            'AMBIVO_AGENTS_ENABLE_WEB_SEARCH',
-            'AMBIVO_AGENTS_MCP_ENABLED'
+            "AMBIVO_AGENTS_REDIS_HOST",
+            "AMBIVO_AGENTS_REDIS_PORT",
+            "AMBIVO_AGENTS_OPENAI_API_KEY",
+            "AMBIVO_AGENTS_ANTHROPIC_API_KEY",
+            "AMBIVO_AGENTS_ENABLE_WEB_SEARCH",
+            "AMBIVO_AGENTS_MCP_ENABLED",
         ]
 
         found_vars = []
@@ -1241,7 +1322,7 @@ def shell():
             value = os.getenv(var)
             if value:
                 # Mask sensitive values
-                if 'key' in var.lower() or 'token' in var.lower():
+                if "key" in var.lower() or "token" in var.lower():
                     display_value = value[:8] + "..." if len(value) > 8 else "***"
                 else:
                     display_value = value
@@ -1285,7 +1366,9 @@ def shell():
         # Show session management
         current_session = cli_instance.get_current_session()
         click.echo(f"\n2. 📋 Session Management:")
-        click.echo(f"   Current session: {current_session[:8] + '...' if current_session else 'None'}")
+        click.echo(
+            f"   Current session: {current_session[:8] + '...' if current_session else 'None'}"
+        )
 
         # Show agent caching
         agents_info = cli_instance.get_cached_agents_info()
@@ -1297,10 +1380,9 @@ def shell():
         click.echo(f"\n4. 🌟 Available Features:")
         features = [
             ("Environment Variables", LOADER_AVAILABLE),
-
             ("ModeratorAgent", MODERATOR_AVAILABLE),
             ("Session History", True),
-            ("Agent Caching", True)
+            ("Agent Caching", True),
         ]
 
         for feature, available in features:
@@ -1308,12 +1390,7 @@ def shell():
             click.echo(f"   {status} {feature}")
 
         click.echo(f"\n5. 💡 Quick Demo Commands:")
-        demo_commands = [
-            "chat 'Hello, how are you?'",
-            "agents",
-            "status",
-            "env-check"
-        ]
+        demo_commands = ["chat 'Hello, how are you?'", "agents", "status", "env-check"]
 
         for cmd in demo_commands:
             click.echo(f"   • {cmd}")
@@ -1352,9 +1429,82 @@ def shell():
 
     except Exception as e:
         click.echo(f"❌ Shell error: {e}")
-        if cli_instance.config.get('cli.verbose', False):
+        if cli_instance.config.get("cli.verbose", False):
             import traceback
+
             traceback.print_exc()
+
+
+@cli.command()
+@click.argument("request")
+@click.option("--token", "-t", help="Authentication token for API calls")
+@click.option("--timeout", type=int, default=30, help="Request timeout in seconds")
+@click.option("--stream", "-s", is_flag=True, help="Stream the response")
+def api(request: str, token: str, timeout: int, stream: bool):
+    """
+    Make API requests with intelligent documentation parsing
+    
+    Examples:
+    - ambivo-agents api "GET https://jsonplaceholder.typicode.com/posts/1"
+    - ambivo-agents api "Read docs at https://api.example.com/docs and get users" --token abc123
+    - ambivo-agents api "POST https://api.example.com/users" --stream
+    """
+    import asyncio
+    
+    async def run_api_request():
+        try:
+            if not cli_instance:
+                initialize_cli()
+            
+            # Get or create API agent
+            session_id = cli_instance.get_current_session()
+            agent, context = await cli_instance.get_or_create_agent(
+                APIAgent, session_id, {"operation": "cli_api_request"}
+            )
+            
+            # Add token to request if provided
+            if token:
+                request_with_token = f"{request} with token {token}"
+            else:
+                request_with_token = request
+            
+            # Add timeout if different from default
+            if timeout != 30:
+                request_with_token += f" with timeout {timeout} seconds"
+            
+            if stream:
+                # Streaming response
+                click.echo("🌐 API Agent - Streaming Response:")
+                click.echo("=" * 50)
+                
+                async for chunk in agent.chat_stream(request_with_token):
+                    chunk_type = chunk.sub_type.value if hasattr(chunk, 'sub_type') else 'content'
+                    chunk_text = chunk.text if hasattr(chunk, 'text') else str(chunk)
+                    
+                    if chunk_type == 'status':
+                        click.echo(f"🔄 {chunk_text}")
+                    elif chunk_type == 'error':
+                        click.echo(f"❌ {chunk_text}")
+                    else:
+                        click.echo(chunk_text)
+                        
+            else:
+                # Non-streaming response
+                click.echo("🌐 API Agent Response:")
+                click.echo("=" * 30)
+                
+                response = await agent.chat(request_with_token)
+                click.echo(response)
+            
+            click.echo(f"\n📋 Session: {context.session_id}")
+            
+        except Exception as e:
+            click.echo(f"❌ API request failed: {str(e)}")
+            if cli_instance.config.get("cli.verbose", False):
+                import traceback
+                traceback.print_exc()
+    
+    asyncio.run(run_api_request())
 
 
 @cli.command()
@@ -1366,7 +1516,8 @@ def status():
     click.echo("📊 Ambivo Agents Status")
     click.echo("=" * 50)
     click.echo(
-        f"🔗 Current Session: {current_session[:8] + '...' if current_session and len(current_session) > 8 else current_session or 'None'}")
+        f"🔗 Current Session: {current_session[:8] + '...' if current_session and len(current_session) > 8 else current_session or 'None'}"
+    )
     click.echo(f"🤖 Cached Agents: {agents_info['total_agents']}")
     click.echo(f"⚙️  Configuration: {cli_instance.config.config_source}")
 
@@ -1376,11 +1527,12 @@ def status():
     # Show key configuration values
     click.echo(f"\n⚙️  Key Configuration:")
     key_configs = [
-        ('Auto Session', 'cli.auto_session'),
-        ('Web Search', 'agent_capabilities.enable_web_search'),
-        ('Knowledge Base', 'agent_capabilities.enable_knowledge_base'),
-        ('MCP Enabled', 'mcp.enabled'),
-        ('YouTube Downloads', 'agent_capabilities.enable_youtube_download')
+        ("Auto Session", "cli.auto_session"),
+        ("Web Search", "agent_capabilities.enable_web_search"),
+        ("Knowledge Base", "agent_capabilities.enable_knowledge_base"),
+        ("API Agent", "agent_capabilities.enable_api_agent"),
+        ("MCP Enabled", "mcp.enabled"),
+        ("YouTube Downloads", "agent_capabilities.enable_youtube_download"),
     ]
 
     for label, key in key_configs:
@@ -1397,12 +1549,12 @@ def env_check():
 
     # Check for key environment variables
     key_env_vars = [
-        'AMBIVO_AGENTS_REDIS_HOST',
-        'AMBIVO_AGENTS_REDIS_PORT',
-        'AMBIVO_AGENTS_OPENAI_API_KEY',
-        'AMBIVO_AGENTS_ANTHROPIC_API_KEY',
-        'AMBIVO_AGENTS_ENABLE_WEB_SEARCH',
-        'AMBIVO_AGENTS_MCP_ENABLED'
+        "AMBIVO_AGENTS_REDIS_HOST",
+        "AMBIVO_AGENTS_REDIS_PORT",
+        "AMBIVO_AGENTS_OPENAI_API_KEY",
+        "AMBIVO_AGENTS_ANTHROPIC_API_KEY",
+        "AMBIVO_AGENTS_ENABLE_WEB_SEARCH",
+        "AMBIVO_AGENTS_MCP_ENABLED",
     ]
 
     found_vars = []
@@ -1412,7 +1564,7 @@ def env_check():
         value = os.getenv(var)
         if value:
             # Mask sensitive values
-            if 'key' in var.lower() or 'token' in var.lower():
+            if "key" in var.lower() or "token" in var.lower():
                 display_value = value[:8] + "..." if len(value) > 8 else "***"
             else:
                 display_value = value
@@ -1468,10 +1620,9 @@ def demo():
     click.echo(f"\n4. 🌟 Available Features:")
     features = [
         ("Environment Variables", LOADER_AVAILABLE),
-
         ("ModeratorAgent", MODERATOR_AVAILABLE),
         ("Session History", True),
-        ("Agent Caching", True)
+        ("Agent Caching", True),
     ]
 
     for feature, available in features:
@@ -1479,12 +1630,7 @@ def demo():
         click.echo(f"   {status} {feature}")
 
     click.echo(f"\n5. 💡 Quick Demo Commands:")
-    demo_commands = [
-        "chat 'Hello, how are you?'",
-        "agents",
-        "status",
-        "env-check"
-    ]
+    demo_commands = ["chat 'Hello, how are you?'", "agents", "status", "env-check"]
 
     for cmd in demo_commands:
         click.echo(f"   • {cmd}")
@@ -1502,8 +1648,9 @@ def main():
         click.echo("\n👋 CLI interrupted by user")
     except Exception as e:
         click.echo(f"❌ CLI error: {e}")
-        if os.getenv('AMBIVO_AGENTS_CLI_VERBOSE') == 'true':
+        if os.getenv("AMBIVO_AGENTS_CLI_VERBOSE") == "true":
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
 

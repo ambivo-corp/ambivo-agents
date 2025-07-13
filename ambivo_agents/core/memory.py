@@ -4,26 +4,26 @@ Memory management system for ambivo_agents.
 FIXED: Redis key consistency issue for session history retrieval
 """
 
-import json
+import base64
 import gzip
-import time
+import hashlib
+import json
 import logging
 import threading
+import time
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Union
-from collections import OrderedDict
-import hashlib
-import base64
+from typing import Any, Dict, List, Optional, Union
 
-from ..config.loader import load_config, get_config_section
+from ..config.loader import get_config_section, load_config
 
 # External dependencies with fallbacks
 try:
+    import lz4.frame
     import redis
     from cachetools import TTLCache
-    import lz4.frame
 
     REDIS_AVAILABLE = True
     COMPRESSION_AVAILABLE = True
@@ -35,6 +35,7 @@ except ImportError:
 @dataclass
 class MemoryStats:
     """Memory usage and performance statistics"""
+
     total_operations: int = 0
     cache_hits: int = 0
     cache_misses: int = 0
@@ -83,12 +84,12 @@ class MemoryManagerInterface(ABC):
 class CompressionManager:
     """Handles data compression with safe UTF-8 handling"""
 
-    def __init__(self, enabled: bool = True, algorithm: str = 'lz4', compression_level: int = 1):
+    def __init__(self, enabled: bool = True, algorithm: str = "lz4", compression_level: int = 1):
         self.enabled = enabled
         self.algorithm = algorithm
         self.compression_level = compression_level
         self.min_size_bytes = 100
-        self.stats = {'compressed_count': 0, 'decompressed_count': 0, 'bytes_saved': 0}
+        self.stats = {"compressed_count": 0, "decompressed_count": 0, "bytes_saved": 0}
 
     def compress(self, data: str) -> str:
         """Compress string data with safe UTF-8 handling"""
@@ -97,14 +98,16 @@ class CompressionManager:
 
         try:
             if isinstance(data, str):
-                data_bytes = data.encode('utf-8', errors='replace')
+                data_bytes = data.encode("utf-8", errors="replace")
             else:
-                data_bytes = str(data).encode('utf-8', errors='replace')
+                data_bytes = str(data).encode("utf-8", errors="replace")
 
-            if self.algorithm == 'gzip':
+            if self.algorithm == "gzip":
                 compressed = gzip.compress(data_bytes, compresslevel=self.compression_level)
-            elif self.algorithm == 'lz4':
-                compressed = lz4.frame.compress(data_bytes, compression_level=self.compression_level)
+            elif self.algorithm == "lz4":
+                compressed = lz4.frame.compress(
+                    data_bytes, compression_level=self.compression_level
+                )
             else:
                 return data
 
@@ -112,11 +115,11 @@ class CompressionManager:
             compressed_size = len(compressed)
 
             if compressed_size < original_size:
-                self.stats['bytes_saved'] += (original_size - compressed_size)
-                self.stats['compressed_count'] += 1
+                self.stats["bytes_saved"] += original_size - compressed_size
+                self.stats["compressed_count"] += 1
 
-                compressed_b64 = base64.b64encode(compressed).decode('ascii')
-                return f'COMPRESSED:{self.algorithm}:{compressed_b64}'
+                compressed_b64 = base64.b64encode(compressed).decode("ascii")
+                return f"COMPRESSED:{self.algorithm}:{compressed_b64}"
 
             return data
 
@@ -126,25 +129,29 @@ class CompressionManager:
 
     def decompress(self, data: str) -> str:
         """Decompress data with safe UTF-8 handling"""
-        if not isinstance(data, str) or not data.startswith('COMPRESSED:'):
+        if not isinstance(data, str) or not data.startswith("COMPRESSED:"):
             return str(data)
 
         try:
-            parts = data.split(':', 2)
+            parts = data.split(":", 2)
             if len(parts) == 3:
                 algorithm = parts[1]
                 compressed_b64 = parts[2]
 
-                compressed_data = base64.b64decode(compressed_b64.encode('ascii'))
+                compressed_data = base64.b64decode(compressed_b64.encode("ascii"))
 
-                if algorithm == 'gzip':
-                    decompressed = gzip.decompress(compressed_data).decode('utf-8', errors='replace')
-                elif algorithm == 'lz4':
-                    decompressed = lz4.frame.decompress(compressed_data).decode('utf-8', errors='replace')
+                if algorithm == "gzip":
+                    decompressed = gzip.decompress(compressed_data).decode(
+                        "utf-8", errors="replace"
+                    )
+                elif algorithm == "lz4":
+                    decompressed = lz4.frame.decompress(compressed_data).decode(
+                        "utf-8", errors="replace"
+                    )
                 else:
-                    decompressed = compressed_data.decode('utf-8', errors='replace')
+                    decompressed = compressed_data.decode("utf-8", errors="replace")
 
-                self.stats['decompressed_count'] += 1
+                self.stats["decompressed_count"] += 1
                 return decompressed
 
             return data
@@ -162,13 +169,13 @@ class IntelligentCache:
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
         self.cache: TTLCache = TTLCache(maxsize=max_size, ttl=ttl_seconds)
-        self.stats = {'hits': 0, 'misses': 0, 'evictions': 0}
+        self.stats = {"hits": 0, "misses": 0, "evictions": 0}
         self._lock = threading.RLock()
 
     def _safe_key(self, key: str) -> str:
         """Ensure key is safe for caching"""
         if isinstance(key, bytes):
-            return key.decode('utf-8', errors='replace')
+            return key.decode("utf-8", errors="replace")
         return str(key)
 
     def get(self, key: str) -> Optional[Any]:
@@ -180,14 +187,14 @@ class IntelligentCache:
             try:
                 safe_key = self._safe_key(key)
                 value = self.cache[safe_key]
-                self.stats['hits'] += 1
+                self.stats["hits"] += 1
                 return value
             except KeyError:
-                self.stats['misses'] += 1
+                self.stats["misses"] += 1
                 return None
             except Exception as e:
                 logging.error(f"Cache get error: {e}")
-                self.stats['misses'] += 1
+                self.stats["misses"] += 1
                 return None
 
     def set(self, key: str, value: Any) -> None:
@@ -199,7 +206,7 @@ class IntelligentCache:
             try:
                 safe_key = self._safe_key(key)
                 if len(self.cache) >= self.max_size:
-                    self.stats['evictions'] += 1
+                    self.stats["evictions"] += 1
                 self.cache[safe_key] = value
             except Exception as e:
                 logging.error(f"Cache set error: {e}")
@@ -234,37 +241,39 @@ class RedisMemoryManager(MemoryManagerInterface):
 
         # Load configuration from YAML
         config = load_config()
-        memory_config = config.get('memory_management', {})
+        memory_config = config.get("memory_management", {})
 
         # Get Redis config from YAML if not provided
         if redis_config is None:
-            redis_config = get_config_section('redis', config)
+            redis_config = get_config_section("redis", config)
 
         self.redis_config = redis_config.copy()
 
         # Ensure safe Redis configuration
-        self.redis_config.update({
-            'decode_responses': True,
-            'encoding': 'utf-8',
-            'encoding_errors': 'replace',
-            'socket_timeout': 10,
-            'socket_connect_timeout': 10,
-            'retry_on_timeout': True
-        })
-
-        # Initialize components from config
-        compression_config = memory_config.get('compression', {})
-        self.compression_manager = CompressionManager(
-            enabled=compression_config.get('enabled', True),
-            algorithm=compression_config.get('algorithm', 'lz4'),
-            compression_level=compression_config.get('compression_level', 1)
+        self.redis_config.update(
+            {
+                "decode_responses": True,
+                "encoding": "utf-8",
+                "encoding_errors": "replace",
+                "socket_timeout": 10,
+                "socket_connect_timeout": 10,
+                "retry_on_timeout": True,
+            }
         )
 
-        cache_config = memory_config.get('cache', {})
+        # Initialize components from config
+        compression_config = memory_config.get("compression", {})
+        self.compression_manager = CompressionManager(
+            enabled=compression_config.get("enabled", True),
+            algorithm=compression_config.get("algorithm", "lz4"),
+            compression_level=compression_config.get("compression_level", 1),
+        )
+
+        cache_config = memory_config.get("cache", {})
         self.cache = IntelligentCache(
-            enabled=cache_config.get('enabled', True),
-            max_size=cache_config.get('max_size', 1000),
-            ttl_seconds=cache_config.get('ttl_seconds', 300)
+            enabled=cache_config.get("enabled", True),
+            max_size=cache_config.get("max_size", 1000),
+            ttl_seconds=cache_config.get("ttl_seconds", 300),
         )
 
         # Statistics
@@ -332,7 +341,7 @@ class RedisMemoryManager(MemoryManagerInterface):
         """Safely deserialize JSON data"""
         try:
             if isinstance(data, bytes):
-                data = data.decode('utf-8', errors='replace')
+                data = data.decode("utf-8", errors="replace")
 
             decompressed_data = self.compression_manager.decompress(str(data))
             return json.loads(decompressed_data)
@@ -344,13 +353,15 @@ class RedisMemoryManager(MemoryManagerInterface):
         """FIXED: Store message with consistent key generation"""
         try:
             # Extract session/conversation info from message
-            session_id = getattr(message, 'session_id', None)
-            conversation_id = getattr(message, 'conversation_id', None)
+            session_id = getattr(message, "session_id", None)
+            conversation_id = getattr(message, "conversation_id", None)
 
             # FIXED: Use consistent key generation
             key = self._get_message_key(session_id, conversation_id)
 
-            message_data = self._safe_serialize(message.to_dict() if hasattr(message, 'to_dict') else message)
+            message_data = self._safe_serialize(
+                message.to_dict() if hasattr(message, "to_dict") else message
+            )
 
             self.redis_client.lpush(key, message_data)
             self.redis_client.expire(key, 30 * 24 * 3600)  # 30 days TTL
@@ -362,7 +373,9 @@ class RedisMemoryManager(MemoryManagerInterface):
             # Enhanced debug logging
             logging.debug(f"STORED message - Key: {key}")
             logging.debug(f"  session_id: {session_id}, conversation_id: {conversation_id}")
-            logging.debug(f"  primary_id: {self._get_primary_identifier(session_id, conversation_id)}")
+            logging.debug(
+                f"  primary_id: {self._get_primary_identifier(session_id, conversation_id)}"
+            )
 
         except Exception as e:
             logging.error(f"Error storing message: {e}")
@@ -401,9 +414,10 @@ class RedisMemoryManager(MemoryManagerInterface):
                     # Deserialize message
                     data = self._safe_deserialize(message_data)
 
-                    if isinstance(data, dict) and 'content' in data:
+                    if isinstance(data, dict) and "content" in data:
                         logging.debug(
-                            f"    ✅ Valid message: {data.get('message_type')} - {data.get('content')[:30]}...")
+                            f"    ✅ Valid message: {data.get('message_type')} - {data.get('content')[:30]}..."
+                        )
                         messages.append(data)
                     else:
                         logging.warning(f"    ⚠️ Invalid message format: {type(data)}")
@@ -479,7 +493,9 @@ class RedisMemoryManager(MemoryManagerInterface):
                 context_key = self._get_context_key(conversation_id, conversation_id)
                 deleted_count = self.redis_client.delete(message_key, context_key)
 
-                logging.debug(f"Cleared memory for conversation {conversation_id}: {deleted_count} keys deleted")
+                logging.debug(
+                    f"Cleared memory for conversation {conversation_id}: {deleted_count} keys deleted"
+                )
             else:
                 # Clear all agent keys
                 agent_pattern = f"agent:{self.agent_id}:*"
@@ -506,18 +522,20 @@ class RedisMemoryManager(MemoryManagerInterface):
     def get_stats(self) -> MemoryStats:
         """Get memory usage statistics"""
         try:
-            info = self.redis_client.info('memory')
-            self.stats.redis_memory_usage_bytes = info.get('used_memory', 0)
+            info = self.redis_client.info("memory")
+            self.stats.redis_memory_usage_bytes = info.get("used_memory", 0)
             self.stats.local_cache_size = len(self.cache.cache)
-            self.stats.cache_hits += self.cache.stats['hits']
-            self.stats.cache_misses += self.cache.stats['misses']
-            self.stats.compression_savings_bytes = self.compression_manager.stats['bytes_saved']
+            self.stats.cache_hits += self.cache.stats["hits"]
+            self.stats.cache_misses += self.cache.stats["misses"]
+            self.stats.compression_savings_bytes = self.compression_manager.stats["bytes_saved"]
         except Exception as e:
             logging.error(f"Error getting stats: {e}")
 
         return self.stats
 
-    def debug_session_keys(self, session_id: str = None, conversation_id: str = None) -> Dict[str, Any]:
+    def debug_session_keys(
+        self, session_id: str = None, conversation_id: str = None
+    ) -> Dict[str, Any]:
         """
         NEW: Debug method to inspect Redis keys for a session
         Useful for troubleshooting key consistency issues
@@ -527,103 +545,83 @@ class RedisMemoryManager(MemoryManagerInterface):
 
             # Check all possible key combinations
             if conversation_id:
-                keys_to_check.extend([
-                    f"session:{conversation_id}:messages",
-                    f"session:{conversation_id}:context"
-                ])
+                keys_to_check.extend(
+                    [f"session:{conversation_id}:messages", f"session:{conversation_id}:context"]
+                )
 
             if session_id and session_id != conversation_id:
-                keys_to_check.extend([
-                    f"session:{session_id}:messages",
-                    f"session:{session_id}:context"
-                ])
+                keys_to_check.extend(
+                    [f"session:{session_id}:messages", f"session:{session_id}:context"]
+                )
 
             # Agent fallback keys
-            keys_to_check.extend([
-                f"agent:{self.agent_id}:messages",
-                f"agent:{self.agent_id}:context"
-            ])
+            keys_to_check.extend(
+                [f"agent:{self.agent_id}:messages", f"agent:{self.agent_id}:context"]
+            )
 
             result = {
-                'session_id': session_id,
-                'conversation_id': conversation_id,
-                'agent_id': self.agent_id,
-                'primary_identifier': self._get_primary_identifier(session_id, conversation_id),
-                'message_key': self._get_message_key(session_id, conversation_id),
-                'context_key': self._get_context_key(session_id, conversation_id),
-                'keys_checked': len(keys_to_check),
-                'key_status': {}
+                "session_id": session_id,
+                "conversation_id": conversation_id,
+                "agent_id": self.agent_id,
+                "primary_identifier": self._get_primary_identifier(session_id, conversation_id),
+                "message_key": self._get_message_key(session_id, conversation_id),
+                "context_key": self._get_context_key(session_id, conversation_id),
+                "keys_checked": len(keys_to_check),
+                "key_status": {},
             }
 
             for key in keys_to_check:
                 exists = self.redis_client.exists(key)
                 if exists:
                     key_type = self.redis_client.type(key)
-                    if key_type == 'list':
+                    if key_type == "list":
                         length = self.redis_client.llen(key)
-                        result['key_status'][key] = {
-                            'exists': True,
-                            'type': key_type,
-                            'length': length
+                        result["key_status"][key] = {
+                            "exists": True,
+                            "type": key_type,
+                            "length": length,
                         }
-                    elif key_type == 'hash':
+                    elif key_type == "hash":
                         length = self.redis_client.hlen(key)
-                        result['key_status'][key] = {
-                            'exists': True,
-                            'type': key_type,
-                            'length': length
+                        result["key_status"][key] = {
+                            "exists": True,
+                            "type": key_type,
+                            "length": length,
                         }
                     else:
-                        result['key_status'][key] = {
-                            'exists': True,
-                            'type': key_type
-                        }
+                        result["key_status"][key] = {"exists": True, "type": key_type}
                 else:
-                    result['key_status'][key] = {'exists': False}
+                    result["key_status"][key] = {"exists": False}
 
             return result
 
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
 
     def debug_keys(self, pattern: str = "*") -> Dict[str, Any]:
         """Enhanced debug method to inspect Redis keys"""
         try:
             keys = self.redis_client.keys(pattern)
-            result = {
-                'total_keys': len(keys),
-                'keys': []
-            }
+            result = {"total_keys": len(keys), "keys": []}
 
             for key in keys[:20]:  # Limit to first 20 keys
                 key_str = key.decode() if isinstance(key, bytes) else str(key)
                 key_type = self.redis_client.type(key_str)
 
-                if key_type == 'list':
+                if key_type == "list":
                     length = self.redis_client.llen(key_str)
-                    result['keys'].append({
-                        'key': key_str,
-                        'type': key_type,
-                        'length': length
-                    })
-                elif key_type == 'hash':
+                    result["keys"].append({"key": key_str, "type": key_type, "length": length})
+                elif key_type == "hash":
                     length = self.redis_client.hlen(key_str)
-                    result['keys'].append({
-                        'key': key_str,
-                        'type': key_type,
-                        'length': length
-                    })
+                    result["keys"].append({"key": key_str, "type": key_type, "length": length})
                 else:
-                    result['keys'].append({
-                        'key': key_str,
-                        'type': key_type
-                    })
+                    result["keys"].append({"key": key_str, "type": key_type})
 
             return result
 
         except Exception as e:
             logging.error(f"Error debugging keys: {e}")
-            return {'error': str(e)}
+            return {"error": str(e)}
 
 
 def create_redis_memory_manager(agent_id: str, redis_config: Dict[str, Any] = None):

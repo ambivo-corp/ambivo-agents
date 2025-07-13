@@ -5,13 +5,13 @@ YouTube Docker executor for downloading videos and audio from YouTube.
 
 import asyncio
 import json
-import time
-import tempfile
 import shutil
+import tempfile
+import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
-from ..config.loader import load_config, get_config_section
+from ..config.loader import get_config_section, load_config
 
 try:
     import docker
@@ -29,12 +29,12 @@ class YouTubeDockerExecutor:
         if config is None:
             try:
                 full_config = load_config()
-                config = get_config_section('youtube_download', full_config)
+                config = get_config_section("youtube_download", full_config)
             except Exception:
                 config = {}
 
         self.config = config
-        self.work_dir = config.get("work_dir", '/opt/ambivo/work_dir')
+        self.work_dir = config.get("work_dir", "/opt/ambivo/work_dir")
         self.docker_image = config.get("docker_image", "sgosain/amb-ubuntu-python-public-pod")
         self.timeout = config.get("timeout", 600)  # 10 minutes for downloads
         self.memory_limit = config.get("memory_limit", "1g")
@@ -56,10 +56,9 @@ class YouTubeDockerExecutor:
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Docker for YouTube downloads: {e}")
 
-    def download_youtube_video(self,
-                               url: str,
-                               audio_only: bool = None,
-                               output_filename: str = None) -> Dict[str, Any]:
+    def download_youtube_video(
+        self, url: str, audio_only: bool = None, output_filename: str = None
+    ) -> Dict[str, Any]:
         """
         Download video or audio from YouTube URL
 
@@ -107,19 +106,16 @@ ls -la /workspace/output/
 
                 # Container configuration for YouTube downloads
                 container_config = {
-                    'image': self.docker_image,
-                    'command': ["bash", "/workspace/run_download.sh"],
-                    'volumes': {str(temp_path): {'bind': '/workspace', 'mode': 'rw'}},
-                    'working_dir': '/workspace',
-                    'mem_limit': self.memory_limit,
-                    'network_disabled': False,  # Need network for YouTube downloads
-                    'remove': True,
-                    'stdout': True,
-                    'stderr': True,
-                    'environment': {
-                        'PYTHONUNBUFFERED': '1',
-                        'PYTHONPATH': '/workspace'
-                    }
+                    "image": self.docker_image,
+                    "command": ["bash", "/workspace/run_download.sh"],
+                    "volumes": {str(temp_path): {"bind": "/workspace", "mode": "rw"}},
+                    "working_dir": "/workspace",
+                    "mem_limit": self.memory_limit,
+                    "network_disabled": False,  # Need network for YouTube downloads
+                    "remove": True,
+                    "stdout": True,
+                    "stderr": True,
+                    "environment": {"PYTHONUNBUFFERED": "1", "PYTHONPATH": "/workspace"},
                 }
 
                 start_time = time.time()
@@ -128,7 +124,7 @@ ls -la /workspace/output/
                     result = self.docker_client.containers.run(**container_config)
                     execution_time = time.time() - start_time
 
-                    output = result.decode('utf-8') if isinstance(result, bytes) else str(result)
+                    output = result.decode("utf-8") if isinstance(result, bytes) else str(result)
 
                     # Check if output file was created
                     output_files = list(container_output.glob("*"))
@@ -137,21 +133,21 @@ ls -la /workspace/output/
                     if output_files:
                         downloaded_file = output_files[0]  # Take first output file
                         output_info = {
-                            'filename': downloaded_file.name,
-                            'size_bytes': downloaded_file.stat().st_size,
-                            'path': str(downloaded_file)
+                            "filename": downloaded_file.name,
+                            "size_bytes": downloaded_file.stat().st_size,
+                            "path": str(downloaded_file),
                         }
 
                         # Move output file to permanent location
                         permanent_output = self.download_dir / downloaded_file.name
                         shutil.move(str(downloaded_file), str(permanent_output))
-                        output_info['final_path'] = str(permanent_output)
+                        output_info["final_path"] = str(permanent_output)
 
                         # Try to parse JSON result from the script output
                         try:
                             # Look for JSON in the output
-                            for line in output.split('\n'):
-                                if line.strip().startswith('{') and 'file_path' in line:
+                            for line in output.split("\n"):
+                                if line.strip().startswith("{") and "file_path" in line:
                                     download_result = json.loads(line.strip())
                                     output_info.update(download_result)
                                     break
@@ -159,31 +155,33 @@ ls -la /workspace/output/
                             pass  # JSON parsing failed, use basic info
 
                     return {
-                        'success': True,
-                        'output': output,
-                        'execution_time': execution_time,
-                        'url': url,
-                        'audio_only': audio_only,
-                        'download_info': output_info,
-                        'temp_dir': str(temp_path)
+                        "success": True,
+                        "output": output,
+                        "execution_time": execution_time,
+                        "url": url,
+                        "audio_only": audio_only,
+                        "download_info": output_info,
+                        "temp_dir": str(temp_path),
                     }
 
                 except Exception as container_error:
                     return {
-                        'success': False,
-                        'error': f"Container execution failed: {str(container_error)}",
-                        'url': url,
-                        'execution_time': time.time() - start_time
+                        "success": False,
+                        "error": f"Container execution failed: {str(container_error)}",
+                        "url": url,
+                        "execution_time": time.time() - start_time,
                     }
 
         except Exception as e:
             return {
-                'success': False,
-                'error': f"YouTube download setup failed: {str(e)}",
-                'url': url
+                "success": False,
+                "error": f"YouTube download setup failed: {str(e)}",
+                "url": url,
             }
 
-    def _create_download_script(self, url: str, audio_only: bool, output_filename: str = None) -> str:
+    def _create_download_script(
+        self, url: str, audio_only: bool, output_filename: str = None
+    ) -> str:
         """Create the Python script for downloading from YouTube"""
 
         script = f'''#!/usr/bin/env python3
@@ -324,7 +322,7 @@ if __name__ == '__main__':
     def get_video_info(self, url: str) -> Dict[str, Any]:
         """Get video information without downloading"""
 
-        info_script = f'''#!/usr/bin/env python3
+        info_script = f"""#!/usr/bin/env python3
 import json
 import sys
 
@@ -358,7 +356,7 @@ try:
 except Exception as e:
     print(f"Error getting video info: {{e}}", file=sys.stderr)
     sys.exit(1)
-'''
+"""
 
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -368,37 +366,29 @@ except Exception as e:
                 script_file.write_text(info_script)
 
                 container_config = {
-                    'image': self.docker_image,
-                    'command': ["python", "/workspace/get_info.py"],
-                    'volumes': {str(temp_path): {'bind': '/workspace', 'mode': 'rw'}},
-                    'working_dir': '/workspace',
-                    'mem_limit': self.memory_limit,
-                    'network_disabled': False,
-                    'remove': True,
-                    'stdout': True,
-                    'stderr': True
+                    "image": self.docker_image,
+                    "command": ["python", "/workspace/get_info.py"],
+                    "volumes": {str(temp_path): {"bind": "/workspace", "mode": "rw"}},
+                    "working_dir": "/workspace",
+                    "mem_limit": self.memory_limit,
+                    "network_disabled": False,
+                    "remove": True,
+                    "stdout": True,
+                    "stderr": True,
                 }
 
                 result = self.docker_client.containers.run(**container_config)
-                output = result.decode('utf-8') if isinstance(result, bytes) else str(result)
+                output = result.decode("utf-8") if isinstance(result, bytes) else str(result)
 
                 try:
                     video_info = json.loads(output.strip())
-                    return {
-                        'success': True,
-                        'video_info': video_info,
-                        'url': url
-                    }
+                    return {"success": True, "video_info": video_info, "url": url}
                 except json.JSONDecodeError:
                     return {
-                        'success': False,
-                        'error': 'Failed to parse video info',
-                        'raw_output': output
+                        "success": False,
+                        "error": "Failed to parse video info",
+                        "raw_output": output,
                     }
 
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'url': url
-            }
+            return {"success": False, "error": str(e), "url": url}

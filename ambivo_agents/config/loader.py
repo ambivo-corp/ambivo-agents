@@ -5,10 +5,10 @@ Supports both YAML file and environment variables for configuration.
 YAML file is now OPTIONAL when environment variables are provided.
 """
 
-import os
 import logging
+import os
 from pathlib import Path
-from typing import Dict, Any, Optional, Union, List
+from typing import Any, Dict, List, Optional, Union
 
 # Try to import yaml, but make it optional
 try:
@@ -21,6 +21,7 @@ except ImportError:
 
 class ConfigurationError(Exception):
     """Raised when configuration is missing or invalid."""
+
     pass
 
 
@@ -34,7 +35,6 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}REDIS_PORT": ("redis", "port"),
     f"{ENV_PREFIX}REDIS_PASSWORD": ("redis", "password"),
     f"{ENV_PREFIX}REDIS_DB": ("redis", "db"),
-
     # LLM Configuration
     f"{ENV_PREFIX}LLM_PREFERRED_PROVIDER": ("llm", "preferred_provider"),
     f"{ENV_PREFIX}LLM_TEMPERATURE": ("llm", "temperature"),
@@ -51,26 +51,66 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}AWS_SECRET_ACCESS_KEY": ("llm", "aws_secret_access_key"),  # Alternative
     f"{ENV_PREFIX}LLM_AWS_REGION": ("llm", "aws_region"),
     f"{ENV_PREFIX}AWS_REGION": ("llm", "aws_region"),  # Alternative
-
     # Agent Capabilities
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_KNOWLEDGE_BASE": ("agent_capabilities", "enable_knowledge_base"),
-    f"{ENV_PREFIX}ENABLE_KNOWLEDGE_BASE": ("agent_capabilities", "enable_knowledge_base"),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SEARCH": ("agent_capabilities", "enable_web_search"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_KNOWLEDGE_BASE": (
+        "agent_capabilities",
+        "enable_knowledge_base",
+    ),
+    f"{ENV_PREFIX}ENABLE_KNOWLEDGE_BASE": (
+        "agent_capabilities",
+        "enable_knowledge_base",
+    ),  # Alternative
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SEARCH": (
+        "agent_capabilities",
+        "enable_web_search",
+    ),
     f"{ENV_PREFIX}ENABLE_WEB_SEARCH": ("agent_capabilities", "enable_web_search"),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_CODE_EXECUTION": ("agent_capabilities", "enable_code_execution"),
-    f"{ENV_PREFIX}ENABLE_CODE_EXECUTION": ("agent_capabilities", "enable_code_execution"),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SCRAPING": ("agent_capabilities", "enable_web_scraping"),
-    f"{ENV_PREFIX}ENABLE_WEB_SCRAPING": ("agent_capabilities", "enable_web_scraping"),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_MEDIA_EDITOR": ("agent_capabilities", "enable_media_editor"),
-    f"{ENV_PREFIX}ENABLE_MEDIA_EDITOR": ("agent_capabilities", "enable_media_editor"),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_YOUTUBE_DOWNLOAD": ("agent_capabilities", "enable_youtube_download"),
-    f"{ENV_PREFIX}ENABLE_YOUTUBE_DOWNLOAD": ("agent_capabilities", "enable_youtube_download"),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_PROXY_MODE": ("agent_capabilities", "enable_proxy_mode"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_CODE_EXECUTION": (
+        "agent_capabilities",
+        "enable_code_execution",
+    ),
+    f"{ENV_PREFIX}ENABLE_CODE_EXECUTION": (
+        "agent_capabilities",
+        "enable_code_execution",
+    ),  # Alternative
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SCRAPING": (
+        "agent_capabilities",
+        "enable_web_scraping",
+    ),
+    f"{ENV_PREFIX}ENABLE_WEB_SCRAPING": (
+        "agent_capabilities",
+        "enable_web_scraping",
+    ),  # Alternative
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_MEDIA_EDITOR": (
+        "agent_capabilities",
+        "enable_media_editor",
+    ),
+    f"{ENV_PREFIX}ENABLE_MEDIA_EDITOR": (
+        "agent_capabilities",
+        "enable_media_editor",
+    ),  # Alternative
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_YOUTUBE_DOWNLOAD": (
+        "agent_capabilities",
+        "enable_youtube_download",
+    ),
+    f"{ENV_PREFIX}ENABLE_YOUTUBE_DOWNLOAD": (
+        "agent_capabilities",
+        "enable_youtube_download",
+    ),  # Alternative
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_PROXY_MODE": (
+        "agent_capabilities",
+        "enable_proxy_mode",
+    ),
     f"{ENV_PREFIX}ENABLE_PROXY_MODE": ("agent_capabilities", "enable_proxy_mode"),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_FILE_PROCESSING": ("agent_capabilities", "enable_file_processing"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_INGESTION": ("agent_capabilities", "enable_web_ingestion"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_FILE_PROCESSING": (
+        "agent_capabilities",
+        "enable_file_processing",
+    ),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_INGESTION": (
+        "agent_capabilities",
+        "enable_web_ingestion",
+    ),
     f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_API_CALLS": ("agent_capabilities", "enable_api_calls"),
-
     # Web Search Configuration
     f"{ENV_PREFIX}WEB_SEARCH_BRAVE_API_KEY": ("web_search", "brave_api_key"),
     f"{ENV_PREFIX}BRAVE_API_KEY": ("web_search", "brave_api_key"),  # Alternative
@@ -78,7 +118,6 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}AVES_API_KEY": ("web_search", "avesapi_api_key"),  # Alternative
     f"{ENV_PREFIX}WEB_SEARCH_DEFAULT_MAX_RESULTS": ("web_search", "default_max_results"),
     f"{ENV_PREFIX}WEB_SEARCH_MAX_RESULTS": ("web_search", "default_max_results"),  # Alternative
-
     # Knowledge Base Configuration
     f"{ENV_PREFIX}KNOWLEDGE_BASE_QDRANT_URL": ("knowledge_base", "qdrant_url"),
     f"{ENV_PREFIX}QDRANT_URL": ("knowledge_base", "qdrant_url"),  # Alternative
@@ -89,25 +128,29 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}KNOWLEDGE_BASE_SIMILARITY_TOP_K": ("knowledge_base", "similarity_top_k"),
     f"{ENV_PREFIX}KB_SIMILARITY_TOP_K": ("knowledge_base", "similarity_top_k"),  # Alternative
     f"{ENV_PREFIX}DEFAULT_COLLECTION_PREFIX": ("knowledge_base", "default_collection_prefix"),
-
     # Web Scraping Configuration
-    f"{ENV_PREFIX}WEB_SCRAPING_PROXY_CONFIG_HTTP_PROXY": ("web_scraping", "proxy_config", "http_proxy"),
+    f"{ENV_PREFIX}WEB_SCRAPING_PROXY_CONFIG_HTTP_PROXY": (
+        "web_scraping",
+        "proxy_config",
+        "http_proxy",
+    ),
     f"{ENV_PREFIX}SCRAPER_PROXY": ("web_scraping", "proxy_config", "http_proxy"),  # Alternative
     f"{ENV_PREFIX}WEB_SCRAPING_PROXY_ENABLED": ("web_scraping", "proxy_enabled"),
     f"{ENV_PREFIX}SCRAPER_PROXY_ENABLED": ("web_scraping", "proxy_enabled"),  # Alternative
     f"{ENV_PREFIX}WEB_SCRAPING_TIMEOUT": ("web_scraping", "timeout"),
     f"{ENV_PREFIX}SCRAPER_TIMEOUT": ("web_scraping", "timeout"),  # Alternative
     f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_IMAGE": ("web_scraping", "docker_image"),
-
     # YouTube Download Configuration
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DOWNLOAD_DIR": ("youtube_download", "download_dir"),
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DIR": ("youtube_download", "download_dir"),  # Alternative
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DEFAULT_AUDIO_ONLY": ("youtube_download", "default_audio_only"),
-    f"{ENV_PREFIX}YOUTUBE_DEFAULT_AUDIO_ONLY": ("youtube_download", "default_audio_only"),  # Alternative
+    f"{ENV_PREFIX}YOUTUBE_DEFAULT_AUDIO_ONLY": (
+        "youtube_download",
+        "default_audio_only",
+    ),  # Alternative
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_TIMEOUT": ("youtube_download", "timeout"),
     f"{ENV_PREFIX}YOUTUBE_TIMEOUT": ("youtube_download", "timeout"),  # Alternative
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DOCKER_IMAGE": ("youtube_download", "docker_image"),
-
     # Media Editor Configuration
     f"{ENV_PREFIX}MEDIA_EDITOR_INPUT_DIR": ("media_editor", "input_dir"),
     f"{ENV_PREFIX}MEDIA_INPUT_DIR": ("media_editor", "input_dir"),  # Alternative
@@ -116,29 +159,32 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}MEDIA_EDITOR_TIMEOUT": ("media_editor", "timeout"),
     f"{ENV_PREFIX}MEDIA_TIMEOUT": ("media_editor", "timeout"),  # Alternative
     f"{ENV_PREFIX}MEDIA_EDITOR_DOCKER_IMAGE": ("media_editor", "docker_image"),
-
     # Docker Configuration
     f"{ENV_PREFIX}DOCKER_MEMORY_LIMIT": ("docker", "memory_limit"),
     f"{ENV_PREFIX}DOCKER_TIMEOUT": ("docker", "timeout"),
     f"{ENV_PREFIX}DOCKER_IMAGES": ("docker", "images"),
     f"{ENV_PREFIX}DOCKER_IMAGE": ("docker", "images"),  # Alternative - will be converted to list
     f"{ENV_PREFIX}DOCKER_WORK_DIR": ("docker", "work_dir"),
-
     # Service Configuration
     f"{ENV_PREFIX}SERVICE_MAX_SESSIONS": ("service", "max_sessions"),
     f"{ENV_PREFIX}SERVICE_LOG_LEVEL": ("service", "log_level"),
     f"{ENV_PREFIX}SERVICE_SESSION_TIMEOUT": ("service", "session_timeout"),
     f"{ENV_PREFIX}SERVICE_ENABLE_METRICS": ("service", "enable_metrics"),
     f"{ENV_PREFIX}SERVICE_LOG_TO_FILE": ("service", "log_to_file"),
-
     # Moderator Configuration
     f"{ENV_PREFIX}MODERATOR_DEFAULT_ENABLED_AGENTS": ("moderator", "default_enabled_agents"),
     f"{ENV_PREFIX}MODERATOR_ENABLED_AGENTS": ("moderator", "default_enabled_agents"),  # Alternative
-    f"{ENV_PREFIX}MODERATOR_ROUTING_CONFIDENCE_THRESHOLD": ("moderator", "routing", "confidence_threshold"),
-    f"{ENV_PREFIX}MODERATOR_CONFIDENCE_THRESHOLD": ("moderator", "routing", "confidence_threshold"),  # Alternative
+    f"{ENV_PREFIX}MODERATOR_ROUTING_CONFIDENCE_THRESHOLD": (
+        "moderator",
+        "routing",
+        "confidence_threshold",
+    ),
+    f"{ENV_PREFIX}MODERATOR_CONFIDENCE_THRESHOLD": (
+        "moderator",
+        "routing",
+        "confidence_threshold",
+    ),  # Alternative
     # Add these to the existing ENV_VARIABLE_MAPPING dictionary
-
-
 }
 
 # Required environment variables for minimal configuration
@@ -154,7 +200,7 @@ LLM_PROVIDER_ENV_VARS = [
     f"{ENV_PREFIX}LLM_ANTHROPIC_API_KEY",
     f"{ENV_PREFIX}ANTHROPIC_API_KEY",
     f"{ENV_PREFIX}LLM_AWS_ACCESS_KEY_ID",
-    f"{ENV_PREFIX}AWS_ACCESS_KEY_ID"
+    f"{ENV_PREFIX}AWS_ACCESS_KEY_ID",
 ]
 
 
@@ -190,13 +236,13 @@ def load_config(config_path: str = None, use_env_vars: bool = None) -> Dict[str,
         try:
             config = _load_config_from_env()
             config_source = "environment variables"
-            #logging.info("✅ Configuration loaded from environment variables")
+            # logging.info("✅ Configuration loaded from environment variables")
 
             # Validate env config
             _validate_config(config)
 
             # Add config source metadata
-            config['_config_source'] = config_source
+            config["_config_source"] = config_source
             return config
 
         except ConfigurationError as e:
@@ -220,7 +266,7 @@ def load_config(config_path: str = None, use_env_vars: bool = None) -> Dict[str,
                 config = yaml_config
                 config_source = "YAML file"
 
-            #logging.info(f"✅ Configuration loaded from {config_source}")
+            # logging.info(f"✅ Configuration loaded from {config_source}")
 
         except ConfigurationError as e:
             if config:
@@ -242,7 +288,7 @@ def load_config(config_path: str = None, use_env_vars: bool = None) -> Dict[str,
         )
 
     # Add metadata about config source
-    config['_config_source'] = config_source
+    config["_config_source"] = config_source
 
     return config
 
@@ -277,12 +323,12 @@ def _load_config_from_env() -> Dict[str, Any]:
     _set_env_config_defaults(config)
 
     # Validate that we have minimum required configuration
-    if not config.get('redis') or not config.get('llm'):
+    if not config.get("redis") or not config.get("llm"):
         missing = []
-        if not config.get('redis'):
-            missing.append('redis')
-        if not config.get('llm'):
-            missing.append('llm')
+        if not config.get("redis"):
+            missing.append("redis")
+        if not config.get("llm"):
+            missing.append("llm")
         raise ConfigurationError(f"Missing required sections from environment variables: {missing}")
 
     return config
@@ -305,7 +351,7 @@ def _load_config_from_yaml(config_path: str = None) -> Dict[str, Any]:
         )
 
     try:
-        with open(config_file, 'r', encoding='utf-8') as f:
+        with open(config_file, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         if not config:
@@ -323,44 +369,33 @@ def _load_config_from_yaml(config_path: str = None) -> Dict[str, Any]:
 def _get_minimal_defaults() -> Dict[str, Any]:
     """Get minimal default configuration when nothing else is available."""
     return {
-        'redis': {
-            'host': 'localhost',
-            'port': 6379,
-            'db': 0,
-            'password': None
+        "redis": {"host": "localhost", "port": 6379, "db": 0, "password": None},
+        "llm": {"preferred_provider": "openai", "temperature": 0.7, "max_tokens": 4000},
+        "agent_capabilities": {
+            "enable_knowledge_base": False,
+            "enable_web_search": False,
+            "enable_code_execution": True,
+            "enable_file_processing": False,
+            "enable_web_ingestion": False,
+            "enable_api_calls": False,
+            "enable_web_scraping": False,
+            "enable_proxy_mode": True,
+            "enable_media_editor": False,
+            "enable_youtube_download": False,
         },
-        'llm': {
-            'preferred_provider': 'openai',
-            'temperature': 0.7,
-            'max_tokens': 4000
+        "service": {
+            "enable_metrics": True,
+            "log_level": "INFO",
+            "max_sessions": 100,
+            "session_timeout": 3600,
         },
-        'agent_capabilities': {
-            'enable_knowledge_base': False,
-            'enable_web_search': False,
-            'enable_code_execution': True,
-            'enable_file_processing': False,
-            'enable_web_ingestion': False,
-            'enable_api_calls': False,
-            'enable_web_scraping': False,
-            'enable_proxy_mode': True,
-            'enable_media_editor': False,
-            'enable_youtube_download': False
+        "moderator": {"default_enabled_agents": ["assistant"]},
+        "docker": {
+            "images": ["sgosain/amb-ubuntu-python-public-pod"],
+            "memory_limit": "512m",
+            "timeout": 60,
+            "work_dir": "/opt/ambivo/work_dir",
         },
-        'service': {
-            'enable_metrics': True,
-            'log_level': 'INFO',
-            'max_sessions': 100,
-            'session_timeout': 3600
-        },
-        'moderator': {
-            'default_enabled_agents': ['assistant']
-        },
-        'docker': {
-            'images': ['sgosain/amb-ubuntu-python-public-pod'],
-            'memory_limit': '512m',
-            'timeout': 60,
-            'work_dir': '/opt/ambivo/work_dir'
-        }
     }
 
 
@@ -384,11 +419,13 @@ def _set_nested_value(config: Dict[str, Any], path: tuple, value: Any) -> None:
             return
 
         # Moderator enabled agents handling
-        elif path[0] == "moderator" and final_key == "default_enabled_agents" and isinstance(value, str):
+        elif (
+            path[0] == "moderator"
+            and final_key == "default_enabled_agents"
+            and isinstance(value, str)
+        ):
             current[final_key] = [agent.strip() for agent in value.split(",")]
             return
-
-
 
     # Default handling
     current[final_key] = value
@@ -400,14 +437,14 @@ def _convert_env_value(value: str) -> Union[str, int, float, bool]:
         return None
 
     # Boolean conversion
-    if value.lower() in ('true', 'yes', '1', 'on'):
+    if value.lower() in ("true", "yes", "1", "on"):
         return True
-    elif value.lower() in ('false', 'no', '0', 'off'):
+    elif value.lower() in ("false", "no", "0", "off"):
         return False
 
     # Integer conversion
     try:
-        if '.' not in value and value.lstrip('-').isdigit():
+        if "." not in value and value.lstrip("-").isdigit():
             return int(value)
     except ValueError:
         pass
@@ -426,127 +463,127 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     """Set default values for configuration sections when using environment variables."""
 
     # Set Redis defaults
-    if 'redis' in config:
-        config['redis'].setdefault('db', 0)
+    if "redis" in config:
+        config["redis"].setdefault("db", 0)
 
     # Set LLM defaults
-    if 'llm' in config:
-        config['llm'].setdefault('temperature', 0.5)
-        config['llm'].setdefault('max_tokens', 4000)
-        config['llm'].setdefault('preferred_provider', 'openai')
+    if "llm" in config:
+        config["llm"].setdefault("temperature", 0.5)
+        config["llm"].setdefault("max_tokens", 4000)
+        config["llm"].setdefault("preferred_provider", "openai")
 
     # Set agent capabilities defaults
-    if 'agent_capabilities' in config:
-        caps = config['agent_capabilities']
-        caps.setdefault('enable_file_processing', True)
-        caps.setdefault('enable_web_ingestion', True)
-        caps.setdefault('enable_api_calls', True)
-        caps.setdefault('enable_agent_collaboration', True)
-        caps.setdefault('enable_result_synthesis', True)
-        caps.setdefault('enable_multi_source_validation', True)
-        caps.setdefault('max_concurrent_operations', 5)
-        caps.setdefault('operation_timeout_seconds', 30)
-        caps.setdefault('max_memory_usage_mb', 500)
+    if "agent_capabilities" in config:
+        caps = config["agent_capabilities"]
+        caps.setdefault("enable_file_processing", True)
+        caps.setdefault("enable_web_ingestion", True)
+        caps.setdefault("enable_api_calls", True)
+        caps.setdefault("enable_agent_collaboration", True)
+        caps.setdefault("enable_result_synthesis", True)
+        caps.setdefault("enable_multi_source_validation", True)
+        caps.setdefault("max_concurrent_operations", 5)
+        caps.setdefault("operation_timeout_seconds", 30)
+        caps.setdefault("max_memory_usage_mb", 500)
 
     # Set web search defaults
-    if 'web_search' in config:
-        ws = config['web_search']
-        ws.setdefault('default_max_results', 10)
-        ws.setdefault('search_timeout_seconds', 10)
-        ws.setdefault('enable_caching', True)
-        ws.setdefault('cache_ttl_minutes', 30)
+    if "web_search" in config:
+        ws = config["web_search"]
+        ws.setdefault("default_max_results", 10)
+        ws.setdefault("search_timeout_seconds", 10)
+        ws.setdefault("enable_caching", True)
+        ws.setdefault("cache_ttl_minutes", 30)
 
     # Set knowledge base defaults
-    if 'knowledge_base' in config:
-        kb = config['knowledge_base']
-        kb.setdefault('chunk_size', 1024)
-        kb.setdefault('chunk_overlap', 20)
-        kb.setdefault('similarity_top_k', 5)
-        kb.setdefault('vector_size', 1536)
-        kb.setdefault('distance_metric', 'cosine')
-        kb.setdefault('default_collection_prefix', '')
-        kb.setdefault('max_file_size_mb', 50)
+    if "knowledge_base" in config:
+        kb = config["knowledge_base"]
+        kb.setdefault("chunk_size", 1024)
+        kb.setdefault("chunk_overlap", 20)
+        kb.setdefault("similarity_top_k", 5)
+        kb.setdefault("vector_size", 1536)
+        kb.setdefault("distance_metric", "cosine")
+        kb.setdefault("default_collection_prefix", "")
+        kb.setdefault("max_file_size_mb", 50)
 
     # Set web scraping defaults
-    if 'web_scraping' in config:
-        ws = config['web_scraping']
-        ws.setdefault('timeout', 120)
-        ws.setdefault('proxy_enabled', False)
-        ws.setdefault('docker_image', 'sgosain/amb-ubuntu-python-public-pod')
+    if "web_scraping" in config:
+        ws = config["web_scraping"]
+        ws.setdefault("timeout", 120)
+        ws.setdefault("proxy_enabled", False)
+        ws.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
 
     # Set YouTube download defaults
-    if 'youtube_download' in config:
-        yt = config['youtube_download']
-        yt.setdefault('download_dir', './youtube_downloads')
-        yt.setdefault('timeout', 600)
-        yt.setdefault('memory_limit', '1g')
-        yt.setdefault('default_audio_only', True)
-        yt.setdefault('docker_image', 'sgosain/amb-ubuntu-python-public-pod')
+    if "youtube_download" in config:
+        yt = config["youtube_download"]
+        yt.setdefault("download_dir", "./youtube_downloads")
+        yt.setdefault("timeout", 600)
+        yt.setdefault("memory_limit", "1g")
+        yt.setdefault("default_audio_only", True)
+        yt.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
 
     # Set media editor defaults
-    if 'media_editor' in config:
-        me = config['media_editor']
-        me.setdefault('input_dir', './examples/media_input')
-        me.setdefault('output_dir', './examples/media_output')
-        me.setdefault('timeout', 300)
-        me.setdefault('docker_image', 'sgosain/amb-ubuntu-python-public-pod')
-        me.setdefault('work_dir', '/opt/ambivo/work_dir')
+    if "media_editor" in config:
+        me = config["media_editor"]
+        me.setdefault("input_dir", "./examples/media_input")
+        me.setdefault("output_dir", "./examples/media_output")
+        me.setdefault("timeout", 300)
+        me.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
+        me.setdefault("work_dir", "/opt/ambivo/work_dir")
 
     # Set Docker defaults
-    if 'docker' in config:
-        docker = config['docker']
-        docker.setdefault('memory_limit', '512m')
-        docker.setdefault('timeout', 60)
-        docker.setdefault('work_dir', '/opt/ambivo/work_dir')
-        if 'images' not in docker:
-            docker['images'] = ['sgosain/amb-ubuntu-python-public-pod']
+    if "docker" in config:
+        docker = config["docker"]
+        docker.setdefault("memory_limit", "512m")
+        docker.setdefault("timeout", 60)
+        docker.setdefault("work_dir", "/opt/ambivo/work_dir")
+        if "images" not in docker:
+            docker["images"] = ["sgosain/amb-ubuntu-python-public-pod"]
 
     # Set service defaults
-    if 'service' in config:
-        service = config['service']
-        service.setdefault('max_sessions', 100)
-        service.setdefault('session_timeout', 3600)
-        service.setdefault('log_level', 'INFO')
-        service.setdefault('log_to_file', False)
-        service.setdefault('enable_metrics', True)
+    if "service" in config:
+        service = config["service"]
+        service.setdefault("max_sessions", 100)
+        service.setdefault("session_timeout", 3600)
+        service.setdefault("log_level", "INFO")
+        service.setdefault("log_to_file", False)
+        service.setdefault("enable_metrics", True)
 
     # Add this to the _set_env_config_defaults function
 
-
-
-
     # Set moderator defaults
-    if 'moderator' in config:
-        mod = config['moderator']
-        if 'default_enabled_agents' not in mod:
+    if "moderator" in config:
+        mod = config["moderator"]
+        if "default_enabled_agents" not in mod:
             # Set default based on what's enabled
-            enabled_agents = ['assistant']
-            if config.get('agent_capabilities', {}).get('enable_knowledge_base'):
-                enabled_agents.append('knowledge_base')
-            if config.get('agent_capabilities', {}).get('enable_web_search'):
-                enabled_agents.append('web_search')
-            if config.get('agent_capabilities', {}).get('enable_youtube_download'):
-                enabled_agents.append('youtube_download')
-            if config.get('agent_capabilities', {}).get('enable_media_editor'):
-                enabled_agents.append('media_editor')
-            if config.get('agent_capabilities', {}).get('enable_web_scraping'):
-                enabled_agents.append('web_scraper')
-            mod['default_enabled_agents'] = enabled_agents
+            enabled_agents = ["assistant"]
+            if config.get("agent_capabilities", {}).get("enable_knowledge_base"):
+                enabled_agents.append("knowledge_base")
+            if config.get("agent_capabilities", {}).get("enable_web_search"):
+                enabled_agents.append("web_search")
+            if config.get("agent_capabilities", {}).get("enable_youtube_download"):
+                enabled_agents.append("youtube_download")
+            if config.get("agent_capabilities", {}).get("enable_media_editor"):
+                enabled_agents.append("media_editor")
+            if config.get("agent_capabilities", {}).get("enable_web_scraping"):
+                enabled_agents.append("web_scraper")
+            mod["default_enabled_agents"] = enabled_agents
 
         # Set routing defaults
-        if 'routing' not in mod:
-            mod['routing'] = {}
-        mod['routing'].setdefault('confidence_threshold', 0.6)
-        mod['routing'].setdefault('enable_multi_agent', True)
-        mod['routing'].setdefault('fallback_agent', 'assistant')
-        mod['routing'].setdefault('max_routing_attempts', 3)
+        if "routing" not in mod:
+            mod["routing"] = {}
+        mod["routing"].setdefault("confidence_threshold", 0.6)
+        mod["routing"].setdefault("enable_multi_agent", True)
+        mod["routing"].setdefault("fallback_agent", "assistant")
+        mod["routing"].setdefault("max_routing_attempts", 3)
 
     # Set memory management defaults
-    config.setdefault('memory_management', {
-        'compression': {'enabled': True, 'algorithm': 'lz4', 'compression_level': 1},
-        'cache': {'enabled': True, 'max_size': 1000, 'ttl_seconds': 300},
-        'backup': {'enabled': True, 'interval_minutes': 60, 'backup_directory': './backups'}
-    })
+    config.setdefault(
+        "memory_management",
+        {
+            "compression": {"enabled": True, "algorithm": "lz4", "compression_level": 1},
+            "cache": {"enabled": True, "max_size": 1000, "ttl_seconds": 300},
+            "backup": {"enabled": True, "interval_minutes": 60, "backup_directory": "./backups"},
+        },
+    )
 
 
 def _merge_configs(yaml_config: Dict[str, Any], env_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -584,7 +621,7 @@ def _find_config_file() -> Optional[Path]:
 
 def _validate_config(config: Dict[str, Any]) -> None:
     """Validate that required configuration sections exist."""
-    required_sections = ['redis', 'llm']
+    required_sections = ["redis", "llm"]
     missing_sections = []
 
     for section in required_sections:
@@ -598,8 +635,8 @@ def _validate_config(config: Dict[str, Any]) -> None:
         )
 
     # Validate Redis config
-    redis_config = config['redis']
-    required_redis_fields = ['host', 'port']
+    redis_config = config["redis"]
+    required_redis_fields = ["host", "port"]
     missing_redis_fields = [field for field in required_redis_fields if field not in redis_config]
 
     if missing_redis_fields:
@@ -608,10 +645,10 @@ def _validate_config(config: Dict[str, Any]) -> None:
         )
 
     # Validate LLM config
-    llm_config = config['llm']
-    has_api_key = any(key in llm_config for key in [
-        'openai_api_key', 'anthropic_api_key', 'aws_access_key_id'
-    ])
+    llm_config = config["llm"]
+    has_api_key = any(
+        key in llm_config for key in ["openai_api_key", "anthropic_api_key", "aws_access_key_id"]
+    )
 
     if not has_api_key:
         raise ConfigurationError(
@@ -659,31 +696,31 @@ def get_current_config_source() -> str:
     """Get the source of the current configuration."""
     try:
         config = load_config()
-        return config.get('_config_source', 'unknown')
+        return config.get("_config_source", "unknown")
     except:
-        return 'none'
+        return "none"
 
 
 # Backward compatibility - keep existing functions
 CAPABILITY_TO_AGENT_TYPE = {
-    'assistant': 'assistant',
-    'code_execution': 'code_executor',
-    'proxy': 'proxy',
-    'web_scraping': 'web_scraper',
-    'knowledge_base': 'knowledge_base',
-    'web_search': 'web_search',
-    'media_editor': 'media_editor',
-    'youtube_download': 'youtube_download'
+    "assistant": "assistant",
+    "code_execution": "code_executor",
+    "proxy": "proxy",
+    "web_scraping": "web_scraper",
+    "knowledge_base": "knowledge_base",
+    "web_search": "web_search",
+    "media_editor": "media_editor",
+    "youtube_download": "youtube_download",
 }
 
 CONFIG_FLAG_TO_CAPABILITY = {
-    'enable_web_scraping': 'web_scraping',
-    'enable_knowledge_base': 'knowledge_base',
-    'enable_web_search': 'web_search',
-    'enable_media_editor': 'media_editor',
-    'enable_youtube_download': 'youtube_download',
-    'enable_code_execution': 'code_execution',
-    'enable_proxy_mode': 'proxy'
+    "enable_web_scraping": "web_scraping",
+    "enable_knowledge_base": "knowledge_base",
+    "enable_web_search": "web_search",
+    "enable_media_editor": "media_editor",
+    "enable_youtube_download": "youtube_download",
+    "enable_code_execution": "code_execution",
+    "enable_proxy_mode": "proxy",
 }
 
 
@@ -693,37 +730,32 @@ def validate_agent_capabilities(config: Dict[str, Any] = None) -> Dict[str, bool
         config = load_config()
 
     capabilities = {
-        'assistant': True,
-        'code_execution': True,
-        'moderator': True,
-        'proxy': True,
+        "assistant": True,
+        "code_execution": True,
+        "moderator": True,
+        "proxy": True,
     }
 
-    agent_caps = config.get('agent_capabilities', {})
+    agent_caps = config.get("agent_capabilities", {})
 
-    capabilities['web_scraping'] = (
-            agent_caps.get('enable_web_scraping', False) and
-            'web_scraping' in config
+    capabilities["web_scraping"] = (
+        agent_caps.get("enable_web_scraping", False) and "web_scraping" in config
     )
 
-    capabilities['knowledge_base'] = (
-            agent_caps.get('enable_knowledge_base', False) and
-            'knowledge_base' in config
+    capabilities["knowledge_base"] = (
+        agent_caps.get("enable_knowledge_base", False) and "knowledge_base" in config
     )
 
-    capabilities['web_search'] = (
-            agent_caps.get('enable_web_search', False) and
-            'web_search' in config
+    capabilities["web_search"] = (
+        agent_caps.get("enable_web_search", False) and "web_search" in config
     )
 
-    capabilities['media_editor'] = (
-            agent_caps.get('enable_media_editor', False) and
-            'media_editor' in config
+    capabilities["media_editor"] = (
+        agent_caps.get("enable_media_editor", False) and "media_editor" in config
     )
 
-    capabilities['youtube_download'] = (
-            agent_caps.get('enable_youtube_download', False) and
-            'youtube_download' in config
+    capabilities["youtube_download"] = (
+        agent_caps.get("enable_youtube_download", False) and "youtube_download" in config
     )
 
     return capabilities
@@ -740,14 +772,14 @@ def get_available_agent_types(config: Dict[str, Any] = None) -> Dict[str, bool]:
     except Exception as e:
         logging.error(f"Error getting available agent types: {e}")
         return {
-            'assistant': True,
-            'code_executor': True,
-            'proxy': True,
-            'knowledge_base': False,
-            'web_scraper': False,
-            'web_search': False,
-            'media_editor': False,
-            'youtube_download': False
+            "assistant": True,
+            "code_executor": True,
+            "proxy": True,
+            "knowledge_base": False,
+            "web_scraper": False,
+            "web_search": False,
+            "media_editor": False,
+            "youtube_download": False,
         }
 
 
@@ -779,7 +811,7 @@ def debug_env_vars():
     print("🔍 AMBIVO_AGENTS Environment Variables Debug")
     print("=" * 50)
 
-    env_vars = {k: v for k, v in os.environ.items() if k.startswith('AMBIVO_AGENTS_')}
+    env_vars = {k: v for k, v in os.environ.items() if k.startswith("AMBIVO_AGENTS_")}
 
     if not env_vars:
         print("❌ No AMBIVO_AGENTS_ environment variables found")
@@ -788,7 +820,7 @@ def debug_env_vars():
     print(f"✅ Found {len(env_vars)} environment variables:")
     for key, value in sorted(env_vars.items()):
         # Mask sensitive values
-        if any(sensitive in key.lower() for sensitive in ['key', 'password', 'secret']):
+        if any(sensitive in key.lower() for sensitive in ["key", "password", "secret"]):
             masked_value = value[:8] + "..." if len(value) > 8 else "***"
             print(f"  {key} = {masked_value}")
         else:
@@ -806,38 +838,41 @@ def debug_env_vars():
 def check_config_health() -> Dict[str, Any]:
     """Check the health of the current configuration."""
     health = {
-        'config_loaded': False,
-        'config_source': 'none',
-        'redis_configured': False,
-        'llm_configured': False,
-        'agents_enabled': [],
-        'errors': []
+        "config_loaded": False,
+        "config_source": "none",
+        "redis_configured": False,
+        "llm_configured": False,
+        "agents_enabled": [],
+        "errors": [],
     }
 
     try:
         config = load_config()
-        health['config_loaded'] = True
-        health['config_source'] = config.get('_config_source', 'unknown')
+        health["config_loaded"] = True
+        health["config_source"] = config.get("_config_source", "unknown")
 
         # Check Redis
-        redis_config = config.get('redis', {})
-        if redis_config.get('host') and redis_config.get('port'):
-            health['redis_configured'] = True
+        redis_config = config.get("redis", {})
+        if redis_config.get("host") and redis_config.get("port"):
+            health["redis_configured"] = True
         else:
-            health['errors'].append('Redis not properly configured')
+            health["errors"].append("Redis not properly configured")
 
         # Check LLM
-        llm_config = config.get('llm', {})
-        if any(key in llm_config for key in ['openai_api_key', 'anthropic_api_key', 'aws_access_key_id']):
-            health['llm_configured'] = True
+        llm_config = config.get("llm", {})
+        if any(
+            key in llm_config
+            for key in ["openai_api_key", "anthropic_api_key", "aws_access_key_id"]
+        ):
+            health["llm_configured"] = True
         else:
-            health['errors'].append('No LLM provider configured')
+            health["errors"].append("No LLM provider configured")
 
         # Check enabled agents
         capabilities = validate_agent_capabilities(config)
-        health['agents_enabled'] = [cap for cap, enabled in capabilities.items() if enabled]
+        health["agents_enabled"] = [cap for cap, enabled in capabilities.items() if enabled]
 
     except Exception as e:
-        health['errors'].append(f"Configuration error: {e}")
+        health["errors"].append(f"Configuration error: {e}")
 
     return health

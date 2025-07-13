@@ -4,17 +4,18 @@ BaseAgentHistoryMixin - Shared conversation context functionality for agents
 Provides standardized methods for agents to access and use conversation history
 """
 
-import re
 import logging
+import re
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional, Callable, Union, Pattern
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Pattern, Union
 
 
 class ContextType(Enum):
     """Types of context that can be extracted from conversation history"""
+
     URL = "url"
     FILE_PATH = "file_path"
     KNOWLEDGE_BASE = "knowledge_base"
@@ -28,6 +29,7 @@ class ContextType(Enum):
 @dataclass
 class ContextItem:
     """Represents a piece of context extracted from conversation history"""
+
     value: str
     context_type: ContextType
     source_message: str
@@ -39,6 +41,7 @@ class ContextItem:
 @dataclass
 class ConversationState:
     """Tracks the current state of a conversation"""
+
     current_resource: Optional[str] = None
     current_operation: Optional[str] = None
     last_intent: Optional[str] = None
@@ -83,38 +86,42 @@ class BaseAgentHistoryMixin:
         # URL extractor (works for various URL types)
         self.register_context_extractor(
             ContextType.URL,
-            lambda text: re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', text, re.IGNORECASE)
+            lambda text: re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', text, re.IGNORECASE),
         )
 
         # File path extractor (common file extensions)
         self.register_context_extractor(
             ContextType.FILE_PATH,
-            lambda text: re.findall(r'[^\s]+\.[a-zA-Z0-9]{2,4}(?:\s|$)', text)
+            lambda text: re.findall(r"[^\s]+\.[a-zA-Z0-9]{2,4}(?:\s|$)", text),
         )
 
         # Knowledge base name extractor (alphanumeric with underscores/hyphens)
         self.register_context_extractor(
             ContextType.KNOWLEDGE_BASE,
-            lambda text: re.findall(r'\b[a-zA-Z][a-zA-Z0-9_-]*(?:_kb|_base|_knowledge)\b', text, re.IGNORECASE)
+            lambda text: re.findall(
+                r"\b[a-zA-Z][a-zA-Z0-9_-]*(?:_kb|_base|_knowledge)\b", text, re.IGNORECASE
+            ),
         )
 
     def _register_default_intents(self):
         """Register default intent keywords for common operations"""
         self.intent_keywords = {
-            'download': ['download', 'get', 'fetch', 'retrieve', 'save'],
-            'upload': ['upload', 'ingest', 'add', 'import', 'insert'],
-            'query': ['search', 'find', 'query', 'look', 'check'],
-            'process': ['convert', 'transform', 'process', 'extract', 'generate'],
-            'analyze': ['analyze', 'examine', 'inspect', 'review', 'evaluate'],
-            'modify': ['edit', 'change', 'update', 'modify', 'alter'],
-            'delete': ['delete', 'remove', 'clear', 'drop', 'destroy']
+            "download": ["download", "get", "fetch", "retrieve", "save"],
+            "upload": ["upload", "ingest", "add", "import", "insert"],
+            "query": ["search", "find", "query", "look", "check"],
+            "process": ["convert", "transform", "process", "extract", "generate"],
+            "analyze": ["analyze", "examine", "inspect", "review", "evaluate"],
+            "modify": ["edit", "change", "update", "modify", "alter"],
+            "delete": ["delete", "remove", "clear", "drop", "destroy"],
         }
 
     # ========================
     # CONTEXT EXTRACTOR METHODS
     # ========================
 
-    def register_context_extractor(self, context_type: ContextType, extractor_func: Callable[[str], List[str]]):
+    def register_context_extractor(
+        self, context_type: ContextType, extractor_func: Callable[[str], List[str]]
+    ):
         """
         Register a custom context extractor function
 
@@ -167,10 +174,9 @@ class BaseAgentHistoryMixin:
     # CONVERSATION HISTORY METHODS
     # ========================
 
-    def get_conversation_history_with_context(self,
-                                              limit: int = 10,
-                                              context_types: Optional[List[ContextType]] = None) -> List[
-        Dict[str, Any]]:
+    def get_conversation_history_with_context(
+        self, limit: int = 10, context_types: Optional[List[ContextType]] = None
+    ) -> List[Dict[str, Any]]:
         """
         Get conversation history with extracted context
 
@@ -182,21 +188,20 @@ class BaseAgentHistoryMixin:
             List of messages with extracted context
         """
         try:
-            if not hasattr(self, 'memory') or not self.memory:
+            if not hasattr(self, "memory") or not self.memory:
                 self.logger.warning("No memory manager available")
                 return []
 
             # Get raw history
             history = self.memory.get_recent_messages(
-                limit=limit,
-                conversation_id=getattr(self.context, 'conversation_id', None)
+                limit=limit, conversation_id=getattr(self.context, "conversation_id", None)
             )
 
             # Enrich with context
             enriched_history = []
             for msg in history:
                 if isinstance(msg, dict):
-                    content = msg.get('content', '')
+                    content = msg.get("content", "")
 
                     # Extract context from message
                     if context_types:
@@ -213,8 +218,8 @@ class BaseAgentHistoryMixin:
                     # Add context to message
                     enriched_msg = {
                         **msg,
-                        'extracted_context': extracted_context,
-                        'has_context': len(extracted_context) > 0
+                        "extracted_context": extracted_context,
+                        "has_context": len(extracted_context) > 0,
                     }
                     enriched_history.append(enriched_msg)
 
@@ -224,10 +229,9 @@ class BaseAgentHistoryMixin:
             self.logger.error(f"Error getting conversation history with context: {e}")
             return []
 
-    def get_recent_context_items(self,
-                                 context_type: ContextType,
-                                 limit: int = 5,
-                                 max_messages: int = 10) -> List[ContextItem]:
+    def get_recent_context_items(
+        self, context_type: ContextType, limit: int = 5, max_messages: int = 10
+    ) -> List[ContextItem]:
         """
         Get recent context items of specific type from conversation history
 
@@ -241,21 +245,22 @@ class BaseAgentHistoryMixin:
         """
         try:
             history = self.get_conversation_history_with_context(
-                limit=max_messages,
-                context_types=[context_type]
+                limit=max_messages, context_types=[context_type]
             )
 
             context_items = []
             for msg in reversed(history):  # Most recent first
-                if msg.get('has_context'):
-                    items = msg.get('extracted_context', {}).get(context_type.value, [])
+                if msg.get("has_context"):
+                    items = msg.get("extracted_context", {}).get(context_type.value, [])
                     for item in items:
                         context_item = ContextItem(
                             value=item,
                             context_type=context_type,
-                            source_message=msg.get('content', '')[:100],
-                            timestamp=datetime.fromisoformat(msg.get('timestamp', datetime.now().isoformat())),
-                            metadata={'message_id': msg.get('id')}
+                            source_message=msg.get("content", "")[:100],
+                            timestamp=datetime.fromisoformat(
+                                msg.get("timestamp", datetime.now().isoformat())
+                            ),
+                            metadata={"message_id": msg.get("id")},
                         )
                         context_items.append(context_item)
 
@@ -306,7 +311,9 @@ class BaseAgentHistoryMixin:
 
         return None
 
-    def has_intent_without_context(self, message: str, required_context_types: List[ContextType]) -> bool:
+    def has_intent_without_context(
+        self, message: str, required_context_types: List[ContextType]
+    ) -> bool:
         """
         Check if message has intent but lacks required context
 
@@ -342,7 +349,7 @@ class BaseAgentHistoryMixin:
             True if history should be checked
         """
         # Check for pronouns indicating reference to previous context
-        pronouns = ['that', 'this', 'it', 'them', 'those', 'these']
+        pronouns = ["that", "this", "it", "them", "those", "these"]
         content_lower = message.lower()
         has_pronouns = any(pronoun in content_lower for pronoun in pronouns)
 
@@ -406,9 +413,9 @@ class BaseAgentHistoryMixin:
     # HIGH-LEVEL HELPER METHODS
     # ========================
 
-    def resolve_context_for_message(self,
-                                    message: str,
-                                    required_context_types: List[ContextType]) -> Dict[ContextType, Optional[str]]:
+    def resolve_context_for_message(
+        self, message: str, required_context_types: List[ContextType]
+    ) -> Dict[ContextType, Optional[str]]:
         """
         Resolve context for a message by checking current message and history
 
@@ -435,10 +442,9 @@ class BaseAgentHistoryMixin:
 
         return resolved_context
 
-    def process_message_with_context_resolution(self,
-                                                message: str,
-                                                required_context_types: List[ContextType],
-                                                processor_func: Callable) -> Any:
+    def process_message_with_context_resolution(
+        self, message: str, required_context_types: List[ContextType], processor_func: Callable
+    ) -> Any:
         """
         Process a message with automatic context resolution
 
@@ -474,31 +480,39 @@ class BaseAgentHistoryMixin:
             recent_history = self.get_conversation_history_with_context(limit=5)
 
             return {
-                'conversation_state': {
-                    'current_resource': self.conversation_state.current_resource,
-                    'current_operation': self.conversation_state.current_operation,
-                    'last_intent': self.conversation_state.last_intent,
-                    'working_files': self.conversation_state.working_files,
-                    'knowledge_bases': self.conversation_state.knowledge_bases
+                "conversation_state": {
+                    "current_resource": self.conversation_state.current_resource,
+                    "current_operation": self.conversation_state.current_operation,
+                    "last_intent": self.conversation_state.last_intent,
+                    "working_files": self.conversation_state.working_files,
+                    "knowledge_bases": self.conversation_state.knowledge_bases,
                 },
-                'registered_extractors': list(self.context_extractors.keys()),
-                'intent_keywords': self.intent_keywords,
-                'recent_context_summary': {
-                    'messages_with_context': len([msg for msg in recent_history if msg.get('has_context')]),
-                    'total_messages': len(recent_history),
-                    'context_types_found': list(set([
-                        ctx_type for msg in recent_history
-                        for ctx_type in msg.get('extracted_context', {}).keys()
-                    ]))
-                }
+                "registered_extractors": list(self.context_extractors.keys()),
+                "intent_keywords": self.intent_keywords,
+                "recent_context_summary": {
+                    "messages_with_context": len(
+                        [msg for msg in recent_history if msg.get("has_context")]
+                    ),
+                    "total_messages": len(recent_history),
+                    "context_types_found": list(
+                        set(
+                            [
+                                ctx_type
+                                for msg in recent_history
+                                for ctx_type in msg.get("extracted_context", {}).keys()
+                            ]
+                        )
+                    ),
+                },
             }
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
 
 
 # ========================
 # SPECIALIZED MIXINS FOR SPECIFIC AGENT TYPES
 # ========================
+
 
 class MediaAgentHistoryMixin(BaseAgentHistoryMixin):
     """Specialized history mixin for media processing agents"""
@@ -509,17 +523,21 @@ class MediaAgentHistoryMixin(BaseAgentHistoryMixin):
         # Register media-specific extractors
         self.register_context_extractor(
             ContextType.MEDIA_FILE,
-            lambda text: re.findall(r'[^\s]+\.(?:mp4|avi|mov|mkv|mp3|wav|flac|aac|m4a|webm|ogg)', text, re.IGNORECASE)
+            lambda text: re.findall(
+                r"[^\s]+\.(?:mp4|avi|mov|mkv|mp3|wav|flac|aac|m4a|webm|ogg)", text, re.IGNORECASE
+            ),
         )
 
         # Add media-specific intents
-        self.intent_keywords.update({
-            'extract_audio': ['extract audio', 'get audio', 'audio from'],
-            'convert_video': ['convert video', 'convert to', 'change format'],
-            'resize': ['resize', 'scale', 'change size'],
-            'trim': ['trim', 'cut', 'clip'],
-            'thumbnail': ['thumbnail', 'screenshot', 'frame']
-        })
+        self.intent_keywords.update(
+            {
+                "extract_audio": ["extract audio", "get audio", "audio from"],
+                "convert_video": ["convert video", "convert to", "change format"],
+                "resize": ["resize", "scale", "change size"],
+                "trim": ["trim", "cut", "clip"],
+                "thumbnail": ["thumbnail", "screenshot", "frame"],
+            }
+        )
 
     def get_recent_media_file(self) -> Optional[str]:
         """Get most recent media file from conversation"""
@@ -535,15 +553,19 @@ class KnowledgeBaseAgentHistoryMixin(BaseAgentHistoryMixin):
         # Register KB-specific extractors
         self.register_context_extractor(
             ContextType.DOCUMENT_NAME,
-            lambda text: re.findall(r'[^\s]+\.(?:pdf|docx|txt|md|html|csv|json)', text, re.IGNORECASE)
+            lambda text: re.findall(
+                r"[^\s]+\.(?:pdf|docx|txt|md|html|csv|json)", text, re.IGNORECASE
+            ),
         )
 
         # Add KB-specific intents
-        self.intent_keywords.update({
-            'ingest': ['ingest', 'upload', 'add document', 'import'],
-            'query_kb': ['query', 'search', 'find in', 'ask'],
-            'create_kb': ['create knowledge base', 'new kb', 'make kb']
-        })
+        self.intent_keywords.update(
+            {
+                "ingest": ["ingest", "upload", "add document", "import"],
+                "query_kb": ["query", "search", "find in", "ask"],
+                "create_kb": ["create knowledge base", "new kb", "make kb"],
+            }
+        )
 
     def get_current_knowledge_base(self) -> Optional[str]:
         """Get current knowledge base from state or history"""
@@ -564,17 +586,18 @@ class WebAgentHistoryMixin(BaseAgentHistoryMixin):
 
         # Register web-specific extractors
         self.register_context_extractor(
-            ContextType.SEARCH_TERM,
-            lambda text: self._extract_search_terms(text)
+            ContextType.SEARCH_TERM, lambda text: self._extract_search_terms(text)
         )
 
         # Add web-specific intents
-        self.intent_keywords.update({
-            'search': ['search', 'find', 'look up', 'search for'],
-            'scrape': ['scrape', 'extract from', 'crawl'],
-            'news_search': ['news', 'latest', 'recent'],
-            'academic_search': ['research', 'academic', 'papers']
-        })
+        self.intent_keywords.update(
+            {
+                "search": ["search", "find", "look up", "search for"],
+                "scrape": ["scrape", "extract from", "crawl"],
+                "news_search": ["news", "latest", "recent"],
+                "academic_search": ["research", "academic", "papers"],
+            }
+        )
 
     def _extract_search_terms(self, text: str) -> List[str]:
         """Extract search terms from text"""
@@ -585,9 +608,9 @@ class WebAgentHistoryMixin(BaseAgentHistoryMixin):
 
         # Extract terms after search keywords
         search_patterns = [
-            r'search for (.+?)(?:\.|$)',
-            r'find (.+?)(?:\.|$)',
-            r'look up (.+?)(?:\.|$)'
+            r"search for (.+?)(?:\.|$)",
+            r"find (.+?)(?:\.|$)",
+            r"look up (.+?)(?:\.|$)",
         ]
 
         for pattern in search_patterns:

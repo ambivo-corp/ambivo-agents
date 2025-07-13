@@ -6,20 +6,26 @@ Building on the existing workflow.py foundation
 
 import asyncio
 import json
-import uuid
-import time
-from typing import Dict, List, Any, Optional, Callable, Union, AsyncIterator
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime
 import logging
+import time
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
+
+from .base import AgentMessage, BaseAgent, ExecutionContext, MessageType
 
 # Import your existing workflow components
 from .workflow import (
-    WorkflowBuilder, AmbivoWorkflow, WorkflowNode, WorkflowEdge,
-    WorkflowResult, WorkflowExecutionType, WorkflowNodeType
+    AmbivoWorkflow,
+    WorkflowBuilder,
+    WorkflowEdge,
+    WorkflowExecutionType,
+    WorkflowNode,
+    WorkflowNodeType,
+    WorkflowResult,
 )
-from .base import BaseAgent, AgentMessage, MessageType, ExecutionContext
 
 
 class AdvancedWorkflowBuilder(WorkflowBuilder):
@@ -31,9 +37,14 @@ class AdvancedWorkflowBuilder(WorkflowBuilder):
         self.variables: Dict[str, Any] = {}
         self.workflows_metadata = {}
 
-    def add_conditional_agent(self, agent: BaseAgent, condition_func: Callable,
-                              true_path: str = None, false_path: str = None,
-                              node_id: str = None) -> 'AdvancedWorkflowBuilder':
+    def add_conditional_agent(
+        self,
+        agent: BaseAgent,
+        condition_func: Callable,
+        true_path: str = None,
+        false_path: str = None,
+        node_id: str = None,
+    ) -> "AdvancedWorkflowBuilder":
         """Add agent with conditional execution"""
         if node_id is None:
             node_id = agent.agent_id
@@ -43,17 +54,20 @@ class AdvancedWorkflowBuilder(WorkflowBuilder):
 
         # Add condition metadata
         self.workflows_metadata[node_id] = {
-            'type': 'conditional',
-            'condition': condition_func,
-            'true_path': true_path,
-            'false_path': false_path
+            "type": "conditional",
+            "condition": condition_func,
+            "true_path": true_path,
+            "false_path": false_path,
         }
 
         return self
 
-    def add_map_reduce_pattern(self, mapper_agents: List[BaseAgent],
-                               reducer_agent: BaseAgent,
-                               data_splitter: Callable = None) -> 'AdvancedWorkflowBuilder':
+    def add_map_reduce_pattern(
+        self,
+        mapper_agents: List[BaseAgent],
+        reducer_agent: BaseAgent,
+        data_splitter: Callable = None,
+    ) -> "AdvancedWorkflowBuilder":
         """Add map-reduce pattern to workflow"""
 
         # Add mapper agents in parallel
@@ -72,17 +86,17 @@ class AdvancedWorkflowBuilder(WorkflowBuilder):
             self.add_edge(map_node, reducer_id)
 
         # Store metadata
-        self.workflows_metadata['map_reduce'] = {
-            'mappers': map_nodes,
-            'reducer': reducer_id,
-            'data_splitter': data_splitter
+        self.workflows_metadata["map_reduce"] = {
+            "mappers": map_nodes,
+            "reducer": reducer_id,
+            "data_splitter": data_splitter,
         }
 
         return self
 
-    def add_loop_pattern(self, agents: List[BaseAgent],
-                         loop_condition: Callable,
-                         max_iterations: int = 10) -> 'AdvancedWorkflowBuilder':
+    def add_loop_pattern(
+        self, agents: List[BaseAgent], loop_condition: Callable, max_iterations: int = 10
+    ) -> "AdvancedWorkflowBuilder":
         """Add loop pattern with condition"""
 
         loop_start = f"loop_start_{uuid.uuid4().hex[:8]}"
@@ -106,15 +120,16 @@ class AdvancedWorkflowBuilder(WorkflowBuilder):
         self.add_edge(last_agent_id, loop_end, condition=loop_condition)
 
         # Loop back edge
-        self.add_edge(last_agent_id, f"loop_0_{agents[0].agent_id}",
-                      condition=lambda x: not loop_condition(x))
+        self.add_edge(
+            last_agent_id, f"loop_0_{agents[0].agent_id}", condition=lambda x: not loop_condition(x)
+        )
 
-        self.workflows_metadata['loop'] = {
-            'agents': agents,
-            'condition': loop_condition,
-            'max_iterations': max_iterations,
-            'start': loop_start,
-            'end': loop_end
+        self.workflows_metadata["loop"] = {
+            "agents": agents,
+            "condition": loop_condition,
+            "max_iterations": max_iterations,
+            "start": loop_start,
+            "end": loop_end,
         }
 
         return self
@@ -135,17 +150,20 @@ class AdvancedWorkflowBuilder(WorkflowBuilder):
             warnings.append(f"Unreachable nodes: {unreachable}")
 
         # Check for missing agents
-        missing_agents = [node_id for node_id, node in self.nodes.items()
-                          if node.node_type == WorkflowNodeType.AGENT and node.agent is None]
+        missing_agents = [
+            node_id
+            for node_id, node in self.nodes.items()
+            if node.node_type == WorkflowNodeType.AGENT and node.agent is None
+        ]
         if missing_agents:
             issues.append(f"Nodes missing agents: {missing_agents}")
 
         return {
-            'valid': len(issues) == 0,
-            'issues': issues,
-            'warnings': warnings,
-            'node_count': len(self.nodes),
-            'edge_count': len(self.edges)
+            "valid": len(issues) == 0,
+            "issues": issues,
+            "warnings": warnings,
+            "node_count": len(self.nodes),
+            "edge_count": len(self.edges),
         }
 
     def _detect_cycles(self) -> List[List[str]]:
@@ -202,6 +220,7 @@ class AdvancedWorkflowBuilder(WorkflowBuilder):
 @dataclass
 class WorkflowState:
     """Persistent workflow execution state"""
+
     workflow_id: str
     execution_id: str
     current_node: str
@@ -223,10 +242,13 @@ class StatefulWorkflowExecutor:
         self.active_workflows: Dict[str, WorkflowState] = {}
         self.logger = logging.getLogger("StatefulWorkflowExecutor")
 
-    async def execute_workflow(self, workflow: AmbivoWorkflow,
-                               initial_message: str,
-                               execution_context: ExecutionContext = None,
-                               workflow_id: str = None) -> WorkflowResult:
+    async def execute_workflow(
+        self,
+        workflow: AmbivoWorkflow,
+        initial_message: str,
+        execution_context: ExecutionContext = None,
+        workflow_id: str = None,
+    ) -> WorkflowResult:
         """Execute workflow with state persistence"""
 
         execution_id = str(uuid.uuid4())
@@ -242,7 +264,7 @@ class StatefulWorkflowExecutor:
             node_results={},
             variables={},
             start_time=datetime.now(),
-            last_update=datetime.now()
+            last_update=datetime.now(),
         )
 
         self.active_workflows[execution_id] = state
@@ -293,13 +315,16 @@ class StatefulWorkflowExecutor:
             messages=[],
             execution_time=0.0,
             nodes_executed=state.completed_nodes,
-            errors=["Resume not fully implemented"]
+            errors=["Resume not fully implemented"],
         )
 
-    async def _execute_with_checkpoints(self, workflow: AmbivoWorkflow,
-                                        initial_message: str,
-                                        context: ExecutionContext,
-                                        state: WorkflowState) -> WorkflowResult:
+    async def _execute_with_checkpoints(
+        self,
+        workflow: AmbivoWorkflow,
+        initial_message: str,
+        context: ExecutionContext,
+        state: WorkflowState,
+    ) -> WorkflowResult:
         """Execute workflow with regular checkpointing"""
 
         start_time = time.time()
@@ -315,7 +340,7 @@ class StatefulWorkflowExecutor:
                 content=initial_message,
                 message_type=MessageType.USER_INPUT,
                 session_id=context.session_id if context else "workflow_session",
-                conversation_id=context.conversation_id if context else "workflow_conv"
+                conversation_id=context.conversation_id if context else "workflow_conv",
             )
             messages.append(user_message)
 
@@ -345,9 +370,9 @@ class StatefulWorkflowExecutor:
 
                         # Store node result
                         state.node_results[node_id] = {
-                            'response': response.content,
-                            'success': True,
-                            'timestamp': datetime.now().isoformat()
+                            "response": response.content,
+                            "success": True,
+                            "timestamp": datetime.now().isoformat(),
                         }
 
                         state.completed_nodes.append(node_id)
@@ -358,9 +383,9 @@ class StatefulWorkflowExecutor:
                         errors.append(error_msg)
                         state.failed_nodes.append(node_id)
                         state.node_results[node_id] = {
-                            'error': str(e),
-                            'success': False,
-                            'timestamp': datetime.now().isoformat()
+                            "error": str(e),
+                            "success": False,
+                            "timestamp": datetime.now().isoformat(),
                         }
                         self.logger.error(error_msg)
 
@@ -373,11 +398,11 @@ class StatefulWorkflowExecutor:
                 nodes_executed=state.completed_nodes,
                 errors=errors,
                 metadata={
-                    'workflow_id': state.workflow_id,
-                    'execution_id': state.execution_id,
-                    'checkpoints': len(state.completed_nodes),
-                    'state_saved': True
-                }
+                    "workflow_id": state.workflow_id,
+                    "execution_id": state.execution_id,
+                    "checkpoints": len(state.completed_nodes),
+                    "state_saved": True,
+                },
             )
 
         except Exception as e:
@@ -387,7 +412,7 @@ class StatefulWorkflowExecutor:
                 messages=messages,
                 execution_time=execution_time,
                 nodes_executed=state.completed_nodes,
-                errors=[f"Workflow execution failed: {str(e)}"]
+                errors=[f"Workflow execution failed: {str(e)}"],
             )
 
     async def _save_workflow_state(self, state: WorkflowState):
@@ -395,22 +420,21 @@ class StatefulWorkflowExecutor:
         if self.memory_manager:
             try:
                 state_data = {
-                    'workflow_id': state.workflow_id,
-                    'execution_id': state.execution_id,
-                    'current_node': state.current_node,
-                    'completed_nodes': state.completed_nodes,
-                    'failed_nodes': state.failed_nodes,
-                    'node_results': state.node_results,
-                    'variables': state.variables,
-                    'start_time': state.start_time.isoformat(),
-                    'last_update': state.last_update.isoformat(),
-                    'status': state.status,
-                    'error_message': state.error_message
+                    "workflow_id": state.workflow_id,
+                    "execution_id": state.execution_id,
+                    "current_node": state.current_node,
+                    "completed_nodes": state.completed_nodes,
+                    "failed_nodes": state.failed_nodes,
+                    "node_results": state.node_results,
+                    "variables": state.variables,
+                    "start_time": state.start_time.isoformat(),
+                    "last_update": state.last_update.isoformat(),
+                    "status": state.status,
+                    "error_message": state.error_message,
                 }
 
                 self.memory_manager.store_context(
-                    f"workflow_state:{state.execution_id}",
-                    state_data
+                    f"workflow_state:{state.execution_id}", state_data
                 )
 
             except Exception as e:
@@ -427,17 +451,17 @@ class StatefulWorkflowExecutor:
                 return None
 
             return WorkflowState(
-                workflow_id=state_data['workflow_id'],
-                execution_id=state_data['execution_id'],
-                current_node=state_data['current_node'],
-                completed_nodes=state_data['completed_nodes'],
-                failed_nodes=state_data['failed_nodes'],
-                node_results=state_data['node_results'],
-                variables=state_data['variables'],
-                start_time=datetime.fromisoformat(state_data['start_time']),
-                last_update=datetime.fromisoformat(state_data['last_update']),
-                status=state_data['status'],
-                error_message=state_data.get('error_message')
+                workflow_id=state_data["workflow_id"],
+                execution_id=state_data["execution_id"],
+                current_node=state_data["current_node"],
+                completed_nodes=state_data["completed_nodes"],
+                failed_nodes=state_data["failed_nodes"],
+                node_results=state_data["node_results"],
+                variables=state_data["variables"],
+                start_time=datetime.fromisoformat(state_data["start_time"]),
+                last_update=datetime.fromisoformat(state_data["last_update"]),
+                status=state_data["status"],
+                error_message=state_data.get("error_message"),
             )
 
         except Exception as e:
@@ -458,9 +482,9 @@ class WorkflowModerator(BaseAgent):
         """Register a named workflow"""
         self.registered_workflows[name] = workflow
 
-    async def execute_named_workflow(self, workflow_name: str,
-                                     initial_message: str,
-                                     context: ExecutionContext = None) -> WorkflowResult:
+    async def execute_named_workflow(
+        self, workflow_name: str, initial_message: str, context: ExecutionContext = None
+    ) -> WorkflowResult:
         """Execute a registered workflow by name"""
         if workflow_name not in self.registered_workflows:
             raise ValueError(f"Workflow '{workflow_name}' not found")
@@ -471,34 +495,34 @@ class WorkflowModerator(BaseAgent):
             workflow, initial_message, context or self.get_execution_context()
         )
 
-    async def process_message(self, message: AgentMessage,
-                              context: ExecutionContext = None) -> AgentMessage:
+    async def process_message(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AgentMessage:
         """Process message with workflow detection and execution"""
 
         content = message.content.lower()
 
         # Check for workflow commands
-        if content.startswith('workflow '):
+        if content.startswith("workflow "):
             return await self._handle_workflow_command(message, context)
 
         # Check for registered workflow patterns
         for workflow_name in self.registered_workflows:
-            if workflow_name.replace('_', ' ') in content:
-                return await self._execute_workflow_from_message(
-                    workflow_name, message, context
-                )
+            if workflow_name.replace("_", " ") in content:
+                return await self._execute_workflow_from_message(workflow_name, message, context)
 
         # Default response
         return self.create_response(
-            content="I can execute workflows. Available workflows: " +
-                    ", ".join(self.registered_workflows.keys()),
+            content="I can execute workflows. Available workflows: "
+            + ", ".join(self.registered_workflows.keys()),
             recipient_id=message.sender_id,
             session_id=message.session_id,
-            conversation_id=message.conversation_id
+            conversation_id=message.conversation_id,
         )
 
-    async def _handle_workflow_command(self, message: AgentMessage,
-                                       context: ExecutionContext) -> AgentMessage:
+    async def _handle_workflow_command(
+        self, message: AgentMessage, context: ExecutionContext
+    ) -> AgentMessage:
         """Handle workflow-specific commands"""
 
         parts = message.content.split()
@@ -507,7 +531,7 @@ class WorkflowModerator(BaseAgent):
                 content="Usage: workflow <command> [args]",
                 recipient_id=message.sender_id,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
 
         command = parts[1].lower()
@@ -518,7 +542,7 @@ class WorkflowModerator(BaseAgent):
                 content=f"Available workflows: {', '.join(workflows)}",
                 recipient_id=message.sender_id,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
 
         elif command == "status":
@@ -529,17 +553,17 @@ class WorkflowModerator(BaseAgent):
                 if state:
                     return self.create_response(
                         content=f"Workflow {execution_id}: {state.status} "
-                                f"({len(state.completed_nodes)} nodes completed)",
+                        f"({len(state.completed_nodes)} nodes completed)",
                         recipient_id=message.sender_id,
                         session_id=message.session_id,
-                        conversation_id=message.conversation_id
+                        conversation_id=message.conversation_id,
                     )
                 else:
                     return self.create_response(
                         content=f"Workflow {execution_id} not found",
                         recipient_id=message.sender_id,
                         session_id=message.session_id,
-                        conversation_id=message.conversation_id
+                        conversation_id=message.conversation_id,
                     )
 
         elif command == "resume":
@@ -551,7 +575,7 @@ class WorkflowModerator(BaseAgent):
                         content=f"Workflow resumed. Success: {result.success}",
                         recipient_id=message.sender_id,
                         session_id=message.session_id,
-                        conversation_id=message.conversation_id
+                        conversation_id=message.conversation_id,
                     )
                 except Exception as e:
                     return self.create_response(
@@ -559,24 +583,25 @@ class WorkflowModerator(BaseAgent):
                         recipient_id=message.sender_id,
                         message_type=MessageType.ERROR,
                         session_id=message.session_id,
-                        conversation_id=message.conversation_id
+                        conversation_id=message.conversation_id,
                     )
 
         return self.create_response(
             content=f"Unknown workflow command: {command}",
             recipient_id=message.sender_id,
             session_id=message.session_id,
-            conversation_id=message.conversation_id
+            conversation_id=message.conversation_id,
         )
 
-    async def process_message_stream(self, message: AgentMessage,
-                                     context: ExecutionContext = None) -> AsyncIterator[str]:
+    async def process_message_stream(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AsyncIterator[str]:
         """Stream processing for WorkflowModerator"""
 
         content = message.content.lower()
 
         # Check for workflow commands
-        if content.startswith('workflow '):
+        if content.startswith("workflow "):
             response = await self._handle_workflow_command(message, context)
             yield response.content
             # Don't use return in async generator, just end the function
@@ -585,7 +610,7 @@ class WorkflowModerator(BaseAgent):
             # Check for registered workflow patterns
             workflow_found = False
             for workflow_name in self.registered_workflows:
-                if workflow_name.replace('_', ' ') in content:
+                if workflow_name.replace("_", " ") in content:
                     workflow_found = True
                     yield f"x-amb-info:Executing workflow: {workflow_name}\n"
                     yield f"x-amb-info:Starting workflow execution...\n\n"
@@ -623,15 +648,13 @@ class WorkflowModerator(BaseAgent):
                 yield "• `workflow resume <id>` - Resume paused workflow\n"
                 yield "• Or describe what you want to do naturally!"
 
-    async def _execute_workflow_from_message(self, workflow_name: str,
-                                             message: AgentMessage,
-                                             context: ExecutionContext) -> AgentMessage:
+    async def _execute_workflow_from_message(
+        self, workflow_name: str, message: AgentMessage, context: ExecutionContext
+    ) -> AgentMessage:
         """Execute workflow based on message content"""
 
         try:
-            result = await self.execute_named_workflow(
-                workflow_name, message.content, context
-            )
+            result = await self.execute_named_workflow(workflow_name, message.content, context)
 
             if result.success:
                 response_content = f"✅ Workflow '{workflow_name}' completed successfully!\n\n"
@@ -647,7 +670,7 @@ class WorkflowModerator(BaseAgent):
                     content=response_content,
                     recipient_id=message.sender_id,
                     session_id=message.session_id,
-                    conversation_id=message.conversation_id
+                    conversation_id=message.conversation_id,
                 )
             else:
                 error_content = f"❌ Workflow '{workflow_name}' failed:\n"
@@ -658,7 +681,7 @@ class WorkflowModerator(BaseAgent):
                     recipient_id=message.sender_id,
                     message_type=MessageType.ERROR,
                     session_id=message.session_id,
-                    conversation_id=message.conversation_id
+                    conversation_id=message.conversation_id,
                 )
 
         except Exception as e:
@@ -667,7 +690,7 @@ class WorkflowModerator(BaseAgent):
                 recipient_id=message.sender_id,
                 message_type=MessageType.ERROR,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
 
 
@@ -676,9 +699,9 @@ class AdvancedWorkflowPatterns:
     """Advanced workflow patterns beyond the basic ones"""
 
     @staticmethod
-    def create_debate_workflow(debater_agents: List[BaseAgent],
-                               moderator_agent: BaseAgent,
-                               rounds: int = 3) -> AmbivoWorkflow:
+    def create_debate_workflow(
+        debater_agents: List[BaseAgent], moderator_agent: BaseAgent, rounds: int = 3
+    ) -> AmbivoWorkflow:
         """Create a debate workflow between multiple agents"""
 
         builder = AdvancedWorkflowBuilder()
@@ -719,8 +742,9 @@ class AdvancedWorkflowPatterns:
         return builder.build()
 
     @staticmethod
-    def create_consensus_workflow(agents: List[BaseAgent],
-                                  consensus_threshold: float = 0.8) -> AmbivoWorkflow:
+    def create_consensus_workflow(
+        agents: List[BaseAgent], consensus_threshold: float = 0.8
+    ) -> AmbivoWorkflow:
         """Create a consensus-building workflow"""
 
         builder = AdvancedWorkflowBuilder()
@@ -733,8 +757,8 @@ class AdvancedWorkflowPatterns:
         def check_consensus(message: AgentMessage) -> bool:
             # Simple consensus check - in practice this would be more sophisticated
             content = message.content.lower()
-            agreement_words = ['agree', 'yes', 'correct', 'consensus', 'aligned']
-            disagreement_words = ['disagree', 'no', 'wrong', 'different']
+            agreement_words = ["agree", "yes", "correct", "consensus", "aligned"]
+            disagreement_words = ["disagree", "no", "wrong", "different"]
 
             agreement_score = sum(1 for word in agreement_words if word in content)
             disagreement_score = sum(1 for word in disagreement_words if word in content)
@@ -751,8 +775,9 @@ class AdvancedWorkflowPatterns:
         return builder.build()
 
     @staticmethod
-    def create_error_recovery_workflow(primary_agent: BaseAgent,
-                                       backup_agents: List[BaseAgent]) -> AmbivoWorkflow:
+    def create_error_recovery_workflow(
+        primary_agent: BaseAgent, backup_agents: List[BaseAgent]
+    ) -> AmbivoWorkflow:
         """Create workflow with error recovery and fallback agents"""
 
         builder = AdvancedWorkflowBuilder()
@@ -766,9 +791,11 @@ class AdvancedWorkflowPatterns:
 
         # Create error detection condition
         def has_error(message: AgentMessage) -> bool:
-            return (message.message_type == MessageType.ERROR or
-                    'error' in message.content.lower() or
-                    'failed' in message.content.lower())
+            return (
+                message.message_type == MessageType.ERROR
+                or "error" in message.content.lower()
+                or "failed" in message.content.lower()
+            )
 
         # Add conditional routing to backup agents
         builder.add_conditional_agent(
@@ -776,7 +803,7 @@ class AdvancedWorkflowPatterns:
             condition_func=lambda msg: not has_error(msg),
             true_path="success_end",
             false_path="backup_0",
-            node_id="primary"
+            node_id="primary",
         )
 
         # Chain backup agents
@@ -787,7 +814,7 @@ class AdvancedWorkflowPatterns:
                     condition_func=lambda msg: not has_error(msg),
                     true_path="success_end",
                     false_path=f"backup_{i + 1}",
-                    node_id=f"backup_{i}"
+                    node_id=f"backup_{i}",
                 )
             else:
                 # Last backup agent
@@ -809,7 +836,7 @@ class EnhancedModeratorAgent:
         self.workflow_moderator = WorkflowModerator(
             agent_id=f"workflow_{base_moderator.agent_id}",
             memory_manager=base_moderator.memory,
-            llm_service=base_moderator.llm_service
+            llm_service=base_moderator.llm_service,
         )
         self.advanced_workflows = {}
         self._setup_advanced_workflows()
@@ -821,30 +848,27 @@ class EnhancedModeratorAgent:
         agents = self.base_moderator.specialized_agents
 
         # 1. Research Consensus Workflow
-        if all(agent_type in agents for agent_type in ['web_search', 'assistant']):
-            research_agents = [
-                agents['web_search'],
-                agents['assistant']
-            ]
+        if all(agent_type in agents for agent_type in ["web_search", "assistant"]):
+            research_agents = [agents["web_search"], agents["assistant"]]
 
             consensus_workflow = AdvancedWorkflowPatterns.create_consensus_workflow(
                 research_agents, consensus_threshold=0.7
             )
             self.workflow_moderator.register_workflow("research_consensus", consensus_workflow)
-            self.advanced_workflows['research_consensus'] = consensus_workflow
+            self.advanced_workflows["research_consensus"] = consensus_workflow
 
         # 2. Multi-Agent Debate Workflow
-        if 'assistant' in agents:
+        if "assistant" in agents:
             # Create multiple assistant instances for debate
-            debater_1 = agents['assistant']
-            debater_2 = agents['assistant']  # In practice, you'd want different perspectives
-            moderator = agents['assistant']
+            debater_1 = agents["assistant"]
+            debater_2 = agents["assistant"]  # In practice, you'd want different perspectives
+            moderator = agents["assistant"]
 
             debate_workflow = AdvancedWorkflowPatterns.create_debate_workflow(
                 [debater_1, debater_2], moderator, rounds=2
             )
             self.workflow_moderator.register_workflow("multi_agent_debate", debate_workflow)
-            self.advanced_workflows['multi_agent_debate'] = debate_workflow
+            self.advanced_workflows["multi_agent_debate"] = debate_workflow
 
         # 3. Error Recovery Workflow
         if len(agents) >= 2:
@@ -855,58 +879,66 @@ class EnhancedModeratorAgent:
                 primary, backups
             )
             self.workflow_moderator.register_workflow("error_recovery", error_recovery_workflow)
-            self.advanced_workflows['error_recovery'] = error_recovery_workflow
+            self.advanced_workflows["error_recovery"] = error_recovery_workflow
 
         # 4. Map-Reduce Analysis Workflow
-        if 'web_search' in agents and 'assistant' in agents:
-            mappers = [agents['web_search']] * 3  # 3 parallel searches
-            reducer = agents['assistant']
+        if "web_search" in agents and "assistant" in agents:
+            mappers = [agents["web_search"]] * 3  # 3 parallel searches
+            reducer = agents["assistant"]
 
             builder = AdvancedWorkflowBuilder()
-            map_reduce_workflow = builder.add_map_reduce_pattern(
-                mappers, reducer
-            ).build()
+            map_reduce_workflow = builder.add_map_reduce_pattern(mappers, reducer).build()
 
             self.workflow_moderator.register_workflow("map_reduce_analysis", map_reduce_workflow)
-            self.advanced_workflows['map_reduce_analysis'] = map_reduce_workflow
+            self.advanced_workflows["map_reduce_analysis"] = map_reduce_workflow
 
-    async def process_message_with_workflows(self, message: AgentMessage,
-                                             context: ExecutionContext = None) -> AgentMessage:
+    async def process_message_with_workflows(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AgentMessage:
         """Enhanced message processing with advanced workflow detection"""
 
         content = message.content.lower()
 
         # Check for advanced workflow patterns
-        if any(phrase in content for phrase in [
-            'consensus', 'agreement', 'collaborate', 'all agents agree'
-        ]):
-            if 'research_consensus' in self.advanced_workflows:
+        if any(
+            phrase in content
+            for phrase in ["consensus", "agreement", "collaborate", "all agents agree"]
+        ):
+            if "research_consensus" in self.advanced_workflows:
                 return await self.workflow_moderator._execute_workflow_from_message(
-                    'research_consensus', message, context
+                    "research_consensus", message, context
                 )
 
-        elif any(phrase in content for phrase in [
-            'debate', 'argue', 'different perspectives', 'pros and cons'
-        ]):
-            if 'multi_agent_debate' in self.advanced_workflows:
+        elif any(
+            phrase in content
+            for phrase in ["debate", "argue", "different perspectives", "pros and cons"]
+        ):
+            if "multi_agent_debate" in self.advanced_workflows:
                 return await self.workflow_moderator._execute_workflow_from_message(
-                    'multi_agent_debate', message, context
+                    "multi_agent_debate", message, context
                 )
 
-        elif any(phrase in content for phrase in [
-            'backup plan', 'fallback', 'error recovery', 'if this fails'
-        ]):
-            if 'error_recovery' in self.advanced_workflows:
+        elif any(
+            phrase in content
+            for phrase in ["backup plan", "fallback", "error recovery", "if this fails"]
+        ):
+            if "error_recovery" in self.advanced_workflows:
                 return await self.workflow_moderator._execute_workflow_from_message(
-                    'error_recovery', message, context
+                    "error_recovery", message, context
                 )
 
-        elif any(phrase in content for phrase in [
-            'parallel analysis', 'map reduce', 'distribute work', 'divide and analyze'
-        ]):
-            if 'map_reduce_analysis' in self.advanced_workflows:
+        elif any(
+            phrase in content
+            for phrase in [
+                "parallel analysis",
+                "map reduce",
+                "distribute work",
+                "divide and analyze",
+            ]
+        ):
+            if "map_reduce_analysis" in self.advanced_workflows:
                 return await self.workflow_moderator._execute_workflow_from_message(
-                    'map_reduce_analysis', message, context
+                    "map_reduce_analysis", message, context
                 )
 
         # Fall back to base moderator
@@ -918,15 +950,15 @@ class EnhancedModeratorAgent:
         base_status = await self.base_moderator.get_agent_status()
 
         workflow_status = {
-            'base_moderator': base_status,
-            'advanced_workflows': {
-                'registered': list(self.advanced_workflows.keys()),
-                'count': len(self.advanced_workflows)
+            "base_moderator": base_status,
+            "advanced_workflows": {
+                "registered": list(self.advanced_workflows.keys()),
+                "count": len(self.advanced_workflows),
             },
-            'workflow_moderator': {
-                'active_executions': len(self.workflow_moderator.active_executions),
-                'registered_workflows': list(self.workflow_moderator.registered_workflows.keys())
-            }
+            "workflow_moderator": {
+                "active_executions": len(self.workflow_moderator.active_executions),
+                "registered_workflows": list(self.workflow_moderator.registered_workflows.keys()),
+            },
         }
 
         return workflow_status
@@ -948,64 +980,73 @@ class WorkflowVisualizer:
                 agent_name = node.agent.name if node.agent else node_id
                 lines.append(f'    {node_id}["{agent_name}"]')
             else:
-                lines.append(f'    {node_id}{{{node_id}}}')
+                lines.append(f"    {node_id}{{{node_id}}}")
 
         # Add edges
         for edge in workflow.edges:
             if edge.condition:
-                lines.append(f'    {edge.from_node} -->|condition| {edge.to_node}')
+                lines.append(f"    {edge.from_node} -->|condition| {edge.to_node}")
             else:
-                lines.append(f'    {edge.from_node} --> {edge.to_node}')
+                lines.append(f"    {edge.from_node} --> {edge.to_node}")
 
         # Style start and end nodes
         for start_node in workflow.start_nodes:
-            lines.append(f'    classDef startNode fill:#90EE90')
-            lines.append(f'    class {start_node} startNode')
+            lines.append(f"    classDef startNode fill:#90EE90")
+            lines.append(f"    class {start_node} startNode")
 
         for end_node in workflow.end_nodes:
-            lines.append(f'    classDef endNode fill:#FFB6C1')
-            lines.append(f'    class {end_node} endNode')
+            lines.append(f"    classDef endNode fill:#FFB6C1")
+            lines.append(f"    class {end_node} endNode")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     @staticmethod
-    def generate_execution_report(result: WorkflowResult,
-                                  state: WorkflowState = None) -> Dict[str, Any]:
+    def generate_execution_report(
+        result: WorkflowResult, state: WorkflowState = None
+    ) -> Dict[str, Any]:
         """Generate comprehensive execution report"""
 
         report = {
-            'execution_summary': {
-                'success': result.success,
-                'execution_time': result.execution_time,
-                'nodes_executed': len(result.nodes_executed),
-                'total_messages': len(result.messages),
-                'errors': len(result.errors)
+            "execution_summary": {
+                "success": result.success,
+                "execution_time": result.execution_time,
+                "nodes_executed": len(result.nodes_executed),
+                "total_messages": len(result.messages),
+                "errors": len(result.errors),
             },
-            'execution_timeline': [],
-            'node_performance': {},
-            'message_flow': []
+            "execution_timeline": [],
+            "node_performance": {},
+            "message_flow": [],
         }
 
         # Add execution timeline
         if state:
             for node_id in result.nodes_executed:
                 node_result = state.node_results.get(node_id, {})
-                report['execution_timeline'].append({
-                    'node': node_id,
-                    'timestamp': node_result.get('timestamp'),
-                    'success': node_result.get('success', True),
-                    'duration': node_result.get('duration', 0)
-                })
+                report["execution_timeline"].append(
+                    {
+                        "node": node_id,
+                        "timestamp": node_result.get("timestamp"),
+                        "success": node_result.get("success", True),
+                        "duration": node_result.get("duration", 0),
+                    }
+                )
 
         # Add message flow
         for i, message in enumerate(result.messages):
-            report['message_flow'].append({
-                'step': i,
-                'sender': message.sender_id,
-                'recipient': message.recipient_id,
-                'type': message.message_type.value,
-                'content_preview': message.content[:100] + "..." if len(message.content) > 100 else message.content
-            })
+            report["message_flow"].append(
+                {
+                    "step": i,
+                    "sender": message.sender_id,
+                    "recipient": message.recipient_id,
+                    "type": message.message_type.value,
+                    "content_preview": (
+                        message.content[:100] + "..."
+                        if len(message.content) > 100
+                        else message.content
+                    ),
+                }
+            )
 
         return report
 
@@ -1020,7 +1061,7 @@ async def setup_enhanced_workflow_system():
     # Create base moderator
     base_moderator = ModeratorAgent.create_simple(
         user_id="workflow_admin",
-        enabled_agents=['web_search', 'assistant', 'code_executor', 'knowledge_base']
+        enabled_agents=["web_search", "assistant", "code_executor", "knowledge_base"],
     )
 
     # Enhance with advanced workflows
@@ -1034,7 +1075,7 @@ async def setup_enhanced_workflow_system():
         content="I need multiple agents to debate the pros and cons of renewable energy",
         message_type=MessageType.USER_INPUT,
         session_id="test_session",
-        conversation_id="test_conv"
+        conversation_id="test_conv",
     )
 
     # Execute with advanced workflow detection
@@ -1059,6 +1100,7 @@ async def integrate_with_existing_system():
     # Step 1: Import your existing moderator
     try:
         from ambivo_agents.agents.moderator import ModeratorAgent
+
         print("✅ Found existing ModeratorAgent")
     except ImportError:
         print("❌ Could not import ModeratorAgent")
@@ -1073,7 +1115,7 @@ async def integrate_with_existing_system():
         "I need agents to reach consensus on climate change solutions",
         "Create a debate between agents about AI ethics",
         "Analyze this data with parallel processing and error recovery",
-        "Use map-reduce to research multiple topics simultaneously"
+        "Use map-reduce to research multiple topics simultaneously",
     ]
 
     print("\n🔧 Testing Advanced Workflow Patterns:")
@@ -1088,7 +1130,7 @@ async def integrate_with_existing_system():
             content=pattern,
             message_type=MessageType.USER_INPUT,
             session_id="integration_test",
-            conversation_id="integration_test"
+            conversation_id="integration_test",
         )
 
         try:
@@ -1109,4 +1151,5 @@ async def integrate_with_existing_system():
 if __name__ == "__main__":
     # Run integration example
     import asyncio
+
     asyncio.run(integrate_with_existing_system())

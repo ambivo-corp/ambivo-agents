@@ -5,19 +5,20 @@ Implements GraphFlow-like capabilities for agent-to-agent workflows
 """
 
 import asyncio
-import uuid
-import time
-from typing import Dict, List, Any, Optional, Callable, Union, AsyncIterator
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime
 import logging
+import time
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
-from .base import BaseAgent, AgentMessage, MessageType, ExecutionContext
+from .base import AgentMessage, BaseAgent, ExecutionContext, MessageType
 
 
 class WorkflowExecutionType(Enum):
     """Types of workflow execution patterns"""
+
     SEQUENTIAL = "sequential"
     PARALLEL = "parallel"
     CONDITIONAL = "conditional"
@@ -26,6 +27,7 @@ class WorkflowExecutionType(Enum):
 
 class WorkflowNodeType(Enum):
     """Types of nodes in a workflow"""
+
     AGENT = "agent"
     CONDITION = "condition"
     JOIN = "join"
@@ -35,6 +37,7 @@ class WorkflowNodeType(Enum):
 @dataclass
 class WorkflowEdge:
     """Represents an edge between workflow nodes"""
+
     from_node: str
     to_node: str
     condition: Optional[Callable[[AgentMessage], bool]] = None
@@ -45,6 +48,7 @@ class WorkflowEdge:
 @dataclass
 class WorkflowNode:
     """Represents a node in the workflow"""
+
     id: str
     agent: Optional[BaseAgent] = None
     node_type: WorkflowNodeType = WorkflowNodeType.AGENT
@@ -55,6 +59,7 @@ class WorkflowNode:
 @dataclass
 class WorkflowResult:
     """Result of workflow execution"""
+
     success: bool
     messages: List[AgentMessage]
     execution_time: float
@@ -72,50 +77,48 @@ class WorkflowBuilder:
         self.start_nodes: List[str] = []
         self.end_nodes: List[str] = []
 
-    def add_agent(self, agent: BaseAgent, node_id: str = None) -> 'WorkflowBuilder':
+    def add_agent(self, agent: BaseAgent, node_id: str = None) -> "WorkflowBuilder":
         """Add an agent to the workflow"""
         if node_id is None:
             node_id = agent.agent_id
 
         self.nodes[node_id] = WorkflowNode(
-            id=node_id,
-            agent=agent,
-            node_type=WorkflowNodeType.AGENT
+            id=node_id, agent=agent, node_type=WorkflowNodeType.AGENT
         )
         return self
 
-    def add_condition(self, node_id: str, condition_func: Callable[[AgentMessage], bool]) -> 'WorkflowBuilder':
+    def add_condition(
+        self, node_id: str, condition_func: Callable[[AgentMessage], bool]
+    ) -> "WorkflowBuilder":
         """Add a conditional node"""
         self.nodes[node_id] = WorkflowNode(
-            id=node_id,
-            node_type=WorkflowNodeType.CONDITION,
-            condition_func=condition_func
+            id=node_id, node_type=WorkflowNodeType.CONDITION, condition_func=condition_func
         )
         return self
 
-    def add_edge(self, from_node: str, to_node: str,
-                 condition: Optional[Callable[[AgentMessage], bool]] = None) -> 'WorkflowBuilder':
+    def add_edge(
+        self,
+        from_node: str,
+        to_node: str,
+        condition: Optional[Callable[[AgentMessage], bool]] = None,
+    ) -> "WorkflowBuilder":
         """Add an edge between nodes"""
-        self.edges.append(WorkflowEdge(
-            from_node=from_node,
-            to_node=to_node,
-            condition=condition
-        ))
+        self.edges.append(WorkflowEdge(from_node=from_node, to_node=to_node, condition=condition))
         return self
 
-    def set_start_node(self, node_id: str) -> 'WorkflowBuilder':
+    def set_start_node(self, node_id: str) -> "WorkflowBuilder":
         """Set a start node for the workflow"""
         if node_id not in self.start_nodes:
             self.start_nodes.append(node_id)
         return self
 
-    def set_end_node(self, node_id: str) -> 'WorkflowBuilder':
+    def set_end_node(self, node_id: str) -> "WorkflowBuilder":
         """Set an end node for the workflow"""
         if node_id not in self.end_nodes:
             self.end_nodes.append(node_id)
         return self
 
-    def build(self) -> 'AmbivoWorkflow':
+    def build(self) -> "AmbivoWorkflow":
         """Build the workflow"""
         # Auto-detect start and end nodes if not explicitly set
         if not self.start_nodes:
@@ -127,7 +130,7 @@ class WorkflowBuilder:
             nodes=self.nodes.copy(),
             edges=self.edges.copy(),
             start_nodes=self.start_nodes.copy(),
-            end_nodes=self.end_nodes.copy()
+            end_nodes=self.end_nodes.copy(),
         )
 
     def _find_start_nodes(self) -> List[str]:
@@ -144,8 +147,13 @@ class WorkflowBuilder:
 class AmbivoWorkflow:
     """Main workflow executor for agent-to-agent workflows"""
 
-    def __init__(self, nodes: Dict[str, WorkflowNode], edges: List[WorkflowEdge],
-                 start_nodes: List[str], end_nodes: List[str]):
+    def __init__(
+        self,
+        nodes: Dict[str, WorkflowNode],
+        edges: List[WorkflowEdge],
+        start_nodes: List[str],
+        end_nodes: List[str],
+    ):
         self.nodes = nodes
         self.edges = edges
         self.start_nodes = start_nodes
@@ -159,8 +167,9 @@ class AmbivoWorkflow:
                 self.adjacency[edge.from_node] = []
             self.adjacency[edge.from_node].append(edge)
 
-    async def execute(self, initial_message: str,
-                      execution_context: ExecutionContext = None) -> WorkflowResult:
+    async def execute(
+        self, initial_message: str, execution_context: ExecutionContext = None
+    ) -> WorkflowResult:
         """Execute the workflow sequentially"""
         start_time = time.time()
         messages = []
@@ -175,8 +184,12 @@ class AmbivoWorkflow:
                 recipient_id="workflow",
                 content=initial_message,
                 message_type=MessageType.USER_INPUT,
-                session_id=execution_context.session_id if execution_context else "workflow_session",
-                conversation_id=execution_context.conversation_id if execution_context else "workflow_conv"
+                session_id=(
+                    execution_context.session_id if execution_context else "workflow_session"
+                ),
+                conversation_id=(
+                    execution_context.conversation_id if execution_context else "workflow_conv"
+                ),
             )
             messages.append(user_message)
 
@@ -198,7 +211,9 @@ class AmbivoWorkflow:
                         self.logger.info(f"Executing agent: {node_id}")
 
                         # Route message to agent
-                        response = await node.agent.process_message(current_message, execution_context)
+                        response = await node.agent.process_message(
+                            current_message, execution_context
+                        )
                         messages.append(response)
                         nodes_executed.append(node_id)
                         executed_nodes.add(node_id)
@@ -218,7 +233,7 @@ class AmbivoWorkflow:
                 messages=messages,
                 execution_time=execution_time,
                 nodes_executed=nodes_executed,
-                errors=errors
+                errors=errors,
             )
 
         except Exception as e:
@@ -228,11 +243,12 @@ class AmbivoWorkflow:
                 messages=messages,
                 execution_time=execution_time,
                 nodes_executed=nodes_executed,
-                errors=[f"Workflow execution failed: {str(e)}"]
+                errors=[f"Workflow execution failed: {str(e)}"],
             )
 
-    async def execute_parallel(self, initial_message: str,
-                               execution_context: ExecutionContext = None) -> WorkflowResult:
+    async def execute_parallel(
+        self, initial_message: str, execution_context: ExecutionContext = None
+    ) -> WorkflowResult:
         """Execute workflow with parallel execution where possible"""
         start_time = time.time()
         messages = []
@@ -247,8 +263,12 @@ class AmbivoWorkflow:
                 recipient_id="workflow",
                 content=initial_message,
                 message_type=MessageType.USER_INPUT,
-                session_id=execution_context.session_id if execution_context else "workflow_session",
-                conversation_id=execution_context.conversation_id if execution_context else "workflow_conv"
+                session_id=(
+                    execution_context.session_id if execution_context else "workflow_session"
+                ),
+                conversation_id=(
+                    execution_context.conversation_id if execution_context else "workflow_conv"
+                ),
             )
             messages.append(user_message)
 
@@ -264,7 +284,9 @@ class AmbivoWorkflow:
 
                     if node.node_type == WorkflowNodeType.AGENT and node.agent:
                         try:
-                            response = await node.agent.process_message(current_message, execution_context)
+                            response = await node.agent.process_message(
+                                current_message, execution_context
+                            )
                             messages.append(response)
                             nodes_executed.append(node_id)
                             current_message = response
@@ -282,7 +304,9 @@ class AmbivoWorkflow:
 
                     # Wait for all parallel tasks
                     if tasks:
-                        results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
+                        results = await asyncio.gather(
+                            *[task for _, task in tasks], return_exceptions=True
+                        )
 
                         parallel_responses = []
                         for i, (node_id, _) in enumerate(tasks):
@@ -305,7 +329,7 @@ class AmbivoWorkflow:
                 messages=messages,
                 execution_time=execution_time,
                 nodes_executed=nodes_executed,
-                errors=errors
+                errors=errors,
             )
 
         except Exception as e:
@@ -315,7 +339,7 @@ class AmbivoWorkflow:
                 messages=messages,
                 execution_time=execution_time,
                 nodes_executed=nodes_executed,
-                errors=[f"Parallel workflow execution failed: {str(e)}"]
+                errors=[f"Parallel workflow execution failed: {str(e)}"],
             )
 
     def _get_execution_order(self) -> List[str]:
@@ -368,12 +392,14 @@ class AmbivoWorkflow:
 
 # Example workflow patterns that work with your existing agents
 
+
 class WorkflowPatterns:
     """Common workflow patterns using ambivo agents"""
 
     @staticmethod
-    def create_search_scrape_ingest_workflow(web_search_agent, web_scraper_agent,
-                                             knowledge_base_agent) -> AmbivoWorkflow:
+    def create_search_scrape_ingest_workflow(
+        web_search_agent, web_scraper_agent, knowledge_base_agent
+    ) -> AmbivoWorkflow:
         """
         Creates a workflow that:
         1. Searches the web for information
@@ -398,8 +424,9 @@ class WorkflowPatterns:
         return builder.build()
 
     @staticmethod
-    def create_research_analysis_workflow(web_search_agent, knowledge_base_agent,
-                                          assistant_agent) -> AmbivoWorkflow:
+    def create_research_analysis_workflow(
+        web_search_agent, knowledge_base_agent, assistant_agent
+    ) -> AmbivoWorkflow:
         """
         Creates a workflow that:
         1. Searches for information
@@ -444,6 +471,7 @@ class WorkflowPatterns:
 
 # Integration with existing ModeratorAgent
 
+
 class WorkflowModerator(BaseAgent):
     """Enhanced moderator that can execute workflows"""
 
@@ -455,8 +483,9 @@ class WorkflowModerator(BaseAgent):
         """Register a named workflow"""
         self.workflows[name] = workflow
 
-    async def execute_workflow(self, workflow_name: str, initial_message: str,
-                               execution_context: ExecutionContext = None) -> WorkflowResult:
+    async def execute_workflow(
+        self, workflow_name: str, initial_message: str, execution_context: ExecutionContext = None
+    ) -> WorkflowResult:
         """Execute a registered workflow"""
         if workflow_name not in self.workflows:
             raise ValueError(f"Workflow '{workflow_name}' not found")
@@ -468,8 +497,9 @@ class WorkflowModerator(BaseAgent):
 
         return await workflow.execute(initial_message, execution_context)
 
-    async def process_message(self, message: AgentMessage,
-                              context: ExecutionContext = None) -> AgentMessage:
+    async def process_message(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AgentMessage:
         """Process message - can detect and execute workflows"""
         content = message.content.lower()
 
@@ -484,11 +514,12 @@ class WorkflowModerator(BaseAgent):
                 content="I can execute workflows like 'search scrape ingest' or 'research and analyze'. What would you like to do?",
                 recipient_id=message.sender_id,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
 
-    async def _handle_workflow_execution(self, workflow_name: str, message: AgentMessage,
-                                         context: ExecutionContext) -> AgentMessage:
+    async def _handle_workflow_execution(
+        self, workflow_name: str, message: AgentMessage, context: ExecutionContext
+    ) -> AgentMessage:
         """Handle workflow execution"""
         try:
             result = await self.execute_workflow(workflow_name, message.content, context)
@@ -509,7 +540,7 @@ class WorkflowModerator(BaseAgent):
                     content=response_content,
                     recipient_id=message.sender_id,
                     session_id=message.session_id,
-                    conversation_id=message.conversation_id
+                    conversation_id=message.conversation_id,
                 )
             else:
                 error_content = f"Workflow '{workflow_name}' failed:\n"
@@ -520,7 +551,7 @@ class WorkflowModerator(BaseAgent):
                     recipient_id=message.sender_id,
                     message_type=MessageType.ERROR,
                     session_id=message.session_id,
-                    conversation_id=message.conversation_id
+                    conversation_id=message.conversation_id,
                 )
 
         except Exception as e:
@@ -529,12 +560,13 @@ class WorkflowModerator(BaseAgent):
                 recipient_id=message.sender_id,
                 message_type=MessageType.ERROR,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
 
     # Add this to ambivo_agents/core/workflow.py WorkflowModerator class
-    async def process_message_stream(self, message: AgentMessage,
-                                     context: ExecutionContext = None) -> AsyncIterator[str]:
+    async def process_message_stream(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AsyncIterator[str]:
         """Simple streaming implementation"""
         response = await self.process_message(message, context)
         yield response.content

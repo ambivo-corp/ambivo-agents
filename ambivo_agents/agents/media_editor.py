@@ -7,25 +7,41 @@ Updated with LLM-aware intent detection and conversation history integration.
 
 import asyncio
 import json
-import uuid
-import time
-import tempfile
-import shutil
 import os
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Union, AsyncIterator
+import shutil
+import tempfile
+import time
+import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
-from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool, StreamChunk, StreamSubType
-from ..config.loader import load_config, get_config_section
-from ..core.history import MediaAgentHistoryMixin, ContextType
+from ..config.loader import get_config_section, load_config
+from ..core.base import (
+    AgentMessage,
+    AgentRole,
+    AgentTool,
+    BaseAgent,
+    ExecutionContext,
+    MessageType,
+    StreamChunk,
+    StreamSubType,
+)
+from ..core.history import ContextType, MediaAgentHistoryMixin
 from ..executors.media_executor import MediaDockerExecutor
 
 
 class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
     """LLM-Aware Media Editor Agent with conversation context and intelligent routing"""
 
-    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, system_message: str = None,**kwargs):
+    def __init__(
+        self,
+        agent_id: str = None,
+        memory_manager=None,
+        llm_service=None,
+        system_message: str = None,
+        **kwargs,
+    ):
         if agent_id is None:
             agent_id = f"media_editor_{str(uuid.uuid4())[:8]}"
 
@@ -45,7 +61,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             name="Media Editor Agent",
             description="LLM-aware media processing agent with conversation history",
             system_message=system_message or default_system,
-            **kwargs
+            **kwargs,
         )
 
         # Initialize history mixin
@@ -62,16 +78,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         """Load media configuration"""
         try:
             config = load_config()
-            self.media_config = get_config_section('media_editor', config)
+            self.media_config = get_config_section("media_editor", config)
         except Exception as e:
             self.media_config = {
-                'docker_image': 'sgosain/amb-ubuntu-python-public-pod',
-                'timeout': 300,
-                'input_dir': './examples/media_input',
-                'output_dir': './examples/media_output'
+                "docker_image": "sgosain/amb-ubuntu-python-public-pod",
+                "timeout": 300,
+                "input_dir": "./examples/media_input",
+                "output_dir": "./examples/media_output",
             }
 
-    async def _llm_analyze_media_intent(self, user_message: str, conversation_context: str = "") -> Dict[str, Any]:
+    async def _llm_analyze_media_intent(
+        self, user_message: str, conversation_context: str = ""
+    ) -> Dict[str, Any]:
         """Use LLM to analyze media processing intent"""
         if not self.llm_service:
             return self._keyword_based_media_analysis(user_message)
@@ -115,7 +133,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         try:
             response = await self.llm_service.generate_response(prompt)
             import re
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
             else:
@@ -128,20 +147,22 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         content_lower = user_message.lower()
 
         # Determine intent
-        if any(word in content_lower for word in ['extract audio', 'get audio', 'audio from']):
-            intent = 'extract_audio'
-        elif any(word in content_lower for word in ['convert', 'change format', 'transform']):
-            intent = 'convert_video'
-        elif any(word in content_lower for word in ['resize', 'scale', 'dimensions']):
-            intent = 'resize_video'
-        elif any(word in content_lower for word in ['trim', 'cut', 'clip']):
-            intent = 'trim_media'
-        elif any(word in content_lower for word in ['thumbnail', 'screenshot', 'frame']):
-            intent = 'create_thumbnail'
-        elif any(word in content_lower for word in ['info', 'information', 'details', 'properties']):
-            intent = 'get_info'
+        if any(word in content_lower for word in ["extract audio", "get audio", "audio from"]):
+            intent = "extract_audio"
+        elif any(word in content_lower for word in ["convert", "change format", "transform"]):
+            intent = "convert_video"
+        elif any(word in content_lower for word in ["resize", "scale", "dimensions"]):
+            intent = "resize_video"
+        elif any(word in content_lower for word in ["trim", "cut", "clip"]):
+            intent = "trim_media"
+        elif any(word in content_lower for word in ["thumbnail", "screenshot", "frame"]):
+            intent = "create_thumbnail"
+        elif any(
+            word in content_lower for word in ["info", "information", "details", "properties"]
+        ):
+            intent = "get_info"
         else:
-            intent = 'help_request'
+            intent = "help_request"
 
         # Extract media files
         media_files = self.extract_context_from_text(user_message, ContextType.MEDIA_FILE)
@@ -150,18 +171,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         # Extract output preferences
         output_format = None
-        if 'mp4' in content_lower:
-            output_format = 'mp4'
-        elif 'mp3' in content_lower:
-            output_format = 'mp3'
-        elif 'wav' in content_lower:
-            output_format = 'wav'
+        if "mp4" in content_lower:
+            output_format = "mp4"
+        elif "mp3" in content_lower:
+            output_format = "mp3"
+        elif "wav" in content_lower:
+            output_format = "wav"
 
-        quality = 'medium'
-        if 'high' in content_lower:
-            quality = 'high'
-        elif 'low' in content_lower:
-            quality = 'low'
+        quality = "medium"
+        if "high" in content_lower:
+            quality = "high"
+        elif "low" in content_lower:
+            quality = "low"
 
         return {
             "primary_intent": intent,
@@ -171,15 +192,17 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 "quality": quality,
                 "dimensions": None,
                 "timing": {},
-                "codec": None
+                "codec": None,
             },
-            "uses_context_reference": any(word in content_lower for word in ['this', 'that', 'it']),
+            "uses_context_reference": any(word in content_lower for word in ["this", "that", "it"]),
             "context_type": "previous_file",
             "technical_specs": {},
-            "confidence": 0.7
+            "confidence": 0.7,
         }
 
-    async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
+    async def process_message(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AgentMessage:
         """Process message with LLM-based media intent detection - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
@@ -189,37 +212,43 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             # Update conversation state
             self.update_conversation_state(user_message)
 
-            llm_context_from_routing = message.metadata.get('llm_context', {})
-            conversation_history_from_routing = llm_context_from_routing.get('conversation_history', [])
+            llm_context_from_routing = message.metadata.get("llm_context", {})
+            conversation_history_from_routing = llm_context_from_routing.get(
+                "conversation_history", []
+            )
 
             if conversation_history_from_routing:
                 conversation_history = conversation_history_from_routing
             else:
-                conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+                conversation_history = await self.get_conversation_history(
+                    limit=5, include_metadata=True
+                )
 
             conversation_context = self._get_media_conversation_context_summary()
 
             # Build LLM context with conversation history
             llm_context = {
-                'conversation_history': conversation_history,
-                'conversation_id': message.conversation_id,
-                'user_id': message.sender_id,
-                'agent_type': 'media_editor'
+                "conversation_history": conversation_history,
+                "conversation_id": message.conversation_id,
+                "user_id": message.sender_id,
+                "agent_type": "media_editor",
             }
 
             # Use LLM to analyze intent WITH CONTEXT
-            intent_analysis = await self._llm_analyze_media_intent_with_context(user_message, conversation_context,
-                                                                                llm_context)
+            intent_analysis = await self._llm_analyze_media_intent_with_context(
+                user_message, conversation_context, llm_context
+            )
 
             # Route request based on LLM analysis with context
-            response_content = await self._route_media_with_llm_analysis_with_context(intent_analysis, user_message,
-                                                                                      context, llm_context)
+            response_content = await self._route_media_with_llm_analysis_with_context(
+                intent_analysis, user_message, context, llm_context
+            )
 
             response = self.create_response(
                 content=response_content,
                 recipient_id=message.sender_id,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
 
             self.memory.store_message(response)
@@ -231,12 +260,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 recipient_id=message.sender_id,
                 message_type=MessageType.ERROR,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
             return error_response
 
-    async def _llm_analyze_media_intent_with_context(self, user_message: str, conversation_context: str = "",
-                                                     llm_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def _llm_analyze_media_intent_with_context(
+        self, user_message: str, conversation_context: str = "", llm_context: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Use LLM to analyze media processing intent - FIXED: With conversation context"""
         if not self.llm_service:
             return self._keyword_based_media_analysis(user_message)
@@ -281,13 +311,12 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         try:
             # Pass conversation history through context
             response = await self.llm_service.generate_response(
-                prompt=prompt,
-                context=llm_context,
-                system_message = enhanced_system_message
+                prompt=prompt, context=llm_context, system_message=enhanced_system_message
             )
 
             import re
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
             else:
@@ -296,9 +325,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             print(f"LLM media intent analysis failed: {e}")
             return self._keyword_based_media_analysis(user_message)
 
-    async def _route_media_with_llm_analysis_with_context(self, intent_analysis: Dict[str, Any], user_message: str,
-                                                          context: ExecutionContext,
-                                                          llm_context: Dict[str, Any]) -> str:
+    async def _route_media_with_llm_analysis_with_context(
+        self,
+        intent_analysis: Dict[str, Any],
+        user_message: str,
+        context: ExecutionContext,
+        llm_context: Dict[str, Any],
+    ) -> str:
         """Route media request based on LLM intent analysis - FIXED: With context preservation"""
 
         primary_intent = intent_analysis.get("primary_intent", "help_request")
@@ -330,11 +363,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         else:
             return await self._handle_media_help_request_with_context(user_message, llm_context)
 
-    async def _handle_media_help_request_with_context(self, user_message: str, llm_context: Dict[str, Any]) -> str:
+    async def _handle_media_help_request_with_context(
+        self, user_message: str, llm_context: Dict[str, Any]
+    ) -> str:
         """Handle media help requests with conversation context - FIXED: Context preserved"""
 
         # Use LLM for more intelligent help if available
-        if self.llm_service and llm_context.get('conversation_history'):
+        if self.llm_service and llm_context.get("conversation_history"):
             enhanced_system_message = self.get_system_message_for_llm(llm_context)
             help_prompt = f"""As a media processing assistant, provide helpful guidance for: {user_message}
 
@@ -343,9 +378,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             try:
                 # Use LLM with conversation context
                 intelligent_help = await self.llm_service.generate_response(
-                    prompt=help_prompt,
-                    context=llm_context,
-                    system_message=enhanced_system_message
+                    prompt=help_prompt, context=llm_context, system_message=enhanced_system_message
                 )
                 return intelligent_help
             except Exception as e:
@@ -354,21 +387,23 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         # Fallback to standard help message
         state = self.get_conversation_state()
 
-        response = ("I'm your Media Editor Agent! I can help you with:\n\n"
-                    "🎥 **Video Processing**\n"
-                    "- Extract audio from videos\n"
-                    "- Convert between formats (MP4, AVI, MOV, MKV)\n"
-                    "- Resize and scale videos\n"
-                    "- Create thumbnails and frames\n"
-                    "- Trim and cut clips\n\n"
-                    "🎵 **Audio Processing**\n"
-                    "- Convert audio formats (MP3, WAV, AAC, FLAC)\n"
-                    "- Extract from videos\n"
-                    "- Adjust quality settings\n\n"
-                    "🧠 **Smart Context Features**\n"
-                    "- Remembers files from previous messages\n"
-                    "- Understands 'that video' and 'this file'\n"
-                    "- Maintains working context\n\n")
+        response = (
+            "I'm your Media Editor Agent! I can help you with:\n\n"
+            "🎥 **Video Processing**\n"
+            "- Extract audio from videos\n"
+            "- Convert between formats (MP4, AVI, MOV, MKV)\n"
+            "- Resize and scale videos\n"
+            "- Create thumbnails and frames\n"
+            "- Trim and cut clips\n\n"
+            "🎵 **Audio Processing**\n"
+            "- Convert audio formats (MP3, WAV, AAC, FLAC)\n"
+            "- Extract from videos\n"
+            "- Adjust quality settings\n\n"
+            "🧠 **Smart Context Features**\n"
+            "- Remembers files from previous messages\n"
+            "- Understands 'that video' and 'this file'\n"
+            "- Maintains working context\n\n"
+        )
 
         # Add current context information
         if state.current_resource:
@@ -392,16 +427,15 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         """Get media conversation context summary"""
         try:
             recent_history = self.get_conversation_history_with_context(
-                limit=3,
-                context_types=[ContextType.MEDIA_FILE, ContextType.FILE_PATH]
+                limit=3, context_types=[ContextType.MEDIA_FILE, ContextType.FILE_PATH]
             )
 
             context_summary = []
             for msg in recent_history:
-                if msg.get('message_type') == 'user_input':
-                    extracted_context = msg.get('extracted_context', {})
-                    media_files = extracted_context.get('media_file', [])
-                    file_paths = extracted_context.get('file_path', [])
+                if msg.get("message_type") == "user_input":
+                    extracted_context = msg.get("extracted_context", {})
+                    media_files = extracted_context.get("media_file", [])
+                    file_paths = extracted_context.get("file_path", [])
 
                     if media_files:
                         context_summary.append(f"Previous media file: {media_files[0]}")
@@ -412,8 +446,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except:
             return "No previous media context"
 
-    async def _route_media_with_llm_analysis(self, intent_analysis: Dict[str, Any], user_message: str,
-                                             context: ExecutionContext) -> str:
+    async def _route_media_with_llm_analysis(
+        self, intent_analysis: Dict[str, Any], user_message: str, context: ExecutionContext
+    ) -> str:
         """Route media request based on LLM intent analysis"""
 
         primary_intent = intent_analysis.get("primary_intent", "help_request")
@@ -445,8 +480,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         else:
             return await self._handle_media_help_request(user_message)
 
-    async def _handle_audio_extraction(self, media_files: List[str], output_prefs: Dict[str, Any],
-                                       user_message: str) -> str:
+    async def _handle_audio_extraction(
+        self, media_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
         """Handle audio extraction with LLM analysis"""
 
         if not media_files:
@@ -454,8 +490,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             if recent_file:
                 return f"I can extract audio from media files. Did you mean to extract audio from **{recent_file}**? Please confirm."
             else:
-                return "I can extract audio from video files. Please provide the video file path.\n\n" \
-                       "Example: 'Extract audio from video.mp4 as high quality mp3'"
+                return (
+                    "I can extract audio from video files. Please provide the video file path.\n\n"
+                    "Example: 'Extract audio from video.mp4 as high quality mp3'"
+                )
 
         input_file = media_files[0]
         output_format = output_prefs.get("format", "mp3")
@@ -464,22 +502,25 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         try:
             result = await self._extract_audio_from_video(input_file, output_format, quality)
 
-            if result['success']:
-                return f"✅ **Audio Extraction Completed**\n\n" \
-                       f"📁 **Input:** {input_file}\n" \
-                       f"🎵 **Output:** {result.get('output_file', 'Unknown')}\n" \
-                       f"📊 **Format:** {output_format.upper()}\n" \
-                       f"🎚️ **Quality:** {quality}\n" \
-                       f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n" \
-                       f"Your audio file is ready! 🎉"
+            if result["success"]:
+                return (
+                    f"✅ **Audio Extraction Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"🎵 **Output:** {result.get('output_file', 'Unknown')}\n"
+                    f"📊 **Format:** {output_format.upper()}\n"
+                    f"🎚️ **Quality:** {quality}\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your audio file is ready! 🎉"
+                )
             else:
                 return f"❌ **Audio extraction failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
             return f"❌ **Error during audio extraction:** {str(e)}"
 
-    async def _handle_video_conversion(self, media_files: List[str], output_prefs: Dict[str, Any],
-                                       user_message: str) -> str:
+    async def _handle_video_conversion(
+        self, media_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
         """Handle video conversion with LLM analysis"""
 
         if not media_files:
@@ -487,10 +528,12 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             if recent_file:
                 return f"I can convert video files. Did you mean to convert **{recent_file}**? Please specify the target format."
             else:
-                return "I can convert video files. Please provide:\n\n" \
-                       "1. Video file path\n" \
-                       "2. Target format (mp4, avi, mov, mkv, webm)\n\n" \
-                       "Example: 'Convert video.avi to mp4'"
+                return (
+                    "I can convert video files. Please provide:\n\n"
+                    "1. Video file path\n"
+                    "2. Target format (mp4, avi, mov, mkv, webm)\n\n"
+                    "Example: 'Convert video.avi to mp4'"
+                )
 
         input_file = media_files[0]
         output_format = output_prefs.get("format", "mp4")
@@ -499,25 +542,29 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         try:
             result = await self._convert_video_format(input_file, output_format, video_codec)
 
-            if result['success']:
-                return f"✅ **Video Conversion Completed**\n\n" \
-                       f"📁 **Input:** {input_file}\n" \
-                       f"🎬 **Output:** {result.get('output_file', 'Unknown')}\n" \
-                       f"📊 **Format:** {output_format.upper()}\n" \
-                       f"🔧 **Codec:** {video_codec}\n" \
-                       f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n" \
-                       f"Your converted video is ready! 🎉"
+            if result["success"]:
+                return (
+                    f"✅ **Video Conversion Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"🎬 **Output:** {result.get('output_file', 'Unknown')}\n"
+                    f"📊 **Format:** {output_format.upper()}\n"
+                    f"🔧 **Codec:** {video_codec}\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your converted video is ready! 🎉"
+                )
             else:
                 return f"❌ **Video conversion failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
             return f"❌ **Error during video conversion:** {str(e)}"
 
-
-
-
-    async def _create_video_thumbnail(self, input_video: str, timestamp: str = "00:00:05",
-                                      output_format: str = "jpg", width: int = 320):
+    async def _create_video_thumbnail(
+        self,
+        input_video: str,
+        timestamp: str = "00:00:05",
+        output_format: str = "jpg",
+        width: int = 320,
+    ):
         """Create thumbnail - FIXED: Better FFmpeg command and error handling"""
         try:
             if not Path(input_video).exists():
@@ -529,37 +576,37 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             commands_to_try = [
                 # Approach 1: Simple with scaling (most common)
                 f"ffmpeg -y -v quiet -i ${{input_video}} -ss {timestamp} -vframes 1 -vf scale={width}:-1 ${{OUTPUT}}",
-
                 # Approach 2: Basic thumbnail without scaling
                 f"ffmpeg -y -v quiet -i ${{input_video}} -ss {timestamp} -vframes 1 ${{OUTPUT}}",
-
                 # Approach 3: Alternative syntax
                 f"ffmpeg -y -i ${{input_video}} -ss {timestamp} -frames:v 1 -q:v 2 ${{OUTPUT}}",
-
                 # Approach 4: Most basic
-                f"ffmpeg -i ${{input_video}} -ss {timestamp} -vframes 1 ${{OUTPUT}}"
+                f"ffmpeg -i ${{input_video}} -ss {timestamp} -vframes 1 ${{OUTPUT}}",
             ]
 
             last_error = None
             for i, ffmpeg_command in enumerate(commands_to_try):
                 result = self.media_executor.execute_ffmpeg_command(
                     ffmpeg_command=ffmpeg_command,
-                    input_files={'input_video': input_video},
-                    output_filename=output_filename
+                    input_files={"input_video": input_video},
+                    output_filename=output_filename,
                 )
 
-                if result['success']:
+                if result["success"]:
                     return {
                         "success": True,
                         "message": f"Thumbnail created successfully (method {i + 1})",
-                        "output_file": result.get('output_file', {}),
+                        "output_file": result.get("output_file", {}),
                         "input_video": input_video,
-                        "execution_time": result['execution_time']
+                        "execution_time": result["execution_time"],
                     }
                 else:
-                    last_error = result.get('error', 'Unknown error')
+                    last_error = result.get("error", "Unknown error")
 
-            return {"success": False, "error": f"All thumbnail methods failed. Last error: {last_error}"}
+            return {
+                "success": False,
+                "error": f"All thumbnail methods failed. Last error: {last_error}",
+            }
 
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -567,8 +614,14 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
     # PATCH: Replace the _resize_video method in MediaEditorAgent
     # Add this to your media_editor.py file
 
-    async def _resize_video(self, input_video: str, width: int = None, height: int = None,
-                            maintain_aspect: bool = True, preset: str = "custom"):
+    async def _resize_video(
+        self,
+        input_video: str,
+        width: int = None,
+        height: int = None,
+        maintain_aspect: bool = True,
+        preset: str = "custom",
+    ):
         """FIXED: Video resize with simpler, more compatible FFmpeg commands"""
         try:
             if not Path(input_video).exists():
@@ -598,13 +651,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             scale_commands = [
                 # Approach 1: Ultra-simple, same style as working thumbnail command
                 f"ffmpeg -y -i ${{input_video}} -vf scale={width}:{height} ${{OUTPUT}}",
-
                 # Approach 2: With audio copy (like thumbnail but with audio)
                 f"ffmpeg -y -i ${{input_video}} -vf scale={width}:{height} -c:a copy ${{OUTPUT}}",
-
                 # Approach 3: Force even dimensions (H.264 compatible)
                 f"ffmpeg -y -i ${{input_video}} -vf scale={width}:{height}:force_divisible_by=2 ${{OUTPUT}}",
-
                 # Approach 4: Basic resize without filters
                 f"ffmpeg -y -i ${{input_video}} -s {width}x{height} ${{OUTPUT}}",
             ]
@@ -616,22 +666,22 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
                     result = self.media_executor.execute_ffmpeg_command(
                         ffmpeg_command=ffmpeg_command,
-                        input_files={'input_video': input_video},
-                        output_filename=output_filename
+                        input_files={"input_video": input_video},
+                        output_filename=output_filename,
                     )
 
-                    if result['success']:
+                    if result["success"]:
                         return {
                             "success": True,
                             "message": f"Video resized successfully to {width}x{height} (method {i + 1})",
-                            "output_file": result.get('output_file', {}),
+                            "output_file": result.get("output_file", {}),
                             "input_video": input_video,
-                            "execution_time": result['execution_time'],
+                            "execution_time": result["execution_time"],
                             "method_used": i + 1,
-                            "final_dimensions": f"{width}x{height}"
+                            "final_dimensions": f"{width}x{height}",
                         }
                     else:
-                        last_error = result.get('error', 'Unknown error')
+                        last_error = result.get("error", "Unknown error")
                         print(f"❌ Method {i + 1} failed: {last_error[:100]}...")
 
                 except Exception as approach_error:
@@ -642,15 +692,21 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 "success": False,
                 "error": f"All {len(scale_commands)} resize methods failed. Last error: {last_error}",
                 "attempted_methods": len(scale_commands),
-                "target_dimensions": f"{width}x{height}"
+                "target_dimensions": f"{width}x{height}",
             }
 
         except Exception as e:
             return {"success": False, "error": f"Resize method error: {str(e)}"}
 
     # ALTERNATIVE: If the above doesn't work, try this minimal version
-    async def _resize_video_minimal(self, input_video: str, width: int = None, height: int = None,
-                                    maintain_aspect: bool = True, preset: str = "custom"):
+    async def _resize_video_minimal(
+        self,
+        input_video: str,
+        width: int = None,
+        height: int = None,
+        maintain_aspect: bool = True,
+        preset: str = "custom",
+    ):
         """MINIMAL: Copy the exact working pattern from thumbnail creation"""
         try:
             if not Path(input_video).exists():
@@ -672,33 +728,34 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             output_filename = f"resized_video_{int(time.time())}.mp4"
 
             # USE EXACT SAME PATTERN AS WORKING THUMBNAIL - just change the filter
-            ffmpeg_command = f"ffmpeg -y -v quiet -i ${{input_video}} -vf scale={width}:{height} ${{OUTPUT}}"
+            ffmpeg_command = (
+                f"ffmpeg -y -v quiet -i ${{input_video}} -vf scale={width}:{height} ${{OUTPUT}}"
+            )
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
-                input_files={'input_video': input_video},
-                output_filename=output_filename
+                input_files={"input_video": input_video},
+                output_filename=output_filename,
             )
 
-            if result['success']:
+            if result["success"]:
                 return {
                     "success": True,
                     "message": f"Video resized successfully to {width}x{height}",
-                    "output_file": result.get('output_file', {}),
+                    "output_file": result.get("output_file", {}),
                     "input_video": input_video,
-                    "execution_time": result['execution_time'],
-                    "final_dimensions": f"{width}x{height}"
+                    "execution_time": result["execution_time"],
+                    "final_dimensions": f"{width}x{height}",
                 }
             else:
                 return {
                     "success": False,
                     "error": f"Video resize failed: {result.get('error', 'Unknown error')}",
-                    "target_dimensions": f"{width}x{height}"
+                    "target_dimensions": f"{width}x{height}",
                 }
 
         except Exception as e:
             return {"success": False, "error": f"Resize error: {str(e)}"}
-
 
     def _parse_dimensions(self, dimensions: str, user_message: str) -> tuple:
         """Parse dimensions from preferences or message - ENHANCED with better regex"""
@@ -721,19 +778,20 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         # Parse from user message with improved patterns
         import re
+
         message_lower = user_message.lower()
 
         # Check for common presets first (more comprehensive)
         preset_patterns = [
-            (r'\b720p?\b', (1280, 720)),
-            (r'\b1080p?\b', (1920, 1080)),
-            (r'\b4k\b', (3840, 2160)),
-            (r'\b480p?\b', (854, 480)),
-            (r'\bresize\s+to\s+720\b', (1280, 720)),
-            (r'\bresize\s+to\s+1080\b', (1920, 1080)),
-            (r'\bscale\s+to\s+720p?\b', (1280, 720)),
-            (r'\bscale\s+to\s+1080p?\b', (1920, 1080)),
-            (r'\bscale\s+to\s+480p?\b', (854, 480)),
+            (r"\b720p?\b", (1280, 720)),
+            (r"\b1080p?\b", (1920, 1080)),
+            (r"\b4k\b", (3840, 2160)),
+            (r"\b480p?\b", (854, 480)),
+            (r"\bresize\s+to\s+720\b", (1280, 720)),
+            (r"\bresize\s+to\s+1080\b", (1920, 1080)),
+            (r"\bscale\s+to\s+720p?\b", (1280, 720)),
+            (r"\bscale\s+to\s+1080p?\b", (1920, 1080)),
+            (r"\bscale\s+to\s+480p?\b", (854, 480)),
         ]
 
         for pattern, dimensions in preset_patterns:
@@ -741,21 +799,21 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 return dimensions
 
         # Look for WIDTHxHEIGHT pattern (more flexible)
-        dimension_matches = re.findall(r'(\d{3,4})\s*[x×]\s*(\d{3,4})', user_message)
+        dimension_matches = re.findall(r"(\d{3,4})\s*[x×]\s*(\d{3,4})", user_message)
         if dimension_matches:
             width, height = dimension_matches[0]
             return int(width), int(height)
 
         # Look for individual width/height mentions
-        width_match = re.search(r'width[:\s]*(\d+)', message_lower)
-        height_match = re.search(r'height[:\s]*(\d+)', message_lower)
+        width_match = re.search(r"width[:\s]*(\d+)", message_lower)
+        height_match = re.search(r"height[:\s]*(\d+)", message_lower)
 
         if width_match and height_match:
             return int(width_match.group(1)), int(height_match.group(1))
 
         # Look for single dimension with common ratios
-        single_width = re.search(r'\bwidth\s+(\d+)', message_lower)
-        single_height = re.search(r'\bheight\s+(\d+)', message_lower)
+        single_width = re.search(r"\bwidth\s+(\d+)", message_lower)
+        single_height = re.search(r"\bheight\s+(\d+)", message_lower)
 
         if single_width:
             width = int(single_width.group(1))
@@ -772,27 +830,31 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         # Default fallback
         return None, None
 
-
-    async def _handle_video_resize(self, media_files: List[str], output_prefs: Dict[str, Any],
-                                   user_message: str) -> str:
+    async def _handle_video_resize(
+        self, media_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
         """Handle video resize with ENHANCED error reporting and user guidance"""
 
         if not media_files:
             recent_file = self.get_recent_media_file()
             if recent_file:
-                return f"I can resize videos. Did you mean to resize **{recent_file}**? Please specify dimensions.\n\n" \
-                       f"**Examples:**\n" \
-                       f"• 'Resize {recent_file} to 720p'\n" \
-                       f"• 'Scale it to 1920x1080'\n" \
-                       f"• 'Make it 4k resolution'"
+                return (
+                    f"I can resize videos. Did you mean to resize **{recent_file}**? Please specify dimensions.\n\n"
+                    f"**Examples:**\n"
+                    f"• 'Resize {recent_file} to 720p'\n"
+                    f"• 'Scale it to 1920x1080'\n"
+                    f"• 'Make it 4k resolution'"
+                )
             else:
-                return "I can resize videos! Please provide:\n\n" \
-                       "**1. Video file path**\n" \
-                       "**2. Target dimensions**\n\n" \
-                       "**Supported formats:**\n" \
-                       "• Presets: 720p, 1080p, 4k, 480p\n" \
-                       "• Custom: 1920x1080, 1280x720, etc.\n\n" \
-                       "**Example:** 'Resize video.mp4 to 720p'"
+                return (
+                    "I can resize videos! Please provide:\n\n"
+                    "**1. Video file path**\n"
+                    "**2. Target dimensions**\n\n"
+                    "**Supported formats:**\n"
+                    "• Presets: 720p, 1080p, 4k, 480p\n"
+                    "• Custom: 1920x1080, 1280x720, etc.\n\n"
+                    "**Example:** 'Resize video.mp4 to 720p'"
+                )
 
         input_file = media_files[0]
         dimensions = output_prefs.get("dimensions")
@@ -801,69 +863,85 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         width, height = self._parse_dimensions(dimensions, user_message)
 
         if not width or not height:
-            return f"I need specific dimensions to resize **{input_file}**.\n\n" \
-                   f"**Please specify one of:**\n" \
-                   f"• Standard: '720p', '1080p', '4k'\n" \
-                   f"• Custom: '1920x1080', '1280x720'\n" \
-                   f"• Explicit: 'width 1280 height 720'\n\n" \
-                   f"**Examples:**\n" \
-                   f"• 'Resize {input_file} to 720p'\n" \
-                   f"• 'Scale to 1920x1080'\n" \
-                   f"• 'Make it 4k resolution'"
+            return (
+                f"I need specific dimensions to resize **{input_file}**.\n\n"
+                f"**Please specify one of:**\n"
+                f"• Standard: '720p', '1080p', '4k'\n"
+                f"• Custom: '1920x1080', '1280x720'\n"
+                f"• Explicit: 'width 1280 height 720'\n\n"
+                f"**Examples:**\n"
+                f"• 'Resize {input_file} to 720p'\n"
+                f"• 'Scale to 1920x1080'\n"
+                f"• 'Make it 4k resolution'"
+            )
 
         # Validate dimensions
         if width < 100 or height < 100:
-            return f"❌ **Invalid dimensions:** {width}x{height} is too small.\n" \
-                   f"Minimum supported size is 100x100 pixels."
+            return (
+                f"❌ **Invalid dimensions:** {width}x{height} is too small.\n"
+                f"Minimum supported size is 100x100 pixels."
+            )
 
         if width > 7680 or height > 4320:
-            return f"❌ **Invalid dimensions:** {width}x{height} is too large.\n" \
-                   f"Maximum supported size is 7680x4320 (8K)."
+            return (
+                f"❌ **Invalid dimensions:** {width}x{height} is too large.\n"
+                f"Maximum supported size is 7680x4320 (8K)."
+            )
 
         try:
             # Show what we're attempting
-            processing_msg = f"🎬 **Processing Video Resize**\n\n" \
-                             f"📁 **Input:** {input_file}\n" \
-                             f"📏 **Target:** {width}x{height}\n" \
-                             f"⚙️ **Method:** Multiple fallback approaches\n\n" \
-                             f"🔄 Processing..."
+            processing_msg = (
+                f"🎬 **Processing Video Resize**\n\n"
+                f"📁 **Input:** {input_file}\n"
+                f"📏 **Target:** {width}x{height}\n"
+                f"⚙️ **Method:** Multiple fallback approaches\n\n"
+                f"🔄 Processing..."
+            )
 
             # Actually perform the resize
             result = await self._resize_video(input_file, width, height)
 
-            if result['success']:
-                return f"✅ **Video Resize Completed**\n\n" \
-                       f"📁 **Input:** {input_file}\n" \
-                       f"🎬 **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n" \
-                       f"📏 **Dimensions:** {result.get('final_dimensions', f'{width}x{height}')}\n" \
-                       f"⚙️ **Method:** {result.get('method_used', 'Unknown')}/{result.get('attempted_methods', 'N/A')}\n" \
-                       f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n" \
-                       f"📊 **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n" \
-                       f"Your resized video is ready! 🎉"
+            if result["success"]:
+                return (
+                    f"✅ **Video Resize Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"🎬 **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f"📏 **Dimensions:** {result.get('final_dimensions', f'{width}x{height}')}\n"
+                    f"⚙️ **Method:** {result.get('method_used', 'Unknown')}/{result.get('attempted_methods', 'N/A')}\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n"
+                    f"📊 **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
+                    f"Your resized video is ready! 🎉"
+                )
             else:
-                error_msg = result.get('error', 'Unknown error')
-                attempted = result.get('attempted_methods', 'several')
+                error_msg = result.get("error", "Unknown error")
+                attempted = result.get("attempted_methods", "several")
 
                 # Provide helpful troubleshooting
-                return f"❌ **Video Resize Failed**\n\n" \
-                       f"📁 **Input:** {input_file}\n" \
-                       f"📏 **Target:** {result.get('target_dimensions', f'{width}x{height}')}\n" \
-                       f"🔧 **Attempted:** {attempted} different methods\n\n" \
-                       f"**Error Details:**\n" \
-                       f"{error_msg[:300]}...\n\n" \
-                       f"**Possible Solutions:**\n" \
-                       f"• Try a different resolution (720p, 1080p)\n" \
-                       f"• Check if the input video is valid\n" \
-                       f"• Try with a smaller video file first\n" \
-                       f"• Contact support if the issue persists"
+                return (
+                    f"❌ **Video Resize Failed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"📏 **Target:** {result.get('target_dimensions', f'{width}x{height}')}\n"
+                    f"🔧 **Attempted:** {attempted} different methods\n\n"
+                    f"**Error Details:**\n"
+                    f"{error_msg[:300]}...\n\n"
+                    f"**Possible Solutions:**\n"
+                    f"• Try a different resolution (720p, 1080p)\n"
+                    f"• Check if the input video is valid\n"
+                    f"• Try with a smaller video file first\n"
+                    f"• Contact support if the issue persists"
+                )
 
         except Exception as e:
-            return f"❌ **Error during video resize:** {str(e)}\n\n" \
-                   f"📁 **File:** {input_file}\n" \
-                   f"📏 **Target:** {width}x{height}\n\n" \
-                   f"Please try again or contact support if the problem continues."
+            return (
+                f"❌ **Error during video resize:** {str(e)}\n\n"
+                f"📁 **File:** {input_file}\n"
+                f"📏 **Target:** {width}x{height}\n\n"
+                f"Please try again or contact support if the problem continues."
+            )
 
-    async def _handle_media_trim(self, media_files: List[str], output_prefs: Dict[str, Any], user_message: str) -> str:
+    async def _handle_media_trim(
+        self, media_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
         """Handle media trimming with LLM analysis"""
 
         if not media_files:
@@ -871,11 +949,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             if recent_file:
                 return f"I can trim media files. Did you mean to trim **{recent_file}**? Please specify start time and duration."
             else:
-                return "I can trim media files. Please provide:\n\n" \
-                       "1. Media file path\n" \
-                       "2. Start time (HH:MM:SS)\n" \
-                       "3. Duration or end time\n\n" \
-                       "Example: 'Trim video.mp4 from 00:01:30 for 30 seconds'"
+                return (
+                    "I can trim media files. Please provide:\n\n"
+                    "1. Media file path\n"
+                    "2. Start time (HH:MM:SS)\n"
+                    "3. Duration or end time\n\n"
+                    "Example: 'Trim video.mp4 from 00:01:30 for 30 seconds'"
+                )
 
         input_file = media_files[0]
         timing = output_prefs.get("timing", {})
@@ -888,32 +968,39 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             start_time, duration = self._parse_timing_from_message(user_message)
 
         if not start_time:
-            return f"Please specify the start time for trimming **{input_file}**.\n\n" \
-                   f"Example: 'Trim from 00:01:30 for 30 seconds'"
+            return (
+                f"Please specify the start time for trimming **{input_file}**.\n\n"
+                f"Example: 'Trim from 00:01:30 for 30 seconds'"
+            )
 
         if not duration:
-            return f"Please specify the duration for trimming **{input_file}** from {start_time}.\n\n" \
-                   f"Example: 'for 30 seconds' or 'for 2 minutes'"
+            return (
+                f"Please specify the duration for trimming **{input_file}** from {start_time}.\n\n"
+                f"Example: 'for 30 seconds' or 'for 2 minutes'"
+            )
 
         try:
             result = await self._trim_media(input_file, start_time, duration)
 
-            if result['success']:
-                return f"✅ **Media Trim Completed**\n\n" \
-                       f"📁 **Input:** {input_file}\n" \
-                       f"🎬 **Output:** {result.get('output_file', 'Unknown')}\n" \
-                       f"⏱️ **Start:** {start_time}\n" \
-                       f"⏰ **Duration:** {duration}\n" \
-                       f"🕐 **Time:** {result.get('execution_time', 0):.2f}s\n\n" \
-                       f"Your trimmed media is ready! 🎉"
+            if result["success"]:
+                return (
+                    f"✅ **Media Trim Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"🎬 **Output:** {result.get('output_file', 'Unknown')}\n"
+                    f"⏱️ **Start:** {start_time}\n"
+                    f"⏰ **Duration:** {duration}\n"
+                    f"🕐 **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your trimmed media is ready! 🎉"
+                )
             else:
                 return f"❌ **Media trim failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
             return f"❌ **Error during media trim:** {str(e)}"
 
-    async def _handle_thumbnail_creation(self, media_files: List[str], output_prefs: Dict[str, Any],
-                                         user_message: str) -> str:
+    async def _handle_thumbnail_creation(
+        self, media_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
         """Handle thumbnail creation with LLM analysis"""
 
         if not media_files:
@@ -921,10 +1008,12 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             if recent_file:
                 return f"I can create thumbnails from videos. Did you mean to create a thumbnail from **{recent_file}**?"
             else:
-                return "I can create thumbnails from videos. Please provide:\n\n" \
-                       "1. Video file path\n" \
-                       "2. Timestamp (HH:MM:SS) - optional\n\n" \
-                       "Example: 'Create thumbnail from video.mp4 at 00:05:00'"
+                return (
+                    "I can create thumbnails from videos. Please provide:\n\n"
+                    "1. Video file path\n"
+                    "2. Timestamp (HH:MM:SS) - optional\n\n"
+                    "Example: 'Create thumbnail from video.mp4 at 00:05:00'"
+                )
 
         input_file = media_files[0]
         timing = output_prefs.get("timing", {})
@@ -934,14 +1023,16 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         try:
             result = await self._create_video_thumbnail(input_file, timestamp, output_format)
 
-            if result['success']:
-                return f"✅ **Thumbnail Created**\n\n" \
-                       f"📁 **Video:** {input_file}\n" \
-                       f"🖼️ **Thumbnail:** {result.get('output_file', 'Unknown')}\n" \
-                       f"⏱️ **Timestamp:** {timestamp}\n" \
-                       f"📊 **Format:** {output_format.upper()}\n" \
-                       f"🕐 **Time:** {result.get('execution_time', 0):.2f}s\n\n" \
-                       f"Your thumbnail is ready! 🎉"
+            if result["success"]:
+                return (
+                    f"✅ **Thumbnail Created**\n\n"
+                    f"📁 **Video:** {input_file}\n"
+                    f"🖼️ **Thumbnail:** {result.get('output_file', 'Unknown')}\n"
+                    f"⏱️ **Timestamp:** {timestamp}\n"
+                    f"📊 **Format:** {output_format.upper()}\n"
+                    f"🕐 **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your thumbnail is ready! 🎉"
+                )
             else:
                 return f"❌ **Thumbnail creation failed:** {result.get('error', 'Unknown error')}"
 
@@ -956,25 +1047,29 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             if recent_file:
                 return f"I can provide information about media files. Did you mean to get info for **{recent_file}**?"
             else:
-                return "I can provide detailed information about media files.\n\n" \
-                       "Please provide the path to a media file."
+                return (
+                    "I can provide detailed information about media files.\n\n"
+                    "Please provide the path to a media file."
+                )
 
         input_file = media_files[0]
 
         try:
             result = await self._get_media_info(input_file)
 
-            if result['success']:
-                info = result.get('media_info', {})
-                return f"📊 **Media Information for {input_file}**\n\n" \
-                       f"**📄 File:** {info.get('filename', 'Unknown')}\n" \
-                       f"**📦 Format:** {info.get('format', 'Unknown')}\n" \
-                       f"**⏱️ Duration:** {info.get('duration', 'Unknown')}\n" \
-                       f"**📏 Resolution:** {info.get('resolution', 'Unknown')}\n" \
-                       f"**🎬 Video Codec:** {info.get('video_codec', 'Unknown')}\n" \
-                       f"**🎵 Audio Codec:** {info.get('audio_codec', 'Unknown')}\n" \
-                       f"**📊 File Size:** {info.get('file_size', 'Unknown')}\n\n" \
-                       f"🎉 Information retrieval completed!"
+            if result["success"]:
+                info = result.get("media_info", {})
+                return (
+                    f"📊 **Media Information for {input_file}**\n\n"
+                    f"**📄 File:** {info.get('filename', 'Unknown')}\n"
+                    f"**📦 Format:** {info.get('format', 'Unknown')}\n"
+                    f"**⏱️ Duration:** {info.get('duration', 'Unknown')}\n"
+                    f"**📏 Resolution:** {info.get('resolution', 'Unknown')}\n"
+                    f"**🎬 Video Codec:** {info.get('video_codec', 'Unknown')}\n"
+                    f"**🎵 Audio Codec:** {info.get('audio_codec', 'Unknown')}\n"
+                    f"**📊 File Size:** {info.get('file_size', 'Unknown')}\n\n"
+                    f"🎉 Information retrieval completed!"
+                )
             else:
                 return f"❌ **Failed to get media info:** {result.get('error', 'Unknown error')}"
 
@@ -986,21 +1081,23 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         state = self.get_conversation_state()
 
-        response = ("I'm your Media Editor Agent! I can help you with:\n\n"
-                    "🎥 **Video Processing**\n"
-                    "- Extract audio from videos\n"
-                    "- Convert between formats (MP4, AVI, MOV, MKV)\n"
-                    "- Resize and scale videos\n"
-                    "- Create thumbnails and frames\n"
-                    "- Trim and cut clips\n\n"
-                    "🎵 **Audio Processing**\n"
-                    "- Convert audio formats (MP3, WAV, AAC, FLAC)\n"
-                    "- Extract from videos\n"
-                    "- Adjust quality settings\n\n"
-                    "🧠 **Smart Context Features**\n"
-                    "- Remembers files from previous messages\n"
-                    "- Understands 'that video' and 'this file'\n"
-                    "- Maintains working context\n\n")
+        response = (
+            "I'm your Media Editor Agent! I can help you with:\n\n"
+            "🎥 **Video Processing**\n"
+            "- Extract audio from videos\n"
+            "- Convert between formats (MP4, AVI, MOV, MKV)\n"
+            "- Resize and scale videos\n"
+            "- Create thumbnails and frames\n"
+            "- Trim and cut clips\n\n"
+            "🎵 **Audio Processing**\n"
+            "- Convert audio formats (MP3, WAV, AAC, FLAC)\n"
+            "- Extract from videos\n"
+            "- Adjust quality settings\n\n"
+            "🧠 **Smart Context Features**\n"
+            "- Remembers files from previous messages\n"
+            "- Understands 'that video' and 'this file'\n"
+            "- Maintains working context\n\n"
+        )
 
         # Add current context information
         if state.current_resource:
@@ -1020,46 +1117,48 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         return response
 
-
-
     def _parse_timing_from_message(self, user_message: str) -> tuple:
         """Parse timing information from user message"""
         import re
 
         # Look for time patterns
-        time_patterns = re.findall(r'\b\d{1,2}:\d{2}:\d{2}\b', user_message)
-        duration_patterns = re.findall(r'(\d+)\s*(?:seconds?|secs?|minutes?|mins?)', user_message, re.IGNORECASE)
+        time_patterns = re.findall(r"\b\d{1,2}:\d{2}:\d{2}\b", user_message)
+        duration_patterns = re.findall(
+            r"(\d+)\s*(?:seconds?|secs?|minutes?|mins?)", user_message, re.IGNORECASE
+        )
 
         start_time = time_patterns[0] if time_patterns else None
 
         duration = None
         if duration_patterns:
             duration_num = duration_patterns[0]
-            if 'minute' in user_message.lower() or 'min' in user_message.lower():
+            if "minute" in user_message.lower() or "min" in user_message.lower():
                 duration = f"00:{duration_num:0>2}:00"
             else:
                 duration = f"{int(duration_num)}"
 
         return start_time, duration
 
-    def _extract_media_intent_from_llm_response(self, llm_response: str, user_message: str) -> Dict[str, Any]:
+    def _extract_media_intent_from_llm_response(
+        self, llm_response: str, user_message: str
+    ) -> Dict[str, Any]:
         """Extract media intent from non-JSON LLM response"""
         content_lower = llm_response.lower()
 
-        if 'extract' in content_lower and 'audio' in content_lower:
-            intent = 'extract_audio'
-        elif 'convert' in content_lower:
-            intent = 'convert_video'
-        elif 'resize' in content_lower:
-            intent = 'resize_video'
-        elif 'trim' in content_lower or 'cut' in content_lower:
-            intent = 'trim_media'
-        elif 'thumbnail' in content_lower:
-            intent = 'create_thumbnail'
-        elif 'info' in content_lower:
-            intent = 'get_info'
+        if "extract" in content_lower and "audio" in content_lower:
+            intent = "extract_audio"
+        elif "convert" in content_lower:
+            intent = "convert_video"
+        elif "resize" in content_lower:
+            intent = "resize_video"
+        elif "trim" in content_lower or "cut" in content_lower:
+            intent = "trim_media"
+        elif "thumbnail" in content_lower:
+            intent = "create_thumbnail"
+        elif "info" in content_lower:
+            intent = "get_info"
         else:
-            intent = 'help_request'
+            intent = "help_request"
 
         return {
             "primary_intent": intent,
@@ -1068,134 +1167,198 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             "uses_context_reference": False,
             "context_type": "none",
             "technical_specs": {},
-            "confidence": 0.6
+            "confidence": 0.6,
         }
-
-
 
     def _initialize_media_executor(self):
         """Initialize media executor"""
         from ..executors.media_executor import MediaDockerExecutor
+
         self.media_executor = MediaDockerExecutor(self.media_config)
 
     def _add_media_tools(self):
         """Add media processing tools"""
 
         # Extract audio from video tool
-        self.add_tool(AgentTool(
-            name="extract_audio_from_video",
-            description="Extract audio track from video file",
-            function=self._extract_audio_from_video,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "input_video": {"type": "string", "description": "Path to input video file"},
-                    "output_format": {"type": "string", "enum": ["mp3", "wav", "aac", "flac"], "default": "mp3"},
-                    "audio_quality": {"type": "string", "enum": ["high", "medium", "low"], "default": "medium"}
+        self.add_tool(
+            AgentTool(
+                name="extract_audio_from_video",
+                description="Extract audio track from video file",
+                function=self._extract_audio_from_video,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_video": {
+                            "type": "string",
+                            "description": "Path to input video file",
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "enum": ["mp3", "wav", "aac", "flac"],
+                            "default": "mp3",
+                        },
+                        "audio_quality": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                            "default": "medium",
+                        },
+                    },
+                    "required": ["input_video"],
                 },
-                "required": ["input_video"]
-            }
-        ))
+            )
+        )
 
         # Convert video format tool
-        self.add_tool(AgentTool(
-            name="convert_video_format",
-            description="Convert video to different format/codec",
-            function=self._convert_video_format,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "input_video": {"type": "string", "description": "Path to input video file"},
-                    "output_format": {"type": "string", "enum": ["mp4", "avi", "mov", "mkv", "webm"], "default": "mp4"},
-                    "video_codec": {"type": "string", "enum": ["h264", "h265", "vp9", "copy"], "default": "h264"},
-                    "audio_codec": {"type": "string", "enum": ["aac", "mp3", "opus", "copy"], "default": "aac"},
-                    "crf": {"type": "integer", "minimum": 0, "maximum": 51, "default": 23}
+        self.add_tool(
+            AgentTool(
+                name="convert_video_format",
+                description="Convert video to different format/codec",
+                function=self._convert_video_format,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_video": {
+                            "type": "string",
+                            "description": "Path to input video file",
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "enum": ["mp4", "avi", "mov", "mkv", "webm"],
+                            "default": "mp4",
+                        },
+                        "video_codec": {
+                            "type": "string",
+                            "enum": ["h264", "h265", "vp9", "copy"],
+                            "default": "h264",
+                        },
+                        "audio_codec": {
+                            "type": "string",
+                            "enum": ["aac", "mp3", "opus", "copy"],
+                            "default": "aac",
+                        },
+                        "crf": {"type": "integer", "minimum": 0, "maximum": 51, "default": 23},
+                    },
+                    "required": ["input_video"],
                 },
-                "required": ["input_video"]
-            }
-        ))
+            )
+        )
 
         # Get media information tool
-        self.add_tool(AgentTool(
-            name="get_media_info",
-            description="Get detailed information about media file",
-            function=self._get_media_info,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "file_path": {"type": "string", "description": "Path to media file"}
+        self.add_tool(
+            AgentTool(
+                name="get_media_info",
+                description="Get detailed information about media file",
+                function=self._get_media_info,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string", "description": "Path to media file"}
+                    },
+                    "required": ["file_path"],
                 },
-                "required": ["file_path"]
-            }
-        ))
+            )
+        )
 
         # Resize video tool
-        self.add_tool(AgentTool(
-            name="resize_video",
-            description="Resize video to specific dimensions",
-            function=self._resize_video,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "input_video": {"type": "string", "description": "Path to input video file"},
-                    "width": {"type": "integer", "description": "Target width in pixels"},
-                    "height": {"type": "integer", "description": "Target height in pixels"},
-                    "maintain_aspect": {"type": "boolean", "default": True},
-                    "preset": {"type": "string", "enum": ["720p", "1080p", "4k", "480p", "custom"], "default": "custom"}
+        self.add_tool(
+            AgentTool(
+                name="resize_video",
+                description="Resize video to specific dimensions",
+                function=self._resize_video,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_video": {
+                            "type": "string",
+                            "description": "Path to input video file",
+                        },
+                        "width": {"type": "integer", "description": "Target width in pixels"},
+                        "height": {"type": "integer", "description": "Target height in pixels"},
+                        "maintain_aspect": {"type": "boolean", "default": True},
+                        "preset": {
+                            "type": "string",
+                            "enum": ["720p", "1080p", "4k", "480p", "custom"],
+                            "default": "custom",
+                        },
+                    },
+                    "required": ["input_video"],
                 },
-                "required": ["input_video"]
-            }
-        ))
+            )
+        )
 
         # Trim media tool
-        self.add_tool(AgentTool(
-            name="trim_media",
-            description="Trim/cut media file to specific time range",
-            function=self._trim_media,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "input_file": {"type": "string", "description": "Path to input media file"},
-                    "start_time": {"type": "string", "description": "Start time (HH:MM:SS or seconds)"},
-                    "duration": {"type": "string", "description": "Duration (HH:MM:SS or seconds)"},
-                    "end_time": {"type": "string", "description": "End time (alternative to duration)"}
+        self.add_tool(
+            AgentTool(
+                name="trim_media",
+                description="Trim/cut media file to specific time range",
+                function=self._trim_media,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_file": {"type": "string", "description": "Path to input media file"},
+                        "start_time": {
+                            "type": "string",
+                            "description": "Start time (HH:MM:SS or seconds)",
+                        },
+                        "duration": {
+                            "type": "string",
+                            "description": "Duration (HH:MM:SS or seconds)",
+                        },
+                        "end_time": {
+                            "type": "string",
+                            "description": "End time (alternative to duration)",
+                        },
+                    },
+                    "required": ["input_file", "start_time"],
                 },
-                "required": ["input_file", "start_time"]
-            }
-        ))
+            )
+        )
 
         # Create video thumbnail tool
-        self.add_tool(AgentTool(
-            name="create_video_thumbnail",
-            description="Extract thumbnail/frame from video",
-            function=self._create_video_thumbnail,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "input_video": {"type": "string", "description": "Path to input video file"},
-                    "timestamp": {"type": "string", "description": "Time to extract frame (HH:MM:SS)",
-                                  "default": "00:00:05"},
-                    "output_format": {"type": "string", "enum": ["jpg", "png", "bmp"], "default": "jpg"},
-                    "width": {"type": "integer", "description": "Thumbnail width", "default": 320}
+        self.add_tool(
+            AgentTool(
+                name="create_video_thumbnail",
+                description="Extract thumbnail/frame from video",
+                function=self._create_video_thumbnail,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_video": {
+                            "type": "string",
+                            "description": "Path to input video file",
+                        },
+                        "timestamp": {
+                            "type": "string",
+                            "description": "Time to extract frame (HH:MM:SS)",
+                            "default": "00:00:05",
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "enum": ["jpg", "png", "bmp"],
+                            "default": "jpg",
+                        },
+                        "width": {
+                            "type": "integer",
+                            "description": "Thumbnail width",
+                            "default": 320,
+                        },
+                    },
+                    "required": ["input_video"],
                 },
-                "required": ["input_video"]
-            }
-        ))
+            )
+        )
 
     # Media processing method implementations
-    async def _extract_audio_from_video_orig(self, input_video: str, output_format: str = "mp3",
-                                        audio_quality: str = "medium"):
+    async def _extract_audio_from_video_orig(
+        self, input_video: str, output_format: str = "mp3", audio_quality: str = "medium"
+    ):
         """Extract audio from video file"""
         try:
             if not Path(input_video).exists():
                 return {"success": False, "error": f"Input video file not found: {input_video}"}
 
             # Quality settings
-            quality_settings = {
-                "low": "-b:a 128k",
-                "medium": "-b:a 192k",
-                "high": "-b:a 320k"
-            }
+            quality_settings = {"low": "-b:a 128k", "medium": "-b:a 192k", "high": "-b:a 320k"}
 
             output_filename = f"extracted_audio_{int(time.time())}.{output_format}"
 
@@ -1208,17 +1371,17 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
-                input_files={'input_video': input_video},
-                output_filename=output_filename
+                input_files={"input_video": input_video},
+                output_filename=output_filename,
             )
 
-            if result['success']:
+            if result["success"]:
                 return {
                     "success": True,
                     "message": f"Audio extracted successfully to {output_format}",
-                    "output_file": result['output_file'],
+                    "output_file": result["output_file"],
                     "input_video": input_video,
-                    "execution_time": result['execution_time']
+                    "execution_time": result["execution_time"],
                 }
             else:
                 return result
@@ -1226,23 +1389,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-
-
-    #====start
+    # ====start
     # FIXED: Audio extraction with proper command syntax
-    async def _extract_audio_from_video(self, input_video: str, output_format: str = "mp3",
-                                        audio_quality: str = "medium"):
+    async def _extract_audio_from_video(
+        self, input_video: str, output_format: str = "mp3", audio_quality: str = "medium"
+    ):
         """FIXED: Extract audio from video file with proper FFmpeg syntax"""
         try:
             if not Path(input_video).exists():
                 return {"success": False, "error": f"Input video file not found: {input_video}"}
 
             # Quality settings - FIXED: Proper bitrate syntax
-            quality_settings = {
-                "low": "128k",
-                "medium": "192k",
-                "high": "320k"
-            }
+            quality_settings = {"low": "128k", "medium": "192k", "high": "320k"}
 
             output_filename = f"extracted_audio_{int(time.time())}.{output_format}"
 
@@ -1250,21 +1408,23 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             audio_codec = self._get_audio_codec(output_format)
             bitrate = quality_settings.get(audio_quality, "192k")
 
-            ffmpeg_command = f"ffmpeg -i ${{input_video}} -vn -acodec {audio_codec} -b:a {bitrate} ${{OUTPUT}}"
+            ffmpeg_command = (
+                f"ffmpeg -i ${{input_video}} -vn -acodec {audio_codec} -b:a {bitrate} ${{OUTPUT}}"
+            )
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
-                input_files={'input_video': input_video},
-                output_filename=output_filename
+                input_files={"input_video": input_video},
+                output_filename=output_filename,
             )
 
-            if result['success']:
+            if result["success"]:
                 return {
                     "success": True,
                     "message": f"Audio extracted successfully to {output_format}",
-                    "output_file": result.get('output_file', {}),
+                    "output_file": result.get("output_file", {}),
                     "input_video": input_video,
-                    "execution_time": result['execution_time']
+                    "execution_time": result["execution_time"],
                 }
             else:
                 return result
@@ -1273,8 +1433,14 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             return {"success": False, "error": str(e)}
 
     # FIXED: Video conversion with proper syntax
-    async def _convert_video_format(self, input_video: str, output_format: str = "mp4",
-                                    video_codec: str = "h264", audio_codec: str = "aac", crf: int = 23):
+    async def _convert_video_format(
+        self,
+        input_video: str,
+        output_format: str = "mp4",
+        video_codec: str = "h264",
+        audio_codec: str = "aac",
+        crf: int = 23,
+    ):
         """FIXED: Convert video format with proper FFmpeg syntax"""
         try:
             if not Path(input_video).exists():
@@ -1283,30 +1449,26 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             output_filename = f"converted_video_{int(time.time())}.{output_format}"
 
             # FIXED: Proper codec mapping
-            codec_map = {
-                'h264': 'libx264',
-                'h265': 'libx265',
-                'vp9': 'libvpx-vp9'
-            }
+            codec_map = {"h264": "libx264", "h265": "libx265", "vp9": "libvpx-vp9"}
 
-            video_codec_proper = codec_map.get(video_codec, 'libx264')
+            video_codec_proper = codec_map.get(video_codec, "libx264")
 
             # FIXED: Simplified, working FFmpeg command
             ffmpeg_command = f"ffmpeg -i ${{input_video}} -c:v {video_codec_proper} -c:a {audio_codec} -crf {crf} ${{OUTPUT}}"
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
-                input_files={'input_video': input_video},
-                output_filename=output_filename
+                input_files={"input_video": input_video},
+                output_filename=output_filename,
             )
 
-            if result['success']:
+            if result["success"]:
                 return {
                     "success": True,
                     "message": f"Video converted successfully to {output_format}",
-                    "output_file": result.get('output_file', {}),
+                    "output_file": result.get("output_file", {}),
                     "input_video": input_video,
-                    "execution_time": result['execution_time']
+                    "execution_time": result["execution_time"],
                 }
             else:
                 return result
@@ -1328,52 +1490,55 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffprobe_command,
-                input_files={'input_file': file_path},
-                output_filename=output_filename
+                input_files={"input_file": file_path},
+                output_filename=output_filename,
             )
 
-            if result['success']:
+            if result["success"]:
                 try:
                     # FIXED: Read the JSON output file
-                    output_file_info = result.get('output_file', {})
-                    output_file_path = output_file_info.get('final_path')
+                    output_file_info = result.get("output_file", {})
+                    output_file_path = output_file_info.get("final_path")
 
                     if output_file_path and os.path.exists(output_file_path):
-                        with open(output_file_path, 'r') as f:
+                        with open(output_file_path, "r") as f:
                             info_data = json.load(f)
 
                         # Clean up temp file
                         os.remove(output_file_path)
                     else:
                         # Fallback: try parsing from stdout
-                        info_data = json.loads(result.get('output', '{}'))
+                        info_data = json.loads(result.get("output", "{}"))
 
-                    format_info = info_data.get('format', {})
-                    streams = info_data.get('streams', [])
+                    format_info = info_data.get("format", {})
+                    streams = info_data.get("streams", [])
 
-                    video_stream = next((s for s in streams if s.get('codec_type') == 'video'), {})
-                    audio_stream = next((s for s in streams if s.get('codec_type') == 'audio'), {})
+                    video_stream = next((s for s in streams if s.get("codec_type") == "video"), {})
+                    audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), {})
 
                     # FIXED: Safe value extraction with defaults
                     media_info = {
-                        'filename': Path(file_path).name,
-                        'format': format_info.get('format_name', 'Unknown'),
-                        'duration': self._format_duration(format_info.get('duration')),
-                        'file_size': self._format_file_size(format_info.get('size')),
-                        'resolution': self._get_resolution(video_stream),
-                        'video_codec': video_stream.get('codec_name', 'N/A'),
-                        'audio_codec': audio_stream.get('codec_name', 'N/A'),
-                        'bit_rate': format_info.get('bit_rate', 'Unknown')
+                        "filename": Path(file_path).name,
+                        "format": format_info.get("format_name", "Unknown"),
+                        "duration": self._format_duration(format_info.get("duration")),
+                        "file_size": self._format_file_size(format_info.get("size")),
+                        "resolution": self._get_resolution(video_stream),
+                        "video_codec": video_stream.get("codec_name", "N/A"),
+                        "audio_codec": audio_stream.get("codec_name", "N/A"),
+                        "bit_rate": format_info.get("bit_rate", "Unknown"),
                     }
 
                     return {
                         "success": True,
                         "media_info": media_info,
-                        "execution_time": result['execution_time']
+                        "execution_time": result["execution_time"],
                     }
 
                 except json.JSONDecodeError as e:
-                    return {"success": False, "error": f"Failed to parse media information: {str(e)}"}
+                    return {
+                        "success": False,
+                        "error": f"Failed to parse media information: {str(e)}",
+                    }
             else:
                 return result
 
@@ -1381,9 +1546,6 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             return {"success": False, "error": str(e)}
 
     # FIXED: Video resize with proper scaling
-
-
-
 
     # HELPER METHODS - FIXED
     def _get_audio_codec(self, format: str) -> str:
@@ -1394,7 +1556,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             "wav": "pcm_s16le",
             "flac": "flac",
             "ogg": "libvorbis",
-            "opus": "libopus"
+            "opus": "libopus",
         }
         return codec_map.get(format, "aac")
 
@@ -1432,15 +1594,21 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         """Get video resolution safely"""
         if not video_stream:
             return "N/A"
-        width = video_stream.get('width')
-        height = video_stream.get('height')
+        width = video_stream.get("width")
+        height = video_stream.get("height")
         if width and height:
             return f"{width}x{height}"
         return "Unknown"
 
     # == end==
-    async def _convert_video_format_orig(self, input_video: str, output_format: str = "mp4",
-                                    video_codec: str = "h264", audio_codec: str = "aac", crf: int = 23):
+    async def _convert_video_format_orig(
+        self,
+        input_video: str,
+        output_format: str = "mp4",
+        video_codec: str = "h264",
+        audio_codec: str = "aac",
+        crf: int = 23,
+    ):
         """Convert video format"""
         try:
             if not Path(input_video).exists():
@@ -1457,17 +1625,17 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
-                input_files={'input_video': input_video},
-                output_filename=output_filename
+                input_files={"input_video": input_video},
+                output_filename=output_filename,
             )
 
-            if result['success']:
+            if result["success"]:
                 return {
                     "success": True,
                     "message": f"Video converted successfully to {output_format}",
-                    "output_file": result['output_file'],
+                    "output_file": result["output_file"],
                     "input_video": input_video,
-                    "execution_time": result['execution_time']
+                    "execution_time": result["execution_time"],
                 }
             else:
                 return result
@@ -1488,34 +1656,38 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffprobe_command,
-                input_files={'input_file': file_path},
-                output_filename=None  # No output file for info
+                input_files={"input_file": file_path},
+                output_filename=None,  # No output file for info
             )
 
-            if result['success']:
+            if result["success"]:
                 # Parse ffprobe output
                 try:
-                    info_data = json.loads(result.get('output', '{}'))
-                    format_info = info_data.get('format', {})
-                    streams = info_data.get('streams', [])
+                    info_data = json.loads(result.get("output", "{}"))
+                    format_info = info_data.get("format", {})
+                    streams = info_data.get("streams", [])
 
-                    video_stream = next((s for s in streams if s.get('codec_type') == 'video'), {})
-                    audio_stream = next((s for s in streams if s.get('codec_type') == 'audio'), {})
+                    video_stream = next((s for s in streams if s.get("codec_type") == "video"), {})
+                    audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), {})
 
                     media_info = {
-                        'filename': Path(file_path).name,
-                        'format': format_info.get('format_name', 'Unknown'),
-                        'duration': format_info.get('duration', 'Unknown'),
-                        'file_size': format_info.get('size', 'Unknown'),
-                        'resolution': f"{video_stream.get('width', 'Unknown')}x{video_stream.get('height', 'Unknown')}" if video_stream else 'N/A',
-                        'video_codec': video_stream.get('codec_name', 'N/A'),
-                        'audio_codec': audio_stream.get('codec_name', 'N/A')
+                        "filename": Path(file_path).name,
+                        "format": format_info.get("format_name", "Unknown"),
+                        "duration": format_info.get("duration", "Unknown"),
+                        "file_size": format_info.get("size", "Unknown"),
+                        "resolution": (
+                            f"{video_stream.get('width', 'Unknown')}x{video_stream.get('height', 'Unknown')}"
+                            if video_stream
+                            else "N/A"
+                        ),
+                        "video_codec": video_stream.get("codec_name", "N/A"),
+                        "audio_codec": audio_stream.get("codec_name", "N/A"),
                     }
 
                     return {
                         "success": True,
                         "media_info": media_info,
-                        "execution_time": result['execution_time']
+                        "execution_time": result["execution_time"],
                     }
                 except json.JSONDecodeError:
                     return {"success": False, "error": "Failed to parse media information"}
@@ -1525,10 +1697,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-
-
-    async def _create_video_thumbnail_orig(self, input_video: str, timestamp: str = "00:00:05",
-                                      output_format: str = "jpg", width: int = 320):
+    async def _create_video_thumbnail_orig(
+        self,
+        input_video: str,
+        timestamp: str = "00:00:05",
+        output_format: str = "jpg",
+        width: int = 320,
+    ):
         """Create thumbnail"""
         try:
             if not Path(input_video).exists():
@@ -1546,17 +1721,17 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
-                input_files={'input_video': input_video},
-                output_filename=output_filename
+                input_files={"input_video": input_video},
+                output_filename=output_filename,
             )
 
-            if result['success']:
+            if result["success"]:
                 return {
                     "success": True,
                     "message": f"Thumbnail created successfully",
-                    "output_file": result['output_file'],
+                    "output_file": result["output_file"],
                     "input_video": input_video,
-                    "execution_time": result['execution_time']
+                    "execution_time": result["execution_time"],
                 }
             else:
                 return result
@@ -1572,11 +1747,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             "wav": "pcm_s16le",
             "flac": "flac",
             "ogg": "libvorbis",
-            "opus": "libopus"
+            "opus": "libopus",
         }
         return codec_map.get(format, "aac")
 
-    async def _trim_media(self, input_file: str, start_time: str, duration: str = None, end_time: str = None):
+    async def _trim_media(
+        self, input_file: str, start_time: str, duration: str = None, end_time: str = None
+    ):
         """Trim media"""
         try:
             if not Path(input_file).exists():
@@ -1598,17 +1775,17 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
-                input_files={'input_file': input_file},
-                output_filename=output_filename
+                input_files={"input_file": input_file},
+                output_filename=output_filename,
             )
 
-            if result['success']:
+            if result["success"]:
                 return {
                     "success": True,
                     "message": f"Media trimmed successfully",
-                    "output_file": result['output_file'],
+                    "output_file": result["output_file"],
                     "input_file": input_file,
-                    "execution_time": result['execution_time']
+                    "execution_time": result["execution_time"],
                 }
             else:
                 return result
@@ -1616,10 +1793,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-
-
-    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        StreamChunk]:
+    async def process_message_stream(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AsyncIterator[StreamChunk]:
         """Stream processing for MediaEditorAgent - COMPLETE IMPLEMENTATION"""
         self.memory.store_message(message)
 
@@ -1630,83 +1806,87 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             yield StreamChunk(
                 text="**Media Editor Agent**\n\n",
                 sub_type=StreamSubType.STATUS,
-                metadata={'agent': 'media_editor', 'phase': 'initialization'}
+                metadata={"agent": "media_editor", "phase": "initialization"},
             )
 
             # Get conversation context for streaming
             conversation_context = self._get_media_conversation_context_summary()
-            conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+            conversation_history = await self.get_conversation_history(
+                limit=5, include_metadata=True
+            )
 
             yield StreamChunk(
                 text="Analyzing media processing request...\n",
                 sub_type=StreamSubType.STATUS,
-                metadata={'phase': 'analysis'}
+                metadata={"phase": "analysis"},
             )
 
             # Build LLM context for streaming
             llm_context = {
-                'conversation_history': conversation_history,
-                'conversation_id': message.conversation_id,
-                'streaming': True,
-                'user_id': message.sender_id,
-                'agent_type': 'media_editor'
+                "conversation_history": conversation_history,
+                "conversation_id": message.conversation_id,
+                "streaming": True,
+                "user_id": message.sender_id,
+                "agent_type": "media_editor",
             }
 
-            intent_analysis = await self._llm_analyze_media_intent(user_message, conversation_context)
+            intent_analysis = await self._llm_analyze_media_intent(
+                user_message, conversation_context
+            )
             primary_intent = intent_analysis.get("primary_intent", "help_request")
 
             yield StreamChunk(
                 text=f"**Detected Intent:** {primary_intent.replace('_', ' ').title()}\n\n",
                 sub_type=StreamSubType.STATUS,
-                metadata={'intent': primary_intent}
+                metadata={"intent": primary_intent},
             )
 
             if primary_intent == "extract_audio":
                 yield StreamChunk(
                     text="🎵 **Audio Extraction**\n\n",
                     sub_type=StreamSubType.STATUS,
-                    metadata={'operation': 'extract_audio'}
+                    metadata={"operation": "extract_audio"},
                 )
                 response_content = await self._handle_audio_extraction_with_context(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),
                     user_message,
-                    llm_context
+                    llm_context,
                 )
                 yield StreamChunk(
                     text=response_content,
                     sub_type=StreamSubType.RESULT,
-                    metadata={'operation': 'extract_audio', 'content_type': 'processing_result'}
+                    metadata={"operation": "extract_audio", "content_type": "processing_result"},
                 )
 
             elif primary_intent == "convert_video":
                 yield StreamChunk(
                     text="🎬 **Video Conversion**\n\n",
                     sub_type=StreamSubType.STATUS,
-                    metadata={'operation': 'convert_video'}
+                    metadata={"operation": "convert_video"},
                 )
                 response_content = await self._handle_video_conversion_with_context(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),
                     user_message,
-                    llm_context
+                    llm_context,
                 )
                 yield StreamChunk(
                     text=response_content,
                     sub_type=StreamSubType.RESULT,
-                    metadata={'operation': 'convert_video', 'content_type': 'processing_result'}
+                    metadata={"operation": "convert_video", "content_type": "processing_result"},
                 )
 
             elif primary_intent == "resize_video":
                 yield StreamChunk(
                     text="📏 **Video Resize**\n\n",
                     sub_type=StreamSubType.STATUS,
-                    metadata={'operation': 'resize_video'}
+                    metadata={"operation": "resize_video"},
                 )
                 response_content = await self._handle_video_resize(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),
-                    user_message
+                    user_message,
                 )
                 yield response_content
 
@@ -1715,7 +1895,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 response_content = await self._handle_media_trim(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),
-                    user_message
+                    user_message,
                 )
                 yield response_content
 
@@ -1724,15 +1904,14 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 response_content = await self._handle_thumbnail_creation(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),
-                    user_message
+                    user_message,
                 )
                 yield response_content
 
             elif primary_intent == "get_info":
                 yield "📊 **Media Information**\n\n"
                 response_content = await self._handle_media_info(
-                    intent_analysis.get("media_files", []),
-                    user_message
+                    intent_analysis.get("media_files", []), user_message
                 )
                 yield response_content
 
@@ -1744,23 +1923,28 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
                     # Stream with conversation context
                     async for chunk in self.llm_service.generate_response_stream(
-                            help_prompt,
-                            context=llm_context,
-                            system_message=enhanced_system_message
+                        help_prompt, context=llm_context, system_message=enhanced_system_message
                     ):
                         yield chunk
                 else:
-                    response_content = await self._route_media_with_llm_analysis(intent_analysis, user_message, context)
+                    response_content = await self._route_media_with_llm_analysis(
+                        intent_analysis, user_message, context
+                    )
                     yield response_content
 
         except Exception as e:
             yield f"❌ **Media Editor Error:** {str(e)}"
 
-    async def _handle_audio_extraction_with_context(self, media_files: List[str], output_prefs: Dict[str, Any],
-                                                    user_message: str, llm_context: Dict[str, Any]) -> str:
+    async def _handle_audio_extraction_with_context(
+        self,
+        media_files: List[str],
+        output_prefs: Dict[str, Any],
+        user_message: str,
+        llm_context: Dict[str, Any],
+    ) -> str:
         """Handle audio extraction with conversation context"""
         # Use the context to provide more intelligent responses
-        if self.llm_service and llm_context.get('conversation_history'):
+        if self.llm_service and llm_context.get("conversation_history"):
             try:
                 enhanced_system_message = self.get_system_message_for_llm(llm_context)
                 context_prompt = f"""Based on our conversation history, help with audio extraction for: {user_message}
@@ -1771,11 +1955,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 guidance = await self.llm_service.generate_response(
                     prompt=context_prompt,
                     context=llm_context,
-                    system_message=enhanced_system_message
+                    system_message=enhanced_system_message,
                 )
 
                 # Proceed with actual extraction
-                result = await self._handle_audio_extraction(media_files, output_prefs, user_message)
+                result = await self._handle_audio_extraction(
+                    media_files, output_prefs, user_message
+                )
 
                 # Enhance the result with context-aware messaging
                 if "✅" in result:
@@ -1790,11 +1976,16 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             # No LLM or context available, use regular method
             return await self._handle_audio_extraction(media_files, output_prefs, user_message)
 
-    async def _handle_video_conversion_with_context(self, media_files: List[str], output_prefs: Dict[str, Any],
-                                                    user_message: str, llm_context: Dict[str, Any]) -> str:
+    async def _handle_video_conversion_with_context(
+        self,
+        media_files: List[str],
+        output_prefs: Dict[str, Any],
+        user_message: str,
+        llm_context: Dict[str, Any],
+    ) -> str:
         """Handle video conversion with conversation context"""
         # Use the context to provide more intelligent responses
-        if self.llm_service and llm_context.get('conversation_history'):
+        if self.llm_service and llm_context.get("conversation_history"):
             try:
                 enhanced_system_message = self.get_system_message_for_llm(llm_context)
                 context_prompt = f"""Based on our conversation history, help with video conversion for: {user_message}
@@ -1805,11 +1996,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 guidance = await self.llm_service.generate_response(
                     prompt=context_prompt,
                     context=llm_context,
-                    system_message=enhanced_system_message
+                    system_message=enhanced_system_message,
                 )
 
                 # Proceed with actual conversion
-                result = await self._handle_video_conversion(media_files, output_prefs, user_message)
+                result = await self._handle_video_conversion(
+                    media_files, output_prefs, user_message
+                )
 
                 # Enhance the result with context-aware messaging
                 if "✅" in result:
@@ -1827,43 +2020,61 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
     def get_agent_status(self) -> Dict[str, Any]:
         """Get current agent status and configuration"""
         return {
-            'agent_id': self.agent_id,
-            'agent_type': 'media_editor',
-            'role': self.role.value,
-            'name': self.name,
-            'description': self.description,
-            'session_id': self.context.session_id,
-            'conversation_id': self.context.conversation_id,
-            'user_id': self.context.user_id,
-            'has_memory': bool(self.memory),
-            'has_llm_service': bool(self.llm_service),
-            'system_message_enabled': bool(self.system_message),
-            'docker_available': bool(hasattr(self, 'media_executor') and self.media_executor.available),
-            'media_config': {
-                'docker_image': getattr(self.media_config, 'docker_image', 'Unknown') if hasattr(self,
-                                                                                                 'media_config') else 'Unknown',
-                'timeout': getattr(self.media_config, 'timeout', 'Unknown') if hasattr(self,
-                                                                                       'media_config') else 'Unknown',
-                'input_dir': getattr(self.media_config, 'input_dir', 'Unknown') if hasattr(self,
-                                                                                           'media_config') else 'Unknown',
-                'output_dir': getattr(self.media_config, 'output_dir', 'Unknown') if hasattr(self,
-                                                                                             'media_config') else 'Unknown'
+            "agent_id": self.agent_id,
+            "agent_type": "media_editor",
+            "role": self.role.value,
+            "name": self.name,
+            "description": self.description,
+            "session_id": self.context.session_id,
+            "conversation_id": self.context.conversation_id,
+            "user_id": self.context.user_id,
+            "has_memory": bool(self.memory),
+            "has_llm_service": bool(self.llm_service),
+            "system_message_enabled": bool(self.system_message),
+            "docker_available": bool(
+                hasattr(self, "media_executor") and self.media_executor.available
+            ),
+            "media_config": {
+                "docker_image": (
+                    getattr(self.media_config, "docker_image", "Unknown")
+                    if hasattr(self, "media_config")
+                    else "Unknown"
+                ),
+                "timeout": (
+                    getattr(self.media_config, "timeout", "Unknown")
+                    if hasattr(self, "media_config")
+                    else "Unknown"
+                ),
+                "input_dir": (
+                    getattr(self.media_config, "input_dir", "Unknown")
+                    if hasattr(self, "media_config")
+                    else "Unknown"
+                ),
+                "output_dir": (
+                    getattr(self.media_config, "output_dir", "Unknown")
+                    if hasattr(self, "media_config")
+                    else "Unknown"
+                ),
             },
-            'conversation_state': {
-                'current_resource': self.conversation_state.current_resource,
-                'current_operation': self.conversation_state.current_operation,
-                'last_intent': self.conversation_state.last_intent
-            } if hasattr(self, 'conversation_state') else None,
-            'capabilities': [
-                'audio_extraction',
-                'video_conversion',
-                'video_resizing',
-                'media_trimming',
-                'thumbnail_creation',
-                'media_info_retrieval',
-                'context_awareness',
-                'ffmpeg_processing',
-                'docker_execution',
-                'streaming_responses'
-            ]
+            "conversation_state": (
+                {
+                    "current_resource": self.conversation_state.current_resource,
+                    "current_operation": self.conversation_state.current_operation,
+                    "last_intent": self.conversation_state.last_intent,
+                }
+                if hasattr(self, "conversation_state")
+                else None
+            ),
+            "capabilities": [
+                "audio_extraction",
+                "video_conversion",
+                "video_resizing",
+                "media_trimming",
+                "thumbnail_creation",
+                "media_info_retrieval",
+                "context_awareness",
+                "ffmpeg_processing",
+                "docker_execution",
+                "streaming_responses",
+            ],
         }

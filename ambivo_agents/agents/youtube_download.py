@@ -7,24 +7,40 @@ Updated with LLM-aware intent detection and conversation history integration.
 
 import asyncio
 import json
-import uuid
-import time
-import re
-from pathlib import Path
-from typing import Dict, List, Any, Optional, AsyncIterator
-from datetime import datetime
 import logging
+import re
+import time
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Any, AsyncIterator, Dict, List, Optional
 
-from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool, StreamChunk, StreamSubType
-from ..config.loader import load_config, get_config_section
-from ..core.history import WebAgentHistoryMixin, ContextType
+from ..config.loader import get_config_section, load_config
+from ..core.base import (
+    AgentMessage,
+    AgentRole,
+    AgentTool,
+    BaseAgent,
+    ExecutionContext,
+    MessageType,
+    StreamChunk,
+    StreamSubType,
+)
+from ..core.history import ContextType, WebAgentHistoryMixin
 from ..executors.youtube_executor import YouTubeDockerExecutor
 
 
 class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
     """YouTube Download Agent for downloading videos and audio from YouTube"""
 
-    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, system_message: str = None,**kwargs):
+    def __init__(
+        self,
+        agent_id: str = None,
+        memory_manager=None,
+        llm_service=None,
+        system_message: str = None,
+        **kwargs,
+    ):
         if agent_id is None:
             agent_id = f"youtube_{str(uuid.uuid4())[:8]}"
 
@@ -35,7 +51,7 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
             llm_service=llm_service,
             name="YouTube Download Agent",
             description="Agent for downloading videos and audio from YouTube using pytubefix",
-            **kwargs
+            **kwargs,
         )
 
         # Initialize history mixin
@@ -43,19 +59,19 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
 
         # Load YouTube configuration
         try:
-            if hasattr(self, 'config') and self.config:
-                self.youtube_config = self.config.get('youtube_download', {})
+            if hasattr(self, "config") and self.config:
+                self.youtube_config = self.config.get("youtube_download", {})
             else:
                 config = load_config()
-                self.youtube_config = config.get('youtube_download', {})
+                self.youtube_config = config.get("youtube_download", {})
         except Exception as e:
             # Provide sensible defaults if config fails
             self.youtube_config = {
-                'docker_image': 'sgosain/amb-ubuntu-python-public-pod',
-                'download_dir': './youtube_downloads',
-                'timeout': 600,
-                'memory_limit': '1g',
-                'default_audio_only': True
+                "docker_image": "sgosain/amb-ubuntu-python-public-pod",
+                "download_dir": "./youtube_downloads",
+                "timeout": 600,
+                "memory_limit": "1g",
+                "default_audio_only": True,
             }
 
         # YouTube-specific initialization
@@ -63,7 +79,9 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
         self._initialize_youtube_executor()
         self._add_youtube_tools()
 
-    async def _llm_analyze_youtube_intent(self, user_message: str, conversation_context: str = "") -> Dict[str, Any]:
+    async def _llm_analyze_youtube_intent(
+        self, user_message: str, conversation_context: str = ""
+    ) -> Dict[str, Any]:
         """Use LLM to analyze YouTube download intent"""
         if not self.llm_service:
             return self._keyword_based_youtube_analysis(user_message)
@@ -100,7 +118,8 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
         try:
             response = await self.llm_service.generate_response(prompt)
             import re
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
             else:
@@ -113,38 +132,38 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
         content_lower = user_message.lower()
 
         # Determine intent
-        if any(word in content_lower for word in ['info', 'information', 'details', 'about']):
-            intent = 'get_info'
-        elif any(word in content_lower for word in ['audio', 'mp3', 'music', 'sound']):
-            intent = 'download_audio'
-        elif any(word in content_lower for word in ['video', 'mp4', 'watch']):
-            intent = 'download_video'
-        elif any(word in content_lower for word in ['batch', 'multiple', 'several']):
-            intent = 'batch_download'
-        elif any(word in content_lower for word in ['download', 'get', 'fetch']):
+        if any(word in content_lower for word in ["info", "information", "details", "about"]):
+            intent = "get_info"
+        elif any(word in content_lower for word in ["audio", "mp3", "music", "sound"]):
+            intent = "download_audio"
+        elif any(word in content_lower for word in ["video", "mp4", "watch"]):
+            intent = "download_video"
+        elif any(word in content_lower for word in ["batch", "multiple", "several"]):
+            intent = "batch_download"
+        elif any(word in content_lower for word in ["download", "get", "fetch"]):
             # Default to audio if no specific format mentioned
-            intent = 'download_audio'
+            intent = "download_audio"
         else:
-            intent = 'help_request'
+            intent = "help_request"
 
         # Extract YouTube URLs
         youtube_urls = self._extract_youtube_urls(user_message)
 
         # Determine output preferences
-        format_type = "video" if intent == 'download_video' else "audio"
+        format_type = "video" if intent == "download_video" else "audio"
         output_format = None
-        if 'mp3' in content_lower:
-            output_format = 'mp3'
-        elif 'mp4' in content_lower:
-            output_format = 'mp4'
-        elif 'wav' in content_lower:
-            output_format = 'wav'
+        if "mp3" in content_lower:
+            output_format = "mp3"
+        elif "mp4" in content_lower:
+            output_format = "mp4"
+        elif "wav" in content_lower:
+            output_format = "wav"
 
-        quality = 'medium'
-        if 'high' in content_lower:
-            quality = 'high'
-        elif 'low' in content_lower:
-            quality = 'low'
+        quality = "medium"
+        if "high" in content_lower:
+            quality = "high"
+        elif "low" in content_lower:
+            quality = "low"
 
         return {
             "primary_intent": intent,
@@ -153,14 +172,16 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
                 "format_type": format_type,
                 "format": output_format,
                 "quality": quality,
-                "custom_filename": None
+                "custom_filename": None,
             },
-            "uses_context_reference": any(word in content_lower for word in ['this', 'that', 'it']),
+            "uses_context_reference": any(word in content_lower for word in ["this", "that", "it"]),
             "context_type": "previous_url",
-            "confidence": 0.7
+            "confidence": 0.7,
         }
 
-    async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
+    async def process_message(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AgentMessage:
         """Process message with LLM-based YouTube intent detection and history context"""
         self.memory.store_message(message)
 
@@ -174,16 +195,20 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
             conversation_context = self._get_youtube_conversation_context_summary()
 
             # Use LLM to analyze intent
-            intent_analysis = await self._llm_analyze_youtube_intent(user_message, conversation_context)
+            intent_analysis = await self._llm_analyze_youtube_intent(
+                user_message, conversation_context
+            )
 
             # Route request based on LLM analysis
-            response_content = await self._route_youtube_with_llm_analysis(intent_analysis, user_message, context)
+            response_content = await self._route_youtube_with_llm_analysis(
+                intent_analysis, user_message, context
+            )
 
             response = self.create_response(
                 content=response_content,
                 recipient_id=message.sender_id,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
 
             self.memory.store_message(response)
@@ -195,12 +220,13 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
                 recipient_id=message.sender_id,
                 message_type=MessageType.ERROR,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
             return error_response
 
-    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        StreamChunk]:
+    async def process_message_stream(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AsyncIterator[StreamChunk]:
         """Stream processing for YouTube operations"""
         self.memory.store_message(message)
 
@@ -215,9 +241,11 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
             yield StreamChunk(
                 text="Analyzing YouTube request...\n\n",
                 sub_type=StreamSubType.STATUS,
-                metadata={'phase': 'analysis'}
+                metadata={"phase": "analysis"},
             )
-            intent_analysis = await self._llm_analyze_youtube_intent(user_message, conversation_context)
+            intent_analysis = await self._llm_analyze_youtube_intent(
+                user_message, conversation_context
+            )
 
             # Route and stream response based on intent
             primary_intent = intent_analysis.get("primary_intent", "help_request")
@@ -226,76 +254,76 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
                 yield StreamChunk(
                     text="**Preparing Audio Download**\n\n",
                     sub_type=StreamSubType.STATUS,
-                    metadata={'intent': 'download_audio'}
+                    metadata={"intent": "download_audio"},
                 )
                 response_content = await self._handle_audio_download(
                     intent_analysis.get("youtube_urls", []),
                     intent_analysis.get("output_preferences", {}),
-                    user_message
+                    user_message,
                 )
                 yield StreamChunk(
                     text=response_content,
                     sub_type=StreamSubType.RESULT,
-                    metadata={'operation': 'audio_download', 'content_type': 'download_result'}
+                    metadata={"operation": "audio_download", "content_type": "download_result"},
                 )
 
             elif primary_intent == "download_video":
                 yield StreamChunk(
                     text="**Preparing Video Download**\n\n",
                     sub_type=StreamSubType.STATUS,
-                    metadata={'intent': 'download_video'}
+                    metadata={"intent": "download_video"},
                 )
                 response_content = await self._handle_video_download(
                     intent_analysis.get("youtube_urls", []),
                     intent_analysis.get("output_preferences", {}),
-                    user_message
+                    user_message,
                 )
                 yield StreamChunk(
                     text=response_content,
                     sub_type=StreamSubType.RESULT,
-                    metadata={'operation': 'video_download', 'content_type': 'download_result'}
+                    metadata={"operation": "video_download", "content_type": "download_result"},
                 )
 
             else:
                 # For other intents, stream LLM response if available
                 if self.llm_service:
                     async for chunk in self.llm_service.generate_response_stream(
-                            f"As a YouTube download assistant, help with: {user_message}"
+                        f"As a YouTube download assistant, help with: {user_message}"
                     ):
                         yield StreamChunk(
                             text=chunk,
                             sub_type=StreamSubType.CONTENT,
-                            metadata={'type': 'help_response'}
+                            metadata={"type": "help_response"},
                         )
                 else:
-                    response_content = await self._route_youtube_with_llm_analysis(intent_analysis, user_message,
-                                                                                   context)
+                    response_content = await self._route_youtube_with_llm_analysis(
+                        intent_analysis, user_message, context
+                    )
                     yield StreamChunk(
                         text=response_content,
                         sub_type=StreamSubType.CONTENT,
-                        metadata={'fallback_response': True}
+                        metadata={"fallback_response": True},
                     )
 
         except Exception as e:
             yield StreamChunk(
                 text=f"YouTube agent error: {str(e)}",
                 sub_type=StreamSubType.ERROR,
-                metadata={'error': str(e)}
+                metadata={"error": str(e)},
             )
 
     def _get_youtube_conversation_context_summary(self) -> str:
         """Get YouTube conversation context summary"""
         try:
             recent_history = self.get_conversation_history_with_context(
-                limit=3,
-                context_types=[ContextType.URL]
+                limit=3, context_types=[ContextType.URL]
             )
 
             context_summary = []
             for msg in recent_history:
-                if msg.get('message_type') == 'user_input':
-                    extracted_context = msg.get('extracted_context', {})
-                    urls = extracted_context.get('url', [])
+                if msg.get("message_type") == "user_input":
+                    extracted_context = msg.get("extracted_context", {})
+                    urls = extracted_context.get("url", [])
 
                     youtube_urls = [url for url in urls if self._is_valid_youtube_url(url)]
                     if youtube_urls:
@@ -305,8 +333,9 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
         except:
             return "No previous YouTube context"
 
-    async def _route_youtube_with_llm_analysis(self, intent_analysis: Dict[str, Any], user_message: str,
-                                              context: ExecutionContext) -> str:
+    async def _route_youtube_with_llm_analysis(
+        self, intent_analysis: Dict[str, Any], user_message: str, context: ExecutionContext
+    ) -> str:
         """Route YouTube request based on LLM intent analysis"""
 
         primary_intent = intent_analysis.get("primary_intent", "help_request")
@@ -334,15 +363,19 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
         else:
             return await self._handle_youtube_help_request(user_message)
 
-    async def _handle_audio_download(self, youtube_urls: List[str], output_prefs: Dict[str, Any], user_message: str) -> str:
+    async def _handle_audio_download(
+        self, youtube_urls: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
         """Handle audio download requests"""
         if not youtube_urls:
             recent_url = self._get_recent_youtube_url_from_history(None)
             if recent_url:
                 return f"I can download audio from YouTube videos. Did you mean to download audio from **{recent_url}**? Please confirm."
             else:
-                return "I can download audio from YouTube videos. Please provide a YouTube URL.\n\n" \
-                       "Example: 'Download audio from https://youtube.com/watch?v=example'"
+                return (
+                    "I can download audio from YouTube videos. Please provide a YouTube URL.\n\n"
+                    "Example: 'Download audio from https://youtube.com/watch?v=example'"
+                )
 
         url = youtube_urls[0]
         output_format = output_prefs.get("format", "mp3")
@@ -352,8 +385,8 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
         try:
             result = await self._download_youtube_audio(url, custom_filename)
 
-            if result['success']:
-                file_size_mb = result.get('file_size_bytes', 0) / (1024 * 1024)
+            if result["success"]:
+                file_size_mb = result.get("file_size_bytes", 0) / (1024 * 1024)
                 return f"""✅ **YouTube Audio Download Completed**
 
 🎵 **Type:** Audio (MP3)
@@ -370,15 +403,19 @@ Your audio file has been successfully downloaded and is ready to use! 🎉"""
         except Exception as e:
             return f"❌ **Error during audio download:** {str(e)}"
 
-    async def _handle_video_download(self, youtube_urls: List[str], output_prefs: Dict[str, Any], user_message: str) -> str:
+    async def _handle_video_download(
+        self, youtube_urls: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
         """Handle video download requests"""
         if not youtube_urls:
             recent_url = self._get_recent_youtube_url_from_history(None)
             if recent_url:
                 return f"I can download videos from YouTube. Did you mean to download the video from **{recent_url}**? Please confirm."
             else:
-                return "I can download videos from YouTube. Please provide a YouTube URL.\n\n" \
-                       "Example: 'Download video from https://youtube.com/watch?v=example'"
+                return (
+                    "I can download videos from YouTube. Please provide a YouTube URL.\n\n"
+                    "Example: 'Download video from https://youtube.com/watch?v=example'"
+                )
 
         url = youtube_urls[0]
         custom_filename = output_prefs.get("custom_filename")
@@ -386,8 +423,8 @@ Your audio file has been successfully downloaded and is ready to use! 🎉"""
         try:
             result = await self._download_youtube_video(url, custom_filename)
 
-            if result['success']:
-                file_size_mb = result.get('file_size_bytes', 0) / (1024 * 1024)
+            if result["success"]:
+                file_size_mb = result.get("file_size_bytes", 0) / (1024 * 1024)
                 return f"""✅ **YouTube Video Download Completed**
 
 🎬 **Type:** Video (MP4)
@@ -411,16 +448,18 @@ Your video file has been successfully downloaded and is ready to use! 🎉"""
             if recent_url:
                 return f"I can get information about YouTube videos. Did you mean to get info for **{recent_url}**? Please confirm."
             else:
-                return "I can get information about YouTube videos. Please provide a YouTube URL.\n\n" \
-                       "Example: 'Get info about https://youtube.com/watch?v=example'"
+                return (
+                    "I can get information about YouTube videos. Please provide a YouTube URL.\n\n"
+                    "Example: 'Get info about https://youtube.com/watch?v=example'"
+                )
 
         url = youtube_urls[0]
 
         try:
             result = await self._get_youtube_info(url)
 
-            if result['success']:
-                video_info = result['video_info']
+            if result["success"]:
+                video_info = result["video_info"]
                 return f"""📹 **YouTube Video Information**
 
 **🎬 Title:** {video_info.get('title', 'Unknown')}
@@ -441,11 +480,15 @@ Would you like me to download this video?"""
         except Exception as e:
             return f"❌ **Error getting video info:** {str(e)}"
 
-    async def _handle_batch_download(self, youtube_urls: List[str], output_prefs: Dict[str, Any], user_message: str) -> str:
+    async def _handle_batch_download(
+        self, youtube_urls: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
         """Handle batch download requests"""
         if not youtube_urls:
-            return "I can download multiple YouTube videos at once. Please provide YouTube URLs.\n\n" \
-                   "Example: 'Download https://youtube.com/watch?v=1 and https://youtube.com/watch?v=2'"
+            return (
+                "I can download multiple YouTube videos at once. Please provide YouTube URLs.\n\n"
+                "Example: 'Download https://youtube.com/watch?v=1 and https://youtube.com/watch?v=2'"
+            )
 
         format_type = output_prefs.get("format_type", "audio")
         audio_only = format_type == "audio"
@@ -453,10 +496,10 @@ Would you like me to download this video?"""
         try:
             result = await self._batch_download_youtube(youtube_urls, audio_only)
 
-            if result['success']:
-                successful = result['successful']
-                failed = result['failed']
-                total = result['total_urls']
+            if result["success"]:
+                successful = result["successful"]
+                failed = result["failed"]
+                total = result["total_urls"]
 
                 response = f"""📦 **Batch YouTube Download Completed**
 
@@ -470,17 +513,19 @@ Would you like me to download this video?"""
 
                 if successful > 0:
                     response += "✅ **Successfully Downloaded:**\n"
-                    for i, download_result in enumerate(result['results'], 1):
-                        if download_result.get('success', False):
+                    for i, download_result in enumerate(result["results"], 1):
+                        if download_result.get("success", False):
                             response += f"{i}. {download_result.get('filename', 'Unknown')}\n"
 
                 if failed > 0:
                     response += f"\n❌ **Failed Downloads:** {failed}\n"
-                    for i, download_result in enumerate(result['results'], 1):
-                        if not download_result.get('success', False):
+                    for i, download_result in enumerate(result["results"], 1):
+                        if not download_result.get("success", False):
                             response += f"{i}. {download_result.get('url', 'Unknown')}: {download_result.get('error', 'Unknown error')}\n"
 
-                response += f"\n🎉 Batch download completed with {successful}/{total} successful downloads!"
+                response += (
+                    f"\n🎉 Batch download completed with {successful}/{total} successful downloads!"
+                )
                 return response
             else:
                 return f"❌ **Batch download failed:** {result['error']}"
@@ -492,26 +537,28 @@ Would you like me to download this video?"""
         """Handle YouTube help requests with conversation context"""
         state = self.get_conversation_state()
 
-        response = ("I'm your YouTube Download Agent! I can help you with:\n\n"
-                    "🎵 **Audio Downloads**\n"
-                    "- Download MP3 audio from YouTube videos\n"
-                    "- High-quality audio extraction\n"
-                    "- Custom filename support\n\n"
-                    "🎥 **Video Downloads**\n"
-                    "- Download MP4 videos in highest available quality\n"
-                    "- Progressive download format\n"
-                    "- Full video with audio\n\n"
-                    "📊 **Video Information**\n"
-                    "- Get video details without downloading\n"
-                    "- Check duration, views, and available streams\n"
-                    "- Thumbnail and metadata extraction\n\n"
-                    "📦 **Batch Operations**\n"
-                    "- Download multiple videos at once\n"
-                    "- Bulk audio/video processing\n\n"
-                    "🧠 **Smart Context Features**\n"
-                    "- Remembers YouTube URLs from conversation\n"
-                    "- Understands 'that video' and 'this URL'\n"
-                    "- Maintains working context\n\n")
+        response = (
+            "I'm your YouTube Download Agent! I can help you with:\n\n"
+            "🎵 **Audio Downloads**\n"
+            "- Download MP3 audio from YouTube videos\n"
+            "- High-quality audio extraction\n"
+            "- Custom filename support\n\n"
+            "🎥 **Video Downloads**\n"
+            "- Download MP4 videos in highest available quality\n"
+            "- Progressive download format\n"
+            "- Full video with audio\n\n"
+            "📊 **Video Information**\n"
+            "- Get video details without downloading\n"
+            "- Check duration, views, and available streams\n"
+            "- Thumbnail and metadata extraction\n\n"
+            "📦 **Batch Operations**\n"
+            "- Download multiple videos at once\n"
+            "- Bulk audio/video processing\n\n"
+            "🧠 **Smart Context Features**\n"
+            "- Remembers YouTube URLs from conversation\n"
+            "- Understands 'that video' and 'this URL'\n"
+            "- Maintains working context\n\n"
+        )
 
         # Add current context information
         if state.current_resource and self._is_valid_youtube_url(state.current_resource):
@@ -526,20 +573,22 @@ Would you like me to download this video?"""
 
         return response
 
-    def _extract_youtube_intent_from_llm_response(self, llm_response: str, user_message: str) -> Dict[str, Any]:
+    def _extract_youtube_intent_from_llm_response(
+        self, llm_response: str, user_message: str
+    ) -> Dict[str, Any]:
         """Extract YouTube intent from non-JSON LLM response"""
         content_lower = llm_response.lower()
 
-        if 'audio' in content_lower or 'mp3' in content_lower:
-            intent = 'download_audio'
-        elif 'video' in content_lower or 'mp4' in content_lower:
-            intent = 'download_video'
-        elif 'info' in content_lower or 'information' in content_lower:
-            intent = 'get_info'
-        elif 'batch' in content_lower or 'multiple' in content_lower:
-            intent = 'batch_download'
+        if "audio" in content_lower or "mp3" in content_lower:
+            intent = "download_audio"
+        elif "video" in content_lower or "mp4" in content_lower:
+            intent = "download_video"
+        elif "info" in content_lower or "information" in content_lower:
+            intent = "get_info"
+        elif "batch" in content_lower or "multiple" in content_lower:
+            intent = "batch_download"
         else:
-            intent = 'help_request'
+            intent = "help_request"
 
         return {
             "primary_intent": intent,
@@ -547,141 +596,182 @@ Would you like me to download this video?"""
             "output_preferences": {"format_type": "audio", "format": None, "quality": "medium"},
             "uses_context_reference": False,
             "context_type": "none",
-            "confidence": 0.6
+            "confidence": 0.6,
         }
 
     def _add_youtube_tools(self):
         """Add all YouTube download tools"""
 
         # Download video/audio tool
-        self.add_tool(AgentTool(
-            name="download_youtube",
-            description="Download video or audio from YouTube URL",
-            function=self._download_youtube,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "YouTube URL to download"},
-                    "audio_only": {"type": "boolean", "default": True, "description": "Download only audio if True"},
-                    "custom_filename": {"type": "string", "description": "Custom filename (optional)"}
+        self.add_tool(
+            AgentTool(
+                name="download_youtube",
+                description="Download video or audio from YouTube URL",
+                function=self._download_youtube,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "YouTube URL to download"},
+                        "audio_only": {
+                            "type": "boolean",
+                            "default": True,
+                            "description": "Download only audio if True",
+                        },
+                        "custom_filename": {
+                            "type": "string",
+                            "description": "Custom filename (optional)",
+                        },
+                    },
+                    "required": ["url"],
                 },
-                "required": ["url"]
-            }
-        ))
+            )
+        )
 
         # Get video information tool
-        self.add_tool(AgentTool(
-            name="get_youtube_info",
-            description="Get information about a YouTube video without downloading",
-            function=self._get_youtube_info,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "YouTube URL to get information about"}
+        self.add_tool(
+            AgentTool(
+                name="get_youtube_info",
+                description="Get information about a YouTube video without downloading",
+                function=self._get_youtube_info,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "YouTube URL to get information about",
+                        }
+                    },
+                    "required": ["url"],
                 },
-                "required": ["url"]
-            }
-        ))
+            )
+        )
 
         # Download audio specifically
-        self.add_tool(AgentTool(
-            name="download_youtube_audio",
-            description="Download audio only from YouTube URL",
-            function=self._download_youtube_audio,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "YouTube URL to download audio from"},
-                    "custom_filename": {"type": "string", "description": "Custom filename (optional)"}
+        self.add_tool(
+            AgentTool(
+                name="download_youtube_audio",
+                description="Download audio only from YouTube URL",
+                function=self._download_youtube_audio,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "YouTube URL to download audio from",
+                        },
+                        "custom_filename": {
+                            "type": "string",
+                            "description": "Custom filename (optional)",
+                        },
+                    },
+                    "required": ["url"],
                 },
-                "required": ["url"]
-            }
-        ))
+            )
+        )
 
         # Download video specifically
-        self.add_tool(AgentTool(
-            name="download_youtube_video",
-            description="Download video from YouTube URL",
-            function=self._download_youtube_video,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "YouTube URL to download video from"},
-                    "custom_filename": {"type": "string", "description": "Custom filename (optional)"}
+        self.add_tool(
+            AgentTool(
+                name="download_youtube_video",
+                description="Download video from YouTube URL",
+                function=self._download_youtube_video,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "YouTube URL to download video from",
+                        },
+                        "custom_filename": {
+                            "type": "string",
+                            "description": "Custom filename (optional)",
+                        },
+                    },
+                    "required": ["url"],
                 },
-                "required": ["url"]
-            }
-        ))
+            )
+        )
 
         # Batch download tool
-        self.add_tool(AgentTool(
-            name="batch_download_youtube",
-            description="Download multiple YouTube videos/audio",
-            function=self._batch_download_youtube,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "urls": {"type": "array", "items": {"type": "string"}, "description": "List of YouTube URLs"},
-                    "audio_only": {"type": "boolean", "default": True, "description": "Download only audio if True"}
+        self.add_tool(
+            AgentTool(
+                name="batch_download_youtube",
+                description="Download multiple YouTube videos/audio",
+                function=self._batch_download_youtube,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "urls": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of YouTube URLs",
+                        },
+                        "audio_only": {
+                            "type": "boolean",
+                            "default": True,
+                            "description": "Download only audio if True",
+                        },
+                    },
+                    "required": ["urls"],
                 },
-                "required": ["urls"]
-            }
-        ))
+            )
+        )
 
     def _load_youtube_config(self):
         """Load YouTube configuration with fallbacks"""
         try:
-            if hasattr(self, 'config') and self.config:
-                self.youtube_config = self.config.get('youtube_download', {})
+            if hasattr(self, "config") and self.config:
+                self.youtube_config = self.config.get("youtube_download", {})
                 logging.info("Loaded YouTube config from agent config")
             else:
                 config = load_config()
-                self.youtube_config = config.get('youtube_download', {})
+                self.youtube_config = config.get("youtube_download", {})
                 logging.info("Loaded YouTube config from file")
         except Exception as e:
             # Provide sensible defaults if config fails
             self.youtube_config = {
-                'docker_image': 'sgosain/amb-ubuntu-python-public-pod',
-                'download_dir': './youtube_downloads',
-                'timeout': 600,
-                'memory_limit': '1g',
-                'default_audio_only': True
+                "docker_image": "sgosain/amb-ubuntu-python-public-pod",
+                "download_dir": "./youtube_downloads",
+                "timeout": 600,
+                "memory_limit": "1g",
+                "default_audio_only": True,
             }
 
     def _initialize_youtube_executor(self):
         """Initialize the YouTube executor"""
         try:
             from ..executors.youtube_executor import YouTubeDockerExecutor
+
             self.youtube_executor = YouTubeDockerExecutor(self.youtube_config)
             logging.info("YouTube executor initialized successfully")
         except Exception as e:
             logging.error(f"Failed to initialize YouTube executor: {e}")
             raise RuntimeError(f"Failed to initialize YouTube executor: {e}")
 
-    async def _download_youtube(self, url: str, audio_only: bool = True, custom_filename: str = None) -> Dict[str, Any]:
+    async def _download_youtube(
+        self, url: str, audio_only: bool = True, custom_filename: str = None
+    ) -> Dict[str, Any]:
         """Download video or audio from YouTube"""
         try:
             if not self._is_valid_youtube_url(url):
                 return {"success": False, "error": f"Invalid YouTube URL: {url}"}
 
             result = self.youtube_executor.download_youtube_video(
-                url=url,
-                audio_only=audio_only,
-                output_filename=custom_filename
+                url=url, audio_only=audio_only, output_filename=custom_filename
             )
 
-            if result['success']:
-                download_info = result.get('download_info', {})
+            if result["success"]:
+                download_info = result.get("download_info", {})
                 return {
                     "success": True,
                     "message": f"Successfully downloaded {'audio' if audio_only else 'video'} from YouTube",
                     "url": url,
                     "audio_only": audio_only,
-                    "file_path": download_info.get('final_path'),
-                    "filename": download_info.get('filename'),
-                    "file_size_bytes": download_info.get('size_bytes', 0),
-                    "execution_time": result['execution_time'],
-                    "custom_filename": custom_filename
+                    "file_path": download_info.get("final_path"),
+                    "filename": download_info.get("filename"),
+                    "file_size_bytes": download_info.get("size_bytes", 0),
+                    "execution_time": result["execution_time"],
+                    "custom_filename": custom_filename,
                 }
             else:
                 return result
@@ -689,11 +779,15 @@ Would you like me to download this video?"""
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _download_youtube_audio(self, url: str, custom_filename: str = None) -> Dict[str, Any]:
+    async def _download_youtube_audio(
+        self, url: str, custom_filename: str = None
+    ) -> Dict[str, Any]:
         """Download audio only from YouTube"""
         return await self._download_youtube(url, audio_only=True, custom_filename=custom_filename)
 
-    async def _download_youtube_video(self, url: str, custom_filename: str = None) -> Dict[str, Any]:
+    async def _download_youtube_video(
+        self, url: str, custom_filename: str = None
+    ) -> Dict[str, Any]:
         """Download video from YouTube"""
         return await self._download_youtube(url, audio_only=False, custom_filename=custom_filename)
 
@@ -705,12 +799,12 @@ Would you like me to download this video?"""
 
             result = self.youtube_executor.get_video_info(url)
 
-            if result['success']:
+            if result["success"]:
                 return {
                     "success": True,
                     "message": "Successfully retrieved video information",
                     "url": url,
-                    "video_info": result['video_info']
+                    "video_info": result["video_info"],
                 }
             else:
                 return result
@@ -718,7 +812,9 @@ Would you like me to download this video?"""
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _batch_download_youtube(self, urls: List[str], audio_only: bool = True) -> Dict[str, Any]:
+    async def _batch_download_youtube(
+        self, urls: List[str], audio_only: bool = True
+    ) -> Dict[str, Any]:
         """Download multiple YouTube videos/audio"""
         try:
             results = []
@@ -730,7 +826,7 @@ Would you like me to download this video?"""
                     result = await self._download_youtube(url, audio_only=audio_only)
                     results.append(result)
 
-                    if result.get('success', False):
+                    if result.get("success", False):
                         successful += 1
                     else:
                         failed += 1
@@ -740,11 +836,7 @@ Would you like me to download this video?"""
                         await asyncio.sleep(2)
 
                 except Exception as e:
-                    results.append({
-                        "success": False,
-                        "url": url,
-                        "error": str(e)
-                    })
+                    results.append({"success": False, "url": url, "error": str(e)})
                     failed += 1
 
             return {
@@ -754,7 +846,7 @@ Would you like me to download this video?"""
                 "successful": successful,
                 "failed": failed,
                 "audio_only": audio_only,
-                "results": results
+                "results": results,
             }
 
         except Exception as e:
@@ -763,11 +855,11 @@ Would you like me to download this video?"""
     def _is_valid_youtube_url(self, url: str) -> bool:
         """Check if URL is a valid YouTube URL"""
         youtube_patterns = [
-            r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/',
-            r'(https?://)?(www\.)?youtu\.be/',
-            r'(https?://)?(www\.)?youtube\.com/watch\?v=',
-            r'(https?://)?(www\.)?youtube\.com/embed/',
-            r'(https?://)?(www\.)?youtube\.com/v/',
+            r"(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/",
+            r"(https?://)?(www\.)?youtu\.be/",
+            r"(https?://)?(www\.)?youtube\.com/watch\?v=",
+            r"(https?://)?(www\.)?youtube\.com/embed/",
+            r"(https?://)?(www\.)?youtube\.com/v/",
         ]
 
         return any(re.match(pattern, url, re.IGNORECASE) for pattern in youtube_patterns)
@@ -775,10 +867,10 @@ Would you like me to download this video?"""
     def _extract_youtube_urls(self, text: str) -> List[str]:
         """Extract YouTube URLs from text"""
         youtube_patterns = [
-            r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-            r'https?://(?:www\.)?youtu\.be/[\w-]+',
-            r'https?://(?:www\.)?youtube\.com/embed/[\w-]+',
-            r'https?://(?:www\.)?youtube\.com/v/[\w-]+',
+            r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
+            r"https?://(?:www\.)?youtu\.be/[\w-]+",
+            r"https?://(?:www\.)?youtube\.com/embed/[\w-]+",
+            r"https?://(?:www\.)?youtube\.com/v/[\w-]+",
         ]
 
         urls = []
@@ -790,10 +882,12 @@ Would you like me to download this video?"""
     def _get_recent_youtube_url_from_history(self, context):
         """Get most recent YouTube URL from conversation history"""
         try:
-            history = self.memory.get_recent_messages(limit=5, conversation_id=context.conversation_id if context else None)
+            history = self.memory.get_recent_messages(
+                limit=5, conversation_id=context.conversation_id if context else None
+            )
             for msg in reversed(history):
                 if isinstance(msg, dict):
-                    content = msg.get('content', '')
+                    content = msg.get("content", "")
                     urls = self._extract_youtube_urls(content)
                     if urls:
                         return urls[0]
@@ -832,19 +926,17 @@ Would you like me to download this video?"""
             agent_id = f"youtube_{str(uuid.uuid4())[:8]}"
 
         # Create with auto-configuration enabled
-        return cls(
-            agent_id=agent_id,
-            auto_configure=True,  # Enable auto-configuration
-            **kwargs
-        )
+        return cls(agent_id=agent_id, auto_configure=True, **kwargs)  # Enable auto-configuration
 
     @classmethod
-    def create_advanced(cls,
-                        agent_id: str,
-                        memory_manager,
-                        llm_service=None,
-                        config: Dict[str, Any] = None,
-                        **kwargs):
+    def create_advanced(
+        cls,
+        agent_id: str,
+        memory_manager,
+        llm_service=None,
+        config: Dict[str, Any] = None,
+        **kwargs,
+    ):
         """
         Create agent with explicit dependencies (for advanced use cases)
 
@@ -864,5 +956,5 @@ Would you like me to download this video?"""
             llm_service=llm_service,
             config=config,
             auto_configure=False,  # Disable auto-config when using advanced mode
-            **kwargs
+            **kwargs,
         )

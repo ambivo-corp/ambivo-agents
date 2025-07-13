@@ -1,6 +1,6 @@
 # Ambivo Agents - Multi-Agent AI System
 
-A toolkit for AI-powered automation including media processing, knowledge base operations, web scraping, YouTube downloads, and more.
+A toolkit for AI-powered automation including media processing, knowledge base operations, web scraping, YouTube downloads, HTTP/REST API integration, and more.
 
 ## Alpha Release Disclaimer
 
@@ -59,7 +59,8 @@ async def main():
     response1 = await moderator.chat("Download audio from https://youtube.com/watch?v=example")
     response2 = await moderator.chat("Search for latest AI trends")
     response3 = await moderator.chat("Extract audio from video.mp4 as MP3")
-    response4 = await moderator.chat("What is machine learning?")
+    response4 = await moderator.chat("GET https://api.github.com/users/octocat")
+    response5 = await moderator.chat("What is machine learning?")
     
     # Check available agents
     status = await moderator.get_agent_status()
@@ -83,6 +84,7 @@ ambivo-agents
 # Single commands
 ambivo-agents -q "Download audio from https://youtube.com/watch?v=example"
 ambivo-agents -q "Search for Python tutorials"
+ambivo-agents -q "GET https://jsonplaceholder.typicode.com/posts/1"
 ```
 
 ## Agent Creation
@@ -186,6 +188,14 @@ await agent.cleanup_session()
 - Download videos and audio from YouTube
 - Docker-based execution with pytubefix
 - Automatic title sanitization and metadata extraction
+
+### API Agent
+- Comprehensive HTTP/REST API integration
+- Multiple authentication methods (Bearer, API Key, Basic, OAuth2)
+- Pre-fetch authentication with automatic token refresh
+- Built-in retry logic with exponential backoff
+- Security features (domain filtering, SSL verification)
+- Support for all HTTP methods (GET, POST, PUT, DELETE, etc.)
 
 ## Workflow System
 
@@ -633,6 +643,83 @@ async def knowledge_base_demo():
         
         if answer['success']:
             print(f"Answer: {answer['answer']}")
+    
+    await agent.cleanup_session()
+```
+
+### API Integration
+
+```python
+from ambivo_agents import APIAgent
+from ambivo_agents.agents.api_agent import APIRequest, AuthConfig, HTTPMethod, AuthType
+
+async def api_integration_demo():
+    agent, context = APIAgent.create(user_id="api_user")
+    
+    # Basic GET request
+    request = APIRequest(
+        url="https://jsonplaceholder.typicode.com/posts/1",
+        method=HTTPMethod.GET
+    )
+    
+    response = await agent.make_api_request(request)
+    if not response.error:
+        print(f"Status: {response.status_code}")
+        print(f"Data: {response.json_data}")
+    
+    # POST with authentication
+    auth_config = AuthConfig(
+        auth_type=AuthType.BEARER,
+        token="your-api-token"
+    )
+    
+    post_request = APIRequest(
+        url="https://api.example.com/data",
+        method=HTTPMethod.POST,
+        auth_config=auth_config,
+        json_data={"name": "test", "value": "123"}
+    )
+    
+    post_response = await agent.make_api_request(post_request)
+    
+    # Google OAuth2 with pre-fetch
+    google_auth = AuthConfig(
+        auth_type=AuthType.BEARER,
+        pre_auth_url="https://www.googleapis.com/oauth2/v4/token",
+        pre_auth_method=HTTPMethod.POST,
+        pre_auth_payload={
+            "client_id": "your-client-id",
+            "client_secret": "your-secret",
+            "refresh_token": "your-refresh-token",
+            "grant_type": "refresh_token"
+        },
+        token_path="access_token"
+    )
+    
+    sheets_request = APIRequest(
+        url="https://sheets.googleapis.com/v4/spreadsheets/sheet-id/values/A1:B10",
+        method=HTTPMethod.GET,
+        auth_config=google_auth
+    )
+    
+    # APIAgent will automatically fetch access_token first, then make the request
+    sheets_response = await agent.make_api_request(sheets_request)
+    
+    await agent.cleanup_session()
+
+# Conversational API usage
+async def conversational_api():
+    agent = APIAgent.create_simple(user_id="chat_user")
+    
+    # Use natural language for API requests
+    response = await agent.chat("GET https://jsonplaceholder.typicode.com/users/1")
+    print(response)
+    
+    response = await agent.chat(
+        "POST https://api.example.com/data with headers: {\"Authorization\": \"Bearer token\"} "
+        "and data: {\"message\": \"Hello API\"}"
+    )
+    print(response)
     
     await agent.cleanup_session()
 ```

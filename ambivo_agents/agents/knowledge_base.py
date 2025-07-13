@@ -6,17 +6,27 @@ Updated for consistency with other agents
 
 import asyncio
 import json
-import uuid
-import time
 import tempfile
-import requests
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Coroutine, AsyncIterator
+import time
+import uuid
 from datetime import datetime
+from pathlib import Path
+from typing import Any, AsyncIterator, Coroutine, Dict, List, Optional
 
-from ..core.base import BaseAgent, AgentRole, AgentMessage, MessageType, ExecutionContext, AgentTool, StreamChunk, StreamSubType
-from ..config.loader import load_config, get_config_section
-from ..core.history import KnowledgeBaseAgentHistoryMixin, ContextType
+import requests
+
+from ..config.loader import get_config_section, load_config
+from ..core.base import (
+    AgentMessage,
+    AgentRole,
+    AgentTool,
+    BaseAgent,
+    ExecutionContext,
+    MessageType,
+    StreamChunk,
+    StreamSubType,
+)
+from ..core.history import ContextType, KnowledgeBaseAgentHistoryMixin
 
 
 class QdrantServiceAdapter:
@@ -25,10 +35,10 @@ class QdrantServiceAdapter:
     def __init__(self):
         # Load from YAML configuration
         config = load_config()
-        kb_config = get_config_section('knowledge_base', config)
+        kb_config = get_config_section("knowledge_base", config)
 
-        self.qdrant_url = kb_config.get('qdrant_url')
-        self.qdrant_api_key = kb_config.get('qdrant_api_key')
+        self.qdrant_url = kb_config.get("qdrant_url")
+        self.qdrant_api_key = kb_config.get("qdrant_api_key")
 
         if not self.qdrant_url:
             raise ValueError("qdrant_url is required in knowledge_base configuration")
@@ -36,10 +46,10 @@ class QdrantServiceAdapter:
         # Initialize Qdrant client
         try:
             import qdrant_client
+
             if self.qdrant_api_key:
                 self.client = qdrant_client.QdrantClient(
-                    url=self.qdrant_url,
-                    api_key=self.qdrant_api_key
+                    url=self.qdrant_url, api_key=self.qdrant_api_key
                 )
             else:
                 self.client = qdrant_client.QdrantClient(url=self.qdrant_url)
@@ -56,14 +66,13 @@ class QdrantServiceAdapter:
 
         # Load chunk settings from config
         config = load_config()
-        kb_config = get_config_section('knowledge_base', config)
+        kb_config = get_config_section("knowledge_base", config)
 
-        chunk_size = kb_config.get('chunk_size', 1024)
-        chunk_overlap = kb_config.get('chunk_overlap', 20)
+        chunk_size = kb_config.get("chunk_size", 1024)
+        chunk_overlap = kb_config.get("chunk_overlap", 20)
 
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap
         )
         splitted_documents = text_splitter.create_documents(texts=[input_text])
 
@@ -71,12 +80,13 @@ class QdrantServiceAdapter:
         docs = [LIDoc.from_langchain_format(doc) for doc in splitted_documents]
         return docs
 
-    def persist_embeddings(self, kb_name: str, doc_path: str = None,
-                           documents=None, custom_meta: Dict[str, Any] = None) -> int:
+    def persist_embeddings(
+        self, kb_name: str, doc_path: str = None, documents=None, custom_meta: Dict[str, Any] = None
+    ) -> int:
         """Persist embeddings to Qdrant"""
         try:
             config = load_config()
-            kb_config = get_config_section('knowledge_base', config)
+            kb_config = get_config_section("knowledge_base", config)
 
             if not documents and doc_path:
                 # Load document from file
@@ -93,24 +103,21 @@ class QdrantServiceAdapter:
             # Add custom metadata
             if custom_meta:
                 for doc in documents:
-                    if not hasattr(doc, 'metadata'):
+                    if not hasattr(doc, "metadata"):
                         doc.metadata = {}
                     doc.metadata.update(custom_meta)
 
             # Create collection name with prefix from config
-            collection_prefix = kb_config.get('default_collection_prefix', '')
+            collection_prefix = kb_config.get("default_collection_prefix", "")
             collection_name = kb_name
             if collection_prefix:
                 collection_name = f"{collection_prefix}_{kb_name}"
 
             # Create vector store and index
-            from llama_index.core import VectorStoreIndex, StorageContext
+            from llama_index.core import StorageContext, VectorStoreIndex
             from llama_index.vector_stores.qdrant import QdrantVectorStore
 
-            vector_store = QdrantVectorStore(
-                client=self.client,
-                collection_name=collection_name
-            )
+            vector_store = QdrantVectorStore(client=self.client, collection_name=collection_name)
 
             storage_context = StorageContext.from_defaults(vector_store=vector_store)
             index = VectorStoreIndex.from_documents(documents, storage_context=storage_context)
@@ -121,38 +128,39 @@ class QdrantServiceAdapter:
             print(f"Error persisting embeddings: {e}")
             return 2  # Error
 
-    def conduct_query(self, query: str, kb_name: str, additional_prompt: str = None,
-                      question_type: str = "free-text", option_list=None) -> tuple:
+    def conduct_query(
+        self,
+        query: str,
+        kb_name: str,
+        additional_prompt: str = None,
+        question_type: str = "free-text",
+        option_list=None,
+    ) -> tuple:
         """Query the knowledge base"""
         try:
             config = load_config()
-            kb_config = get_config_section('knowledge_base', config)
+            kb_config = get_config_section("knowledge_base", config)
 
-            collection_prefix = kb_config.get('default_collection_prefix', '')
+            collection_prefix = kb_config.get("default_collection_prefix", "")
             collection_name = kb_name
             if collection_prefix:
                 collection_name = f"{collection_prefix}_{kb_name}"
 
-            similarity_top_k = kb_config.get('similarity_top_k', 5)
+            similarity_top_k = kb_config.get("similarity_top_k", 5)
 
             # Create vector store and query engine
-            from llama_index.core import VectorStoreIndex
-            from llama_index.vector_stores.qdrant import QdrantVectorStore
+            from llama_index.core import VectorStoreIndex, get_response_synthesizer
             from llama_index.core.indices.vector_store import VectorIndexRetriever
             from llama_index.core.query_engine import RetrieverQueryEngine
-            from llama_index.core import get_response_synthesizer
+            from llama_index.vector_stores.qdrant import QdrantVectorStore
 
-            vector_store = QdrantVectorStore(
-                client=self.client,
-                collection_name=collection_name
-            )
+            vector_store = QdrantVectorStore(client=self.client, collection_name=collection_name)
 
             index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
             retriever = VectorIndexRetriever(similarity_top_k=similarity_top_k, index=index)
             response_synthesizer = get_response_synthesizer()
             query_engine = RetrieverQueryEngine(
-                retriever=retriever,
-                response_synthesizer=response_synthesizer
+                retriever=retriever, response_synthesizer=response_synthesizer
             )
 
             # Execute query
@@ -160,20 +168,22 @@ class QdrantServiceAdapter:
             answer = str(response)
             source_list = []
 
-            if hasattr(response, 'source_nodes') and response.source_nodes:
+            if hasattr(response, "source_nodes") and response.source_nodes:
                 for node in response.source_nodes:
                     source_info = {
                         "text": node.node.get_text()[:200] + "...",
-                        "score": getattr(node, 'score', 0.0),
-                        "metadata": getattr(node.node, 'metadata', {})
+                        "score": getattr(node, "score", 0.0),
+                        "metadata": getattr(node.node, "metadata", {}),
                     }
                     source_list.append(source_info)
 
-            ans_dict_list = [{
-                "answer": answer,
-                "source": f"Found {len(source_list)} relevant sources",
-                "source_list": source_list
-            }]
+            ans_dict_list = [
+                {
+                    "answer": answer,
+                    "source": f"Found {len(source_list)} relevant sources",
+                    "source_list": source_list,
+                }
+            ]
 
             return answer, ans_dict_list
 
@@ -185,7 +195,14 @@ class QdrantServiceAdapter:
 class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
     """LLM-Aware Knowledge Base Agent with conversation context and intelligent routing"""
 
-    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, system_message: str = None,**kwargs):
+    def __init__(
+        self,
+        agent_id: str = None,
+        memory_manager=None,
+        llm_service=None,
+        system_message: str = None,
+        **kwargs,
+    ):
         if agent_id is None:
             agent_id = f"kb_{str(uuid.uuid4())[:8]}"
 
@@ -205,7 +222,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             name="Knowledge Base Agent",
             description="LLM-aware knowledge base agent with conversation history",
             system_message=system_message or default_system,
-            **kwargs
+            **kwargs,
         )
 
         # Initialize history mixin
@@ -220,7 +237,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         # Add knowledge base tools
         self._add_knowledge_base_tools()
 
-    async def _llm_analyze_kb_intent(self, user_message: str, conversation_context: str = "") -> Dict[str, Any]:
+    async def _llm_analyze_kb_intent(
+        self, user_message: str, conversation_context: str = ""
+    ) -> Dict[str, Any]:
         """Use LLM to analyze knowledge base related intent"""
         if not self.llm_service:
             return self._keyword_based_kb_analysis(user_message)
@@ -259,7 +278,8 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         try:
             response = await self.llm_service.generate_response(prompt)
             import re
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
             else:
@@ -272,18 +292,23 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         content_lower = user_message.lower()
 
         # Determine intent
-        if any(word in content_lower for word in ['ingest', 'upload', 'add document', 'import', 'load']):
-            intent = 'ingest_document'
-        elif any(word in content_lower for word in ['add text', 'ingest text', 'text to']):
-            intent = 'ingest_text'
-        elif any(word in content_lower for word in ['query', 'search', 'find', 'ask', 'what', 'how', 'where']):
-            intent = 'query_kb'
-        elif any(word in content_lower for word in ['create', 'new kb', 'make kb', 'setup']):
-            intent = 'create_kb'
-        elif any(word in content_lower for word in ['help', 'what can', 'how to']):
-            intent = 'help_request'
+        if any(
+            word in content_lower for word in ["ingest", "upload", "add document", "import", "load"]
+        ):
+            intent = "ingest_document"
+        elif any(word in content_lower for word in ["add text", "ingest text", "text to"]):
+            intent = "ingest_text"
+        elif any(
+            word in content_lower
+            for word in ["query", "search", "find", "ask", "what", "how", "where"]
+        ):
+            intent = "query_kb"
+        elif any(word in content_lower for word in ["create", "new kb", "make kb", "setup"]):
+            intent = "create_kb"
+        elif any(word in content_lower for word in ["help", "what can", "how to"]):
+            intent = "help_request"
         else:
-            intent = 'help_request'
+            intent = "help_request"
 
         # Extract KB names and documents
         kb_names = self.extract_context_from_text(user_message, ContextType.KNOWLEDGE_BASE)
@@ -292,26 +317,30 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         all_documents = documents + file_paths
 
         # Extract query content
-        query_content = self._extract_query_from_kb_message(user_message) if intent == 'query_kb' else None
+        query_content = (
+            self._extract_query_from_kb_message(user_message) if intent == "query_kb" else None
+        )
 
         return {
             "primary_intent": intent,
             "kb_name": kb_names[0] if kb_names else None,
             "document_references": all_documents,
             "query_content": query_content,
-            "uses_context_reference": any(word in content_lower for word in ['this', 'that', 'it']),
+            "uses_context_reference": any(word in content_lower for word in ["this", "that", "it"]),
             "context_type": "previous_kb",
             "operation_details": {
                 "query_type": "free-text",
                 "custom_metadata": {},
-                "source_type": "file"
+                "source_type": "file",
             },
-            "confidence": 0.7
+            "confidence": 0.7,
         }
 
     # ambivo_agents/agents/knowledge_base.py - FIXED METHODS for context preservation
 
-    async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
+    async def process_message(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AgentMessage:
         """Process message with LLM-based KB intent detection - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
@@ -326,25 +355,29 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             conversation_history = []
 
             try:
-                conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+                conversation_history = await self.get_conversation_history(
+                    limit=5, include_metadata=True
+                )
             except Exception as e:
                 print(f"Could not get conversation history: {e}")
 
             # 🔥 FIX: Build LLM context with conversation history
             llm_context = {
-                'conversation_history': conversation_history,  # 🔥 KEY FIX
-                'conversation_id': message.conversation_id,
-                'user_id': message.sender_id,
-                'agent_type': 'knowledge_base'
+                "conversation_history": conversation_history,  # 🔥 KEY FIX
+                "conversation_id": message.conversation_id,
+                "user_id": message.sender_id,
+                "agent_type": "knowledge_base",
             }
 
             # 🔥 FIX: Use LLM to analyze intent WITH CONTEXT
-            intent_analysis = await self._llm_analyze_kb_intent_with_context(user_message, conversation_context,
-                                                                             llm_context)
+            intent_analysis = await self._llm_analyze_kb_intent_with_context(
+                user_message, conversation_context, llm_context
+            )
 
             # Route request based on LLM analysis with context
-            response_content = await self._route_kb_with_llm_analysis_with_context(intent_analysis, user_message,
-                                                                                   context, llm_context)
+            response_content = await self._route_kb_with_llm_analysis_with_context(
+                intent_analysis, user_message, context, llm_context
+            )
 
             if isinstance(response_content, tuple):
                 response_content, sources_dict = response_content
@@ -356,7 +389,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 metadata={"sources_dict": sources_dict},
                 recipient_id=message.sender_id,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
 
             self.memory.store_message(response)
@@ -368,12 +401,13 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 recipient_id=message.sender_id,
                 message_type=MessageType.ERROR,
                 session_id=message.session_id,
-                conversation_id=message.conversation_id
+                conversation_id=message.conversation_id,
             )
             return error_response
 
-    async def _llm_analyze_kb_intent_with_context(self, user_message: str, conversation_context: str = "",
-                                                  llm_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def _llm_analyze_kb_intent_with_context(
+        self, user_message: str, conversation_context: str = "", llm_context: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Use LLM to analyze knowledge base related intent - FIXED: With conversation context"""
         if not self.llm_service:
             return self._keyword_based_kb_analysis(user_message)
@@ -413,11 +447,12 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             # 🔥 FIX: Pass conversation history through context
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                context=llm_context  # 🔥 KEY: Context preserves memory across provider switches
+                context=llm_context,  # 🔥 KEY: Context preserves memory across provider switches
             )
 
             import re
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
             else:
@@ -426,10 +461,13 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             print(f"LLM KB intent analysis failed: {e}")
             return self._keyword_based_kb_analysis(user_message)
 
-    async def _route_kb_with_llm_analysis_with_context(self, intent_analysis: Dict[str, Any], user_message: str,
-                                                       context: ExecutionContext, llm_context: Dict[str, Any]) -> str | \
-                                                                                                                  tuple[
-                                                                                                                      Any, dict]:
+    async def _route_kb_with_llm_analysis_with_context(
+        self,
+        intent_analysis: Dict[str, Any],
+        user_message: str,
+        context: ExecutionContext,
+        llm_context: Dict[str, Any],
+    ) -> str | tuple[Any, dict]:
         """Route KB request based on LLM intent analysis - FIXED: With context preservation"""
 
         primary_intent = intent_analysis.get("primary_intent", "help_request")
@@ -451,7 +489,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         if primary_intent == "help_request":
             return await self._handle_kb_help_request_with_context(user_message, llm_context)
         elif primary_intent == "ingest_document":
-            return await self._handle_document_ingestion(kb_name, documents, operation_details, user_message)
+            return await self._handle_document_ingestion(
+                kb_name, documents, operation_details, user_message
+            )
         elif primary_intent == "ingest_text":
             return await self._handle_text_ingestion(kb_name, user_message, operation_details)
         elif primary_intent == "query_kb":
@@ -463,11 +503,13 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         else:
             return await self._handle_kb_help_request_with_context(user_message, llm_context)
 
-    async def _handle_kb_help_request_with_context(self, user_message: str, llm_context: Dict[str, Any]) -> str:
+    async def _handle_kb_help_request_with_context(
+        self, user_message: str, llm_context: Dict[str, Any]
+    ) -> str:
         """Handle KB help requests with conversation context - FIXED: Context preserved"""
 
         # Use LLM for more intelligent help if available
-        if self.llm_service and llm_context.get('conversation_history'):
+        if self.llm_service and llm_context.get("conversation_history"):
             help_prompt = f"""As a knowledge base assistant, provide helpful guidance for: {user_message}
 
     Consider the user's previous KB operations and provide contextual assistance."""
@@ -475,8 +517,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             try:
                 # 🔥 FIX: Use LLM with conversation context
                 intelligent_help = await self.llm_service.generate_response(
-                    prompt=help_prompt,
-                    context=llm_context  # 🔥 KEY: Context preserves memory
+                    prompt=help_prompt, context=llm_context  # 🔥 KEY: Context preserves memory
                 )
                 return intelligent_help
             except Exception as e:
@@ -485,19 +526,21 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         # Fallback to standard help message
         state = self.get_conversation_state()
 
-        response = ("I'm your Knowledge Base Agent! I can help you with:\n\n"
-                    "📄 **Document Management**\n"
-                    "- Ingest PDFs, DOCX, TXT, MD files\n"
-                    "- Process web content from URLs\n"
-                    "- Add text content directly\n\n"
-                    "🔍 **Intelligent Search**\n"
-                    "- Natural language queries\n"
-                    "- Semantic similarity search\n"
-                    "- Source attribution\n\n"
-                    "🧠 **Smart Context Features**\n"
-                    "- Remembers knowledge bases from conversation\n"
-                    "- Understands 'that KB' and 'this document'\n"
-                    "- Maintains working context\n\n")
+        response = (
+            "I'm your Knowledge Base Agent! I can help you with:\n\n"
+            "📄 **Document Management**\n"
+            "- Ingest PDFs, DOCX, TXT, MD files\n"
+            "- Process web content from URLs\n"
+            "- Add text content directly\n\n"
+            "🔍 **Intelligent Search**\n"
+            "- Natural language queries\n"
+            "- Semantic similarity search\n"
+            "- Source attribution\n\n"
+            "🧠 **Smart Context Features**\n"
+            "- Remembers knowledge bases from conversation\n"
+            "- Understands 'that KB' and 'this document'\n"
+            "- Maintains working context\n\n"
+        )
 
         # Add current context information
         if state.knowledge_bases:
@@ -516,8 +559,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
         return response
 
-    async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None) -> AsyncIterator[
-        StreamChunk]:
+    async def process_message_stream(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AsyncIterator[StreamChunk]:
         """Stream processing for Knowledge Base operations - FIXED: Context preserved across provider switches"""
         self.memory.store_message(message)
 
@@ -528,34 +572,37 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             yield StreamChunk(
                 text="**Knowledge Base Assistant**\n\n",
                 sub_type=StreamSubType.STATUS,
-                metadata={'agent': 'knowledge_base', 'phase': 'initialization'}
+                metadata={"agent": "knowledge_base", "phase": "initialization"},
             )
 
             # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_kb_conversation_context_summary()
 
-
-            llm_context_from_routing = message.metadata.get('llm_context', {})
-            conversation_history_from_routing = llm_context_from_routing.get('conversation_history', [])
+            llm_context_from_routing = message.metadata.get("llm_context", {})
+            conversation_history_from_routing = llm_context_from_routing.get(
+                "conversation_history", []
+            )
 
             if conversation_history_from_routing:
                 conversation_history = conversation_history_from_routing
             else:
-                conversation_history = await self.get_conversation_history(limit=5, include_metadata=True)
+                conversation_history = await self.get_conversation_history(
+                    limit=5, include_metadata=True
+                )
 
             yield StreamChunk(
                 text="Analyzing knowledge base request...\n",
                 sub_type=StreamSubType.STATUS,
-                metadata={'phase': 'analysis'}
+                metadata={"phase": "analysis"},
             )
 
             # 🔥 FIX: Build LLM context for streaming
             llm_context = {
-                'conversation_history': conversation_history,  # 🔥 KEY FIX
-                'conversation_id': message.conversation_id,
-                'streaming': True,
-                'agent_type': 'knowledge_base',  # media_editor, web_scraper, etc.
-                'routed_from_moderator': bool(llm_context_from_routing)
+                "conversation_history": conversation_history,  # 🔥 KEY FIX
+                "conversation_id": message.conversation_id,
+                "streaming": True,
+                "agent_type": "knowledge_base",  # media_editor, web_scraper, etc.
+                "routed_from_moderator": bool(llm_context_from_routing),
             }
 
             intent_analysis = await self._llm_analyze_kb_intent(user_message, conversation_context)
@@ -569,42 +616,46 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 yield StreamChunk(
                     text="**Document Ingestion**\n\n",
                     sub_type=StreamSubType.STATUS,
-                    metadata={'intent': 'ingest_document'}
+                    metadata={"intent": "ingest_document"},
                 )
                 if not kb_name:
                     yield StreamChunk(
                         text="Determining knowledge base...\n",
                         sub_type=StreamSubType.STATUS,
-                        metadata={'phase': 'determining_kb'}
+                        metadata={"phase": "determining_kb"},
                     )
                 if not documents:
                     yield StreamChunk(
                         text="Identifying documents...\n",
                         sub_type=StreamSubType.STATUS,
-                        metadata={'phase': 'identifying_docs'}
+                        metadata={"phase": "identifying_docs"},
                     )
 
-                async for chunk in self._stream_document_ingestion_with_context(kb_name, documents, user_message,
-                                                                                llm_context):
+                async for chunk in self._stream_document_ingestion_with_context(
+                    kb_name, documents, user_message, llm_context
+                ):
                     yield chunk
 
             elif primary_intent == "ingest_text":
                 yield StreamChunk(
                     text="**Text Ingestion**\n\n",
                     sub_type=StreamSubType.STATUS,
-                    metadata={'intent': 'ingest_text'}
+                    metadata={"intent": "ingest_text"},
                 )
-                async for chunk in self._stream_text_ingestion_with_context(kb_name, user_message, llm_context):
+                async for chunk in self._stream_text_ingestion_with_context(
+                    kb_name, user_message, llm_context
+                ):
                     yield chunk
 
             elif primary_intent == "query_kb":
                 yield StreamChunk(
                     text="**Knowledge Base Query**\n\n",
                     sub_type=StreamSubType.STATUS,
-                    metadata={'intent': 'query_kb'}
+                    metadata={"intent": "query_kb"},
                 )
-                async for chunk in self._stream_kb_query_with_context(kb_name, intent_analysis.get("query_content"),
-                                                                      user_message, llm_context):
+                async for chunk in self._stream_kb_query_with_context(
+                    kb_name, intent_analysis.get("query_content"), user_message, llm_context
+                ):
                     yield chunk
 
             else:
@@ -614,28 +665,29 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     enhanced_system_message = self.get_system_message_for_llm(llm_context)
                     #  Stream with conversation context
                     async for chunk in self.llm_service.generate_response_stream(
-                            help_prompt,
-                            context=llm_context,
-                            system_message=enhanced_system_message
+                        help_prompt, context=llm_context, system_message=enhanced_system_message
                     ):
                         yield chunk
                 else:
-                    response_content = await self._route_kb_with_llm_analysis(intent_analysis, user_message, context)
+                    response_content = await self._route_kb_with_llm_analysis(
+                        intent_analysis, user_message, context
+                    )
                     yield StreamChunk(
                         text=response_content,
                         sub_type=StreamSubType.CONTENT,
-                        metadata={'intent': 'general_response'}
+                        metadata={"intent": "general_response"},
                     )
 
         except Exception as e:
             yield StreamChunk(
                 text=f"**Knowledge Base Error:** {str(e)}",
                 sub_type=StreamSubType.ERROR,
-                metadata={'error': str(e)}
+                metadata={"error": str(e)},
             )
 
-    async def _stream_document_ingestion_with_context(self, kb_name: str, documents: list, user_message: str,
-                                                      llm_context: Dict[str, Any]) -> AsyncIterator[str]:
+    async def _stream_document_ingestion_with_context(
+        self, kb_name: str, documents: list, user_message: str, llm_context: Dict[str, Any]
+    ) -> AsyncIterator[str]:
         """Stream document ingestion with context preservation"""
         try:
             if not kb_name or not documents:
@@ -645,8 +697,8 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     if self.llm_service:
                         # 🔥 FIX: Use context-aware LLM for help
                         async for chunk in self.llm_service.generate_response_stream(
-                                f"User wants to ingest documents but didn't specify KB. Help them: {user_message}",
-                                context=llm_context  # 🔥 KEY: Context preserves memory
+                            f"User wants to ingest documents but didn't specify KB. Help them: {user_message}",
+                            context=llm_context,  # 🔥 KEY: Context preserves memory
                         ):
                             yield chunk
                     return
@@ -665,7 +717,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             processing_time = time.time() - start_time
 
-            if result['success']:
+            if result["success"]:
                 yield f"**Ingestion Completed Successfully!**\n\n"
                 yield f"**Summary:**\n"
                 yield f"Document: {document_path}\n"
@@ -678,8 +730,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except Exception as e:
             yield f"**Error during document ingestion:** {str(e)}"
 
-    async def _stream_text_ingestion_with_context(self, kb_name: str, user_message: str, llm_context: Dict[str, Any]) -> \
-    AsyncIterator[str]:
+    async def _stream_text_ingestion_with_context(
+        self, kb_name: str, user_message: str, llm_context: Dict[str, Any]
+    ) -> AsyncIterator[str]:
         """Stream text ingestion with context preservation"""
         try:
             if not kb_name:
@@ -700,7 +753,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             result = await self._ingest_text(kb_name, text_content)
 
-            if result['success']:
+            if result["success"]:
                 preview = text_content[:100] + "..." if len(text_content) > 100 else text_content
                 yield f"**Text Ingestion Completed**\n\n"
                 yield f"**Preview:** {preview}\n"
@@ -713,8 +766,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except Exception as e:
             yield f"❌ **Error during text ingestion:** {str(e)}"
 
-    async def _stream_kb_query_with_context(self, kb_name: str, query_content: str, user_message: str,
-                                            llm_context: Dict[str, Any]) -> AsyncIterator[str]:
+    async def _stream_kb_query_with_context(
+        self, kb_name: str, query_content: str, user_message: str, llm_context: Dict[str, Any]
+    ) -> AsyncIterator[str]:
         """Stream knowledge base queries with context preservation"""
         try:
             if not kb_name:
@@ -741,9 +795,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             # Perform the actual query
             result = await self._query_knowledge_base(kb_name, query_content)
 
-            if result['success']:
-                answer = result['answer']
-                source_count = len(result.get('source_details', []))
+            if result["success"]:
+                answer = result["answer"]
+                source_count = len(result.get("source_details", []))
 
                 yield f"**Search Results:**\n\n"
 
@@ -752,34 +806,34 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     words = answer.split()
                     chunk_size = 20
                     for i in range(0, len(words), chunk_size):
-                        chunk = ' '.join(words[i:i + chunk_size])
+                        chunk = " ".join(words[i : i + chunk_size])
                         yield f"{chunk} "
                         await asyncio.sleep(0.05)  # Small delay for streaming effect
                 else:
                     yield answer
 
-                #yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
-                #yield f"✅ **Query completed successfully!**\n"
+                # yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
+                # yield f"✅ **Query completed successfully!**\n"
                 yield f"\n"
             else:
                 yield f"❌ **Query failed:** {result['error']}\n"
 
         except Exception as e:
             yield f"❌ **Error during query:** {str(e)}"
+
     def _get_kb_conversation_context_summary(self) -> str:
         """Get KB conversation context summary"""
         try:
             recent_history = self.get_conversation_history_with_context(
-                limit=3,
-                context_types=[ContextType.KNOWLEDGE_BASE, ContextType.DOCUMENT_NAME]
+                limit=3, context_types=[ContextType.KNOWLEDGE_BASE, ContextType.DOCUMENT_NAME]
             )
 
             context_summary = []
             for msg in recent_history:
-                if msg.get('message_type') == 'user_input':
-                    extracted_context = msg.get('extracted_context', {})
-                    kb_names = extracted_context.get('knowledge_base', [])
-                    docs = extracted_context.get('document_name', [])
+                if msg.get("message_type") == "user_input":
+                    extracted_context = msg.get("extracted_context", {})
+                    kb_names = extracted_context.get("knowledge_base", [])
+                    docs = extracted_context.get("document_name", [])
 
                     if kb_names:
                         context_summary.append(f"Previous KB: {kb_names[0]}")
@@ -795,8 +849,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except:
             return "No previous KB context"
 
-    async def _route_kb_with_llm_analysis(self, intent_analysis: Dict[str, Any], user_message: str,
-                                          context: ExecutionContext) ->  str | tuple[Any, dict]:
+    async def _route_kb_with_llm_analysis(
+        self, intent_analysis: Dict[str, Any], user_message: str, context: ExecutionContext
+    ) -> str | tuple[Any, dict]:
         """Route KB request based on LLM intent analysis"""
 
         primary_intent = intent_analysis.get("primary_intent", "help_request")
@@ -818,7 +873,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         if primary_intent == "help_request":
             return await self._handle_kb_help_request(user_message)
         elif primary_intent == "ingest_document":
-            return await self._handle_document_ingestion(kb_name, documents, operation_details, user_message)
+            return await self._handle_document_ingestion(
+                kb_name, documents, operation_details, user_message
+            )
         elif primary_intent == "ingest_text":
             return await self._handle_text_ingestion(kb_name, user_message, operation_details)
         elif primary_intent == "query_kb":
@@ -830,52 +887,68 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         else:
             return await self._handle_kb_help_request(user_message)
 
-    async def _handle_document_ingestion(self, kb_name: str, documents: List[str], operation_details: Dict[str, Any],
-                                         user_message: str) -> str:
+    async def _handle_document_ingestion(
+        self,
+        kb_name: str,
+        documents: List[str],
+        operation_details: Dict[str, Any],
+        user_message: str,
+    ) -> str:
         """Handle document ingestion with LLM analysis"""
 
         # Resolve missing parameters
         if not kb_name:
             available_kbs = self.conversation_state.knowledge_bases
             if available_kbs:
-                return f"I can ingest documents! Which knowledge base?\n\n" \
-                       f"**Available KBs:**\n" + "\n".join([f"• {kb}" for kb in available_kbs]) + \
-                    f"\n\nOr specify a new KB name."
+                return (
+                    f"I can ingest documents! Which knowledge base?\n\n"
+                    f"**Available KBs:**\n"
+                    + "\n".join([f"• {kb}" for kb in available_kbs])
+                    + f"\n\nOr specify a new KB name."
+                )
             else:
-                return "I can ingest documents into knowledge bases. Please specify:\n\n" \
-                       "1. **Knowledge base name** (I'll create it if it doesn't exist)\n" \
-                       "2. **Document path** or just tell me which document\n\n" \
-                       "Example: 'Ingest research.pdf into ai_papers'"
+                return (
+                    "I can ingest documents into knowledge bases. Please specify:\n\n"
+                    "1. **Knowledge base name** (I'll create it if it doesn't exist)\n"
+                    "2. **Document path** or just tell me which document\n\n"
+                    "Example: 'Ingest research.pdf into ai_papers'"
+                )
 
         if not documents:
-            return f"I'll ingest into the **{kb_name}** knowledge base. Which document would you like to add?\n\n" \
-                   f"Please provide the document path or tell me the filename."
+            return (
+                f"I'll ingest into the **{kb_name}** knowledge base. Which document would you like to add?\n\n"
+                f"Please provide the document path or tell me the filename."
+            )
 
         # Perform ingestion
         document_path = documents[0]
 
         try:
             # Check if it's a URL or file path
-            if document_path.startswith('http'):
+            if document_path.startswith("http"):
                 result = await self._ingest_web_content(kb_name, document_path)
                 operation_type = "Web content"
             else:
                 result = await self._ingest_document(kb_name, document_path)
                 operation_type = "Document"
 
-            if result['success']:
-                return f"✅ **{operation_type} Ingestion Completed**\n\n" \
-                       f"📄 **Source:** {document_path}\n" \
-                       f"🗃️ **Knowledge Base:** {kb_name}\n" \
-                       f"⏱️ **Status:** Successfully processed and indexed\n\n" \
-                       f"You can now query this knowledge base! 🎉"
+            if result["success"]:
+                return (
+                    f"✅ **{operation_type} Ingestion Completed**\n\n"
+                    f"📄 **Source:** {document_path}\n"
+                    f"🗃️ **Knowledge Base:** {kb_name}\n"
+                    f"⏱️ **Status:** Successfully processed and indexed\n\n"
+                    f"You can now query this knowledge base! 🎉"
+                )
             else:
                 return f"❌ **Ingestion failed:** {result['error']}"
 
         except Exception as e:
             return f"❌ **Error during ingestion:** {str(e)}"
 
-    async def _handle_text_ingestion(self, kb_name: str, user_message: str, operation_details: Dict[str, Any]) -> str:
+    async def _handle_text_ingestion(
+        self, kb_name: str, user_message: str, operation_details: Dict[str, Any]
+    ) -> str:
         """Handle text ingestion with LLM analysis"""
 
         if not kb_name:
@@ -890,47 +963,55 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         try:
             result = await self._ingest_text(kb_name, text_content)
 
-            if result['success']:
+            if result["success"]:
                 preview = text_content[:100] + "..." if len(text_content) > 100 else text_content
-                return f"✅ **Text Ingestion Completed**\n\n" \
-                       f"📝 **Text Preview:** {preview}\n" \
-                       f"🗃️ **Knowledge Base:** {kb_name}\n" \
-                       f"📊 **Length:** {len(text_content)} characters\n\n" \
-                       f"Text successfully indexed! 🎉"
+                return (
+                    f"✅ **Text Ingestion Completed**\n\n"
+                    f"📝 **Text Preview:** {preview}\n"
+                    f"🗃️ **Knowledge Base:** {kb_name}\n"
+                    f"📊 **Length:** {len(text_content)} characters\n\n"
+                    f"Text successfully indexed! 🎉"
+                )
             else:
                 return f"❌ **Text ingestion failed:** {result['error']}"
 
         except Exception as e:
             return f"❌ **Error during text ingestion:** {str(e)}"
 
-    async def _handle_kb_query(self, kb_name: str, query_content: str, operation_details: Dict[str, Any]) -> str | \
-                                                                                                             tuple[
-                                                                                                                 Any, dict]:
+    async def _handle_kb_query(
+        self, kb_name: str, query_content: str, operation_details: Dict[str, Any]
+    ) -> str | tuple[Any, dict]:
         """Handle KB queries with LLM analysis"""
 
         # Resolve missing parameters
         if not kb_name:
             available_kbs = self.conversation_state.knowledge_bases
             if available_kbs:
-                return f"I can query knowledge bases! Which one?\n\n" \
-                       f"**Available KBs from our conversation:**\n" + \
-                    "\n".join([f"• {kb}" for kb in available_kbs]) + \
-                    f"\n\nExample: 'Query {available_kbs[0]}: {query_content or 'your question'}'"
+                return (
+                    f"I can query knowledge bases! Which one?\n\n"
+                    f"**Available KBs from our conversation:**\n"
+                    + "\n".join([f"• {kb}" for kb in available_kbs])
+                    + f"\n\nExample: 'Query {available_kbs[0]}: {query_content or 'your question'}'"
+                )
             else:
-                return "I can query knowledge bases, but I need to know which one to search.\n\n" \
-                       "Please specify: `Query [kb_name]: [your question]`"
+                return (
+                    "I can query knowledge bases, but I need to know which one to search.\n\n"
+                    "Please specify: `Query [kb_name]: [your question]`"
+                )
 
         if not query_content:
             return f"I'll search the **{kb_name}** knowledge base. What would you like me to find?"
 
         try:
             query_type = operation_details.get("query_type", "free-text")
-            result = await self._query_knowledge_base(kb_name, query_content, question_type=query_type)
+            result = await self._query_knowledge_base(
+                kb_name, query_content, question_type=query_type
+            )
             sources_dict = {}
-            if result['success']:
-                answer = result['answer']
-                source_count = len(result.get('source_details', []))
-                sources_dict:dict = result.get('source_details', {})
+            if result["success"]:
+                answer = result["answer"]
+                source_count = len(result.get("source_details", []))
+                sources_dict: dict = result.get("source_details", {})
 
                 # return f"🔍 **Query Results from {kb_name}**\n\n" \
                 #        f"**Question:** {query_content}\n\n" \
@@ -947,15 +1028,19 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         """Handle KB creation requests"""
 
         if not kb_name:
-            return "I can create knowledge bases! What would you like to name the new knowledge base?\n\n" \
-                   "Example: 'Create a knowledge base called research_papers'"
+            return (
+                "I can create knowledge bases! What would you like to name the new knowledge base?\n\n"
+                "Example: 'Create a knowledge base called research_papers'"
+            )
 
         # KB creation is implicit when first document is ingested
-        return f"Great! I'll create the **{kb_name}** knowledge base when you add the first document.\n\n" \
-               f"To get started:\n" \
-               f"• `Ingest document.pdf into {kb_name}`\n" \
-               f"• `Add text to {kb_name}: [your text content]`\n" \
-               f"• `Ingest https://example.com into {kb_name}`"
+        return (
+            f"Great! I'll create the **{kb_name}** knowledge base when you add the first document.\n\n"
+            f"To get started:\n"
+            f"• `Ingest document.pdf into {kb_name}`\n"
+            f"• `Add text to {kb_name}: [your text content]`\n"
+            f"• `Ingest https://example.com into {kb_name}`"
+        )
 
     async def _handle_kb_management(self, kb_name: str, user_message: str) -> str:
         """Handle KB management requests"""
@@ -982,19 +1067,21 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
         state = self.get_conversation_state()
 
-        response = ("I'm your Knowledge Base Agent! I can help you with:\n\n"
-                    "📄 **Document Management**\n"
-                    "- Ingest PDFs, DOCX, TXT, MD files\n"
-                    "- Process web content from URLs\n"
-                    "- Add text content directly\n\n"
-                    "🔍 **Intelligent Search**\n"
-                    "- Natural language queries\n"
-                    "- Semantic similarity search\n"
-                    "- Source attribution\n\n"
-                    "🧠 **Smart Context Features**\n"
-                    "- Remembers knowledge bases from conversation\n"
-                    "- Understands 'that KB' and 'this document'\n"
-                    "- Maintains working context\n\n")
+        response = (
+            "I'm your Knowledge Base Agent! I can help you with:\n\n"
+            "📄 **Document Management**\n"
+            "- Ingest PDFs, DOCX, TXT, MD files\n"
+            "- Process web content from URLs\n"
+            "- Add text content directly\n\n"
+            "🔍 **Intelligent Search**\n"
+            "- Natural language queries\n"
+            "- Semantic similarity search\n"
+            "- Source attribution\n\n"
+            "🧠 **Smart Context Features**\n"
+            "- Remembers knowledge bases from conversation\n"
+            "- Understands 'that KB' and 'this document'\n"
+            "- Maintains working context\n\n"
+        )
 
         # Add current context information
         if state.knowledge_bases:
@@ -1017,31 +1104,33 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         """Extract query content from KB message"""
         # Look for colon pattern first
         import re
-        colon_match = re.search(r':\s*(.+)', message)
+
+        colon_match = re.search(r":\s*(.+)", message)
         if colon_match:
             return colon_match.group(1).strip()
 
         # Remove KB operation keywords
-        query_keywords = ['query', 'search', 'find', 'ask', 'what', 'how', 'where', 'when', 'why']
+        query_keywords = ["query", "search", "find", "ask", "what", "how", "where", "when", "why"]
         words = message.split()
         filtered_words = []
 
         for word in words:
-            if word.lower() not in query_keywords and not word.lower().endswith('_kb'):
+            if word.lower() not in query_keywords and not word.lower().endswith("_kb"):
                 filtered_words.append(word)
 
-        return ' '.join(filtered_words).strip()
+        return " ".join(filtered_words).strip()
 
     def _extract_text_for_ingestion(self, message: str) -> str:
         """Extract text content for ingestion from message"""
         # Look for colon pattern
         import re
-        colon_match = re.search(r':\s*(.+)', message)
+
+        colon_match = re.search(r":\s*(.+)", message)
         if colon_match:
             return colon_match.group(1).strip()
 
         # Remove ingestion keywords
-        ingest_keywords = ['ingest', 'add', 'upload', 'text', 'into', 'to']
+        ingest_keywords = ["ingest", "add", "upload", "text", "into", "to"]
         words = message.split()
         filtered_words = []
         skip_next = False
@@ -1053,25 +1142,27 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             if word.lower() in ingest_keywords:
                 continue
-            elif word.lower().endswith('_kb') or word.lower().endswith('_base'):
+            elif word.lower().endswith("_kb") or word.lower().endswith("_base"):
                 continue
             else:
                 filtered_words.append(word)
 
-        return ' '.join(filtered_words).strip()
+        return " ".join(filtered_words).strip()
 
-    def _extract_kb_intent_from_llm_response(self, llm_response: str, user_message: str) -> Dict[str, Any]:
+    def _extract_kb_intent_from_llm_response(
+        self, llm_response: str, user_message: str
+    ) -> Dict[str, Any]:
         """Extract KB intent from non-JSON LLM response"""
         content_lower = llm_response.lower()
 
-        if 'ingest' in content_lower or 'upload' in content_lower:
-            intent = 'ingest_document'
-        elif 'query' in content_lower or 'search' in content_lower:
-            intent = 'query_kb'
-        elif 'create' in content_lower:
-            intent = 'create_kb'
+        if "ingest" in content_lower or "upload" in content_lower:
+            intent = "ingest_document"
+        elif "query" in content_lower or "search" in content_lower:
+            intent = "query_kb"
+        elif "create" in content_lower:
+            intent = "create_kb"
         else:
-            intent = 'help_request'
+            intent = "help_request"
 
         return {
             "primary_intent": intent,
@@ -1081,7 +1172,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             "uses_context_reference": False,
             "context_type": "none",
             "operation_details": {"query_type": "free-text"},
-            "confidence": 0.6
+            "confidence": 0.6,
         }
 
     # Tool implementations
@@ -1089,93 +1180,126 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         """Add all knowledge base related tools"""
 
         # Document ingestion tool
-        self.add_tool(AgentTool(
-            name="ingest_document",
-            description="Ingest a document into the knowledge base",
-            function=self._ingest_document,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "kb_name": {"type": "string", "description": "Knowledge base name"},
-                    "doc_path": {"type": "string", "description": "Path to document file"},
-                    "custom_meta": {"type": "object", "description": "Custom metadata for the document"}
+        self.add_tool(
+            AgentTool(
+                name="ingest_document",
+                description="Ingest a document into the knowledge base",
+                function=self._ingest_document,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "Knowledge base name"},
+                        "doc_path": {"type": "string", "description": "Path to document file"},
+                        "custom_meta": {
+                            "type": "object",
+                            "description": "Custom metadata for the document",
+                        },
+                    },
+                    "required": ["kb_name", "doc_path"],
                 },
-                "required": ["kb_name", "doc_path"]
-            }
-        ))
+            )
+        )
 
         # Text ingestion tool
-        self.add_tool(AgentTool(
-            name="ingest_text",
-            description="Ingest a Text string into the knowledge base",
-            function=self._ingest_text,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "kb_name": {"type": "string", "description": "Knowledge base name"},
-                    "input_text": {"type": "string", "description": "Text to Ingest"},
-                    "custom_meta": {"type": "object", "description": "Custom metadata for the text"}
+        self.add_tool(
+            AgentTool(
+                name="ingest_text",
+                description="Ingest a Text string into the knowledge base",
+                function=self._ingest_text,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "Knowledge base name"},
+                        "input_text": {"type": "string", "description": "Text to Ingest"},
+                        "custom_meta": {
+                            "type": "object",
+                            "description": "Custom metadata for the text",
+                        },
+                    },
+                    "required": ["kb_name", "input_text"],
                 },
-                "required": ["kb_name", "input_text"]
-            }
-        ))
+            )
+        )
 
         # Knowledge base query tool
-        self.add_tool(AgentTool(
-            name="query_knowledge_base",
-            description="Query the knowledge base for information",
-            function=self._query_knowledge_base,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "kb_name": {"type": "string", "description": "Knowledge base name"},
-                    "query": {"type": "string", "description": "Query string"},
-                    "question_type": {"type": "string",
-                                      "enum": ["free-text", "multi-select", "single-select", "yes-no"],
-                                      "default": "free-text"},
-                    "option_list": {"type": "array", "items": {"type": "string"},
-                                    "description": "Options for multi/single select questions"},
-                    "additional_prompt": {"type": "string", "description": "Additional prompt context"}
+        self.add_tool(
+            AgentTool(
+                name="query_knowledge_base",
+                description="Query the knowledge base for information",
+                function=self._query_knowledge_base,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "Knowledge base name"},
+                        "query": {"type": "string", "description": "Query string"},
+                        "question_type": {
+                            "type": "string",
+                            "enum": ["free-text", "multi-select", "single-select", "yes-no"],
+                            "default": "free-text",
+                        },
+                        "option_list": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Options for multi/single select questions",
+                        },
+                        "additional_prompt": {
+                            "type": "string",
+                            "description": "Additional prompt context",
+                        },
+                    },
+                    "required": ["kb_name", "query"],
                 },
-                "required": ["kb_name", "query"]
-            }
-        ))
+            )
+        )
 
         # Web content ingestion tool
-        self.add_tool(AgentTool(
-            name="ingest_web_content",
-            description="Ingest content from web URLs",
-            function=self._ingest_web_content,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "kb_name": {"type": "string", "description": "Knowledge base name"},
-                    "url": {"type": "string", "description": "URL to ingest"},
-                    "custom_meta": {"type": "object", "description": "Custom metadata"}
+        self.add_tool(
+            AgentTool(
+                name="ingest_web_content",
+                description="Ingest content from web URLs",
+                function=self._ingest_web_content,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "Knowledge base name"},
+                        "url": {"type": "string", "description": "URL to ingest"},
+                        "custom_meta": {"type": "object", "description": "Custom metadata"},
+                    },
+                    "required": ["kb_name", "url"],
                 },
-                "required": ["kb_name", "url"]
-            }
-        ))
+            )
+        )
 
         # API call tool
-        self.add_tool(AgentTool(
-            name="call_api",
-            description="Make API calls to external services",
-            function=self._call_api,
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "API endpoint URL"},
-                    "method": {"type": "string", "enum": ["GET", "POST", "PUT", "DELETE"], "default": "GET"},
-                    "headers": {"type": "object", "description": "Request headers"},
-                    "payload": {"type": "object", "description": "Request payload for POST/PUT"},
-                    "timeout": {"type": "number", "default": 30}
+        self.add_tool(
+            AgentTool(
+                name="call_api",
+                description="Make API calls to external services",
+                function=self._call_api,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "API endpoint URL"},
+                        "method": {
+                            "type": "string",
+                            "enum": ["GET", "POST", "PUT", "DELETE"],
+                            "default": "GET",
+                        },
+                        "headers": {"type": "object", "description": "Request headers"},
+                        "payload": {
+                            "type": "object",
+                            "description": "Request payload for POST/PUT",
+                        },
+                        "timeout": {"type": "number", "default": 30},
+                    },
+                    "required": ["url"],
                 },
-                "required": ["url"]
-            }
-        ))
+            )
+        )
 
-    async def _ingest_document(self, kb_name: str, doc_path: str, custom_meta: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def _ingest_document(
+        self, kb_name: str, doc_path: str, custom_meta: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Ingest a document into the knowledge base"""
         try:
             if not Path(doc_path).exists():
@@ -1185,17 +1309,13 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             if not custom_meta:
                 custom_meta = {}
 
-            custom_meta.update({
-                "ingestion_time": time.time(),
-                "agent_id": self.agent_id,
-                "file_path": doc_path
-            })
+            custom_meta.update(
+                {"ingestion_time": time.time(), "agent_id": self.agent_id, "file_path": doc_path}
+            )
 
             # Use existing persist_embeddings method
             result = self.qdrant_service.persist_embeddings(
-                kb_name=kb_name,
-                doc_path=doc_path,
-                custom_meta=custom_meta
+                kb_name=kb_name, doc_path=doc_path, custom_meta=custom_meta
             )
 
             if result == 1:
@@ -1203,37 +1323,35 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     "success": True,
                     "message": f"Document {doc_path} successfully ingested into {kb_name}",
                     "kb_name": kb_name,
-                    "file_path": doc_path
+                    "file_path": doc_path,
                 }
             else:
-                return {
-                    "success": False,
-                    "error": f"Failed to ingest document {doc_path}"
-                }
+                return {"success": False, "error": f"Failed to ingest document {doc_path}"}
 
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _ingest_text(self, kb_name: str, input_text: str, custom_meta: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def _ingest_text(
+        self, kb_name: str, input_text: str, custom_meta: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Ingest text into the knowledge base"""
         try:
             # Add metadata
             if not custom_meta:
                 custom_meta = {}
 
-            custom_meta.update({
-                "ingestion_time": time.time(),
-                "agent_id": self.agent_id,
-            })
+            custom_meta.update(
+                {
+                    "ingestion_time": time.time(),
+                    "agent_id": self.agent_id,
+                }
+            )
 
             document_list = self.qdrant_service.documents_from_text(input_text)
 
             # Use existing persist_embeddings method
             result = self.qdrant_service.persist_embeddings(
-                kb_name=kb_name,
-                doc_path=None,
-                documents=document_list,
-                custom_meta=custom_meta
+                kb_name=kb_name, doc_path=None, documents=document_list, custom_meta=custom_meta
             )
 
             if result == 1:
@@ -1243,10 +1361,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     "kb_name": kb_name,
                 }
             else:
-                return {
-                    "success": False,
-                    "error": f"Failed to ingest text"
-                }
+                return {"success": False, "error": f"Failed to ingest text"}
 
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -1256,9 +1371,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         try:
             # Use existing conduct_query method
             answer, ans_dict_list = self.qdrant_service.conduct_query(
-                query=query,
-                kb_name=kb_name,
-                question_type=question_type
+                query=query, kb_name=kb_name, question_type=question_type
             )
 
             return {
@@ -1269,8 +1382,14 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _query_knowledge_base(self, kb_name: str, query: str, question_type: str = "free-text",
-                                    option_list: List[str] = None, additional_prompt: str = None) -> Dict[str, Any]:
+    async def _query_knowledge_base(
+        self,
+        kb_name: str,
+        query: str,
+        question_type: str = "free-text",
+        option_list: List[str] = None,
+        additional_prompt: str = None,
+    ) -> Dict[str, Any]:
         """Query the knowledge base"""
         try:
             # Use existing conduct_query method
@@ -1279,7 +1398,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 kb_name=kb_name,
                 additional_prompt=additional_prompt,
                 question_type=question_type,
-                option_list=option_list
+                option_list=option_list,
             )
 
             return {
@@ -1288,13 +1407,15 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 "source_details": ans_dict_list,
                 "kb_name": kb_name,
                 "query": query,
-                "question_type": question_type
+                "question_type": question_type,
             }
 
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _ingest_web_content(self, kb_name: str, url: str, custom_meta: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def _ingest_web_content(
+        self, kb_name: str, url: str, custom_meta: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Ingest content from web URLs"""
         try:
             # Fetch web content
@@ -1302,7 +1423,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             response.raise_for_status()
 
             # Create temporary file with content
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp_file:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp_file:
                 tmp_file.write(response.text)
                 tmp_path = tmp_file.name
 
@@ -1310,11 +1431,13 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             if not custom_meta:
                 custom_meta = {}
 
-            custom_meta.update({
-                "source_url": url,
-                "fetch_time": time.time(),
-                "content_type": response.headers.get('content-type', 'unknown')
-            })
+            custom_meta.update(
+                {
+                    "source_url": url,
+                    "fetch_time": time.time(),
+                    "content_type": response.headers.get("content-type", "unknown"),
+                }
+            )
 
             # Ingest the content
             result = await self._ingest_document(kb_name, tmp_path, custom_meta)
@@ -1331,16 +1454,18 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _call_api(self, url: str, method: str = "GET", headers: Dict[str, str] = None,
-                        payload: Dict[str, Any] = None, timeout: int = 30) -> Dict[str, Any]:
+    async def _call_api(
+        self,
+        url: str,
+        method: str = "GET",
+        headers: Dict[str, str] = None,
+        payload: Dict[str, Any] = None,
+        timeout: int = 30,
+    ) -> Dict[str, Any]:
         """Make API calls to external services"""
         try:
             # Prepare request
-            kwargs = {
-                "url": url,
-                "method": method.upper(),
-                "timeout": timeout
-            }
+            kwargs = {"url": url, "method": method.upper(), "timeout": timeout}
 
             if headers:
                 kwargs["headers"] = headers
@@ -1363,15 +1488,15 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 "response_data": response_data,
                 "headers": dict(response.headers),
                 "url": url,
-                "method": method.upper()
+                "method": method.upper(),
             }
 
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-
-
-    async def _stream_document_ingestion(self, kb_name: str, documents: list, user_message: str) -> AsyncIterator[str]:
+    async def _stream_document_ingestion(
+        self, kb_name: str, documents: list, user_message: str
+    ) -> AsyncIterator[str]:
         """Stream document ingestion with progress updates"""
         try:
             if not kb_name or not documents:
@@ -1380,7 +1505,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     yield "⚠️ No knowledge base specified. "
                     if self.llm_service:
                         async for chunk in self.llm_service.generate_response_stream(
-                                f"User wants to ingest documents but didn't specify KB. Help them: {user_message}"
+                            f"User wants to ingest documents but didn't specify KB. Help them: {user_message}"
                         ):
                             yield chunk
                     return
@@ -1399,7 +1524,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             processing_time = time.time() - start_time
 
-            if result['success']:
+            if result["success"]:
                 yield f"✅ **Ingestion Completed Successfully!**\n\n"
                 yield f"📊 **Summary:**\n"
                 yield f"• Document: {document_path}\n"
@@ -1433,7 +1558,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             result = await self._ingest_text(kb_name, text_content)
 
-            if result['success']:
+            if result["success"]:
                 preview = text_content[:100] + "..." if len(text_content) > 100 else text_content
                 yield f"✅ **Text Ingestion Completed**\n\n"
                 yield f"📄 **Preview:** {preview}\n"
@@ -1446,7 +1571,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except Exception as e:
             yield f"❌ **Error during text ingestion:** {str(e)}"
 
-    async def _stream_kb_query(self, kb_name: str, query_content: str, user_message: str) -> AsyncIterator[str]:
+    async def _stream_kb_query(
+        self, kb_name: str, query_content: str, user_message: str
+    ) -> AsyncIterator[str]:
         """Stream knowledge base queries with progress and results"""
         try:
             if not kb_name:
@@ -1473,9 +1600,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             # Perform the actual query
             result = await self._query_knowledge_base(kb_name, query_content)
 
-            if result['success']:
-                answer = result['answer']
-                source_count = len(result.get('source_details', []))
+            if result["success"]:
+                answer = result["answer"]
+                source_count = len(result.get("source_details", []))
 
                 yield f"📋 **Search Results:**\n\n"
 
@@ -1484,14 +1611,14 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     words = answer.split()
                     chunk_size = 20
                     for i in range(0, len(words), chunk_size):
-                        chunk = ' '.join(words[i:i + chunk_size])
+                        chunk = " ".join(words[i : i + chunk_size])
                         yield f"{chunk} "
                         await asyncio.sleep(0.05)  # Small delay for streaming effect
                 else:
                     yield answer
 
-                #yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
-                #yield f"✅ **Query completed successfully!**\n"
+                # yield f"\n\n📊 **Sources:** {source_count} relevant documents found\n"
+                # yield f"✅ **Query completed successfully!**\n"
                 yield f"\n"
             else:
                 yield f"❌ **Query failed:** {result['error']}\n"

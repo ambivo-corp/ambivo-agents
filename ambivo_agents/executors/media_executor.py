@@ -5,16 +5,17 @@ Media Docker executor for FFmpeg operations.
 
 import asyncio
 import json
-import time
-import tempfile
 import shutil
+import tempfile
+import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
-from ..config.loader import load_config, get_config_section
+from ..config.loader import get_config_section, load_config
 
 try:
     import docker
+
     DOCKER_AVAILABLE = True
 except ImportError:
     DOCKER_AVAILABLE = False
@@ -28,12 +29,12 @@ class MediaDockerExecutor:
         if config is None:
             try:
                 full_config = load_config()
-                config = get_config_section('media_editor', full_config)
+                config = get_config_section("media_editor", full_config)
             except Exception:
                 config = {}
 
         self.config = config
-        self.work_dir = config.get("work_dir", '/opt/ambivo/work_dir')
+        self.work_dir = config.get("work_dir", "/opt/ambivo/work_dir")
         self.docker_image = config.get("docker_image", "sgosain/amb-ubuntu-python-public-pod")
         self.timeout = config.get("timeout", 300)  # 5 minutes for media processing
         self.memory_limit = config.get("memory_limit", "2g")
@@ -56,11 +57,13 @@ class MediaDockerExecutor:
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Docker for media processing: {e}")
 
-    def execute_ffmpeg_command(self,
-                               ffmpeg_command: str,
-                               input_files: Dict[str, str] = None,
-                               output_filename: str = None,
-                               work_files: Dict[str, str] = None) -> Dict[str, Any]:
+    def execute_ffmpeg_command(
+        self,
+        ffmpeg_command: str,
+        input_files: Dict[str, str] = None,
+        output_filename: str = None,
+        work_files: Dict[str, str] = None,
+    ) -> Dict[str, Any]:
         """
         Execute ffmpeg command in Docker container
 
@@ -90,9 +93,9 @@ class MediaDockerExecutor:
                             file_mapping[container_name] = f"/workspace/input/{container_name}"
                         else:
                             return {
-                                'success': False,
-                                'error': f'Input file not found: {host_path}',
-                                'command': ffmpeg_command
+                                "success": False,
+                                "error": f"Input file not found: {host_path}",
+                                "command": ffmpeg_command,
                             }
 
                 # Copy additional work files
@@ -108,7 +111,9 @@ class MediaDockerExecutor:
 
                 # Add output path
                 if output_filename:
-                    final_command = final_command.replace("${OUTPUT}", f"/workspace/output/{output_filename}")
+                    final_command = final_command.replace(
+                        "${OUTPUT}", f"/workspace/output/{output_filename}"
+                    )
 
                 # Create execution script
                 script_content = f"""#!/bin/bash
@@ -134,19 +139,19 @@ ls -la /workspace/output/
 
                 # Container configuration for media processing
                 container_config = {
-                    'image': self.docker_image,
-                    'command': ["bash", "/workspace/process_media.sh"],
-                    'volumes': {str(temp_path): {'bind': '/workspace', 'mode': 'rw'}},
-                    'working_dir': '/workspace',
-                    'mem_limit': self.memory_limit,
-                    'network_disabled': True,
-                    'remove': True,
-                    'stdout': True,
-                    'stderr': True,
-                    'environment': {
-                        'FFMPEG_PATH': '/usr/bin/ffmpeg',
-                        'FFPROBE_PATH': '/usr/bin/ffprobe'
-                    }
+                    "image": self.docker_image,
+                    "command": ["bash", "/workspace/process_media.sh"],
+                    "volumes": {str(temp_path): {"bind": "/workspace", "mode": "rw"}},
+                    "working_dir": "/workspace",
+                    "mem_limit": self.memory_limit,
+                    "network_disabled": True,
+                    "remove": True,
+                    "stdout": True,
+                    "stderr": True,
+                    "environment": {
+                        "FFMPEG_PATH": "/usr/bin/ffmpeg",
+                        "FFPROBE_PATH": "/usr/bin/ffprobe",
+                    },
                 }
 
                 start_time = time.time()
@@ -155,7 +160,7 @@ ls -la /workspace/output/
                     result = self.docker_client.containers.run(**container_config)
                     execution_time = time.time() - start_time
 
-                    output = result.decode('utf-8') if isinstance(result, bytes) else str(result)
+                    output = result.decode("utf-8") if isinstance(result, bytes) else str(result)
 
                     # Check if output file was created
                     output_files = list(container_output.glob("*"))
@@ -164,74 +169,61 @@ ls -la /workspace/output/
                     if output_files:
                         output_file = output_files[0]  # Take first output file
                         output_info = {
-                            'filename': output_file.name,
-                            'size_bytes': output_file.stat().st_size,
-                            'path': str(output_file)
+                            "filename": output_file.name,
+                            "size_bytes": output_file.stat().st_size,
+                            "path": str(output_file),
                         }
 
                         # Move output file to permanent location
                         permanent_output = self.output_dir / output_file.name
                         shutil.move(str(output_file), str(permanent_output))
-                        output_info['final_path'] = str(permanent_output)
+                        output_info["final_path"] = str(permanent_output)
 
                     return {
-                        'success': True,
-                        'output': output,
-                        'execution_time': execution_time,
-                        'command': final_command,
-                        'output_file': output_info,
-                        'temp_dir': str(temp_path)
+                        "success": True,
+                        "output": output,
+                        "execution_time": execution_time,
+                        "command": final_command,
+                        "output_file": output_info,
+                        "temp_dir": str(temp_path),
                     }
 
                 except Exception as container_error:
                     return {
-                        'success': False,
-                        'error': f"Container execution failed: {str(container_error)}",
-                        'command': final_command,
-                        'execution_time': time.time() - start_time
+                        "success": False,
+                        "error": f"Container execution failed: {str(container_error)}",
+                        "command": final_command,
+                        "execution_time": time.time() - start_time,
                     }
 
         except Exception as e:
             return {
-                'success': False,
-                'error': f"Media processing setup failed: {str(e)}",
-                'command': ffmpeg_command
+                "success": False,
+                "error": f"Media processing setup failed: {str(e)}",
+                "command": ffmpeg_command,
             }
 
     def get_media_info(self, file_path: str) -> Dict[str, Any]:
         """Get media file information using ffprobe"""
 
         if not Path(file_path).exists():
-            return {
-                'success': False,
-                'error': f'File not found: {file_path}'
-            }
+            return {"success": False, "error": f"File not found: {file_path}"}
 
         # Use ffprobe to get media information
         ffprobe_command = (
-            f"ffprobe -v quiet -print_format json -show_format -show_streams "
-            f"${{input_file}}"
+            f"ffprobe -v quiet -print_format json -show_format -show_streams " f"${{input_file}}"
         )
 
         result = self.execute_ffmpeg_command(
-            ffmpeg_command=ffprobe_command,
-            input_files={'input_file': file_path}
+            ffmpeg_command=ffprobe_command, input_files={"input_file": file_path}
         )
 
-        if result['success']:
+        if result["success"]:
             try:
                 # Parse JSON output from ffprobe
-                media_info = json.loads(result['output'].split('\n')[-2])  # Get JSON from output
-                return {
-                    'success': True,
-                    'media_info': media_info,
-                    'file_path': file_path
-                }
+                media_info = json.loads(result["output"].split("\n")[-2])  # Get JSON from output
+                return {"success": True, "media_info": media_info, "file_path": file_path}
             except:
-                return {
-                    'success': True,
-                    'raw_output': result['output'],
-                    'file_path': file_path
-                }
+                return {"success": True, "raw_output": result["output"], "file_path": file_path}
 
         return result
