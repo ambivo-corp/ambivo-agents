@@ -1,4 +1,5 @@
 # ambivo_agents/agents/__init__.py
+from .analytics import AnalyticsAgent
 from .api_agent import APIAgent
 from .assistant import AssistantAgent
 from .code_executor import CodeExecutorAgent
@@ -10,6 +11,7 @@ from .web_search import WebSearchAgent
 from .youtube_download import YouTubeDownloadAgent
 
 __all__ = [
+    "AnalyticsAgent",
     "AssistantAgent",
     "CodeExecutorAgent",
     "KnowledgeBaseAgent",

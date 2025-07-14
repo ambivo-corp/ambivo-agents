@@ -1,6 +1,6 @@
 # Ambivo Agents - Multi-Agent AI System
 
-A toolkit for AI-powered automation including media processing, knowledge base operations, web scraping, YouTube downloads, HTTP/REST API integration, and more.
+A toolkit for AI-powered automation including data analytics with DuckDB, media processing, knowledge base operations, web scraping, YouTube downloads, HTTP/REST API integration, and more.
 
 ## Alpha Release Disclaimer
 
@@ -60,7 +60,8 @@ async def main():
     response2 = await moderator.chat("Search for latest AI trends")
     response3 = await moderator.chat("Extract audio from video.mp4 as MP3")
     response4 = await moderator.chat("GET https://api.github.com/users/octocat")
-    response5 = await moderator.chat("What is machine learning?")
+    response5 = await moderator.chat("Load data from sales.csv and analyze it")
+    response6 = await moderator.chat("What is machine learning?")
     
     # Check available agents
     status = await moderator.get_agent_status()
@@ -84,6 +85,7 @@ ambivo-agents
 # Single commands
 ambivo-agents -q "Download audio from https://youtube.com/watch?v=example"
 ambivo-agents -q "Search for Python tutorials"
+ambivo-agents -q "Load data from sales.csv and analyze it"
 ambivo-agents -q "GET https://jsonplaceholder.typicode.com/posts/1"
 ```
 
@@ -136,6 +138,7 @@ await agent.cleanup_session()
 ### Core Capabilities
 - **ModeratorAgent**: Intelligent multi-agent orchestrator with automatic routing
 - **Smart Routing**: Automatically routes queries to appropriate specialized agents
+- **Data Analytics**: In-memory DuckDB integration with CSV/XLS ingestion and text-based visualizations
 - **Context Memory**: Maintains conversation history across interactions
 - **Docker Integration**: Secure, isolated execution environment
 - **Redis Memory**: Persistent conversation memory with compression
@@ -152,6 +155,15 @@ await agent.cleanup_session()
 - Automatic agent selection based on query analysis
 - Session management and cleanup
 - Workflow execution and coordination
+
+### Analytics Agent
+- CSV/XLS file ingestion into in-memory DuckDB
+- Schema exploration and data quality assessment  
+- Natural language to SQL query conversion
+- Text-based chart generation (bar charts, line charts, tables)
+- Chart recommendations based on data characteristics
+- Docker-only execution for security
+- Business intelligence and data insights
 
 ### Assistant Agent
 - General purpose conversational AI
@@ -405,6 +417,7 @@ agent_capabilities:
   enable_proxy_mode: true
   enable_media_editor: true
   enable_youtube_download: true
+  enable_analytics: true
 
 # ModeratorAgent default agents
 moderator:
@@ -416,6 +429,7 @@ moderator:
     - youtube_download
     - code_executor
     - web_scraper
+    - analytics
 
 # Service-specific configurations
 web_search:
@@ -435,6 +449,13 @@ youtube_download:
   timeout: 600
   memory_limit: "1g"
   default_audio_only: true
+
+analytics:
+  docker_image: "sgosain/amb-ubuntu-python-public-pod"
+  timeout: 300
+  memory_limit: "1g"
+  enable_url_ingestion: true
+  max_file_size_mb: 100
 
 docker:
   timeout: 60
@@ -479,7 +500,8 @@ export AMBIVO_AGENTS_OPENAI_API_KEY="sk-your-openai-key"
 # Optional - Enable specific agents
 export AMBIVO_AGENTS_ENABLE_YOUTUBE_DOWNLOAD="true"
 export AMBIVO_AGENTS_ENABLE_WEB_SEARCH="true"
-export AMBIVO_AGENTS_MODERATOR_ENABLED_AGENTS="youtube_download,web_search,assistant"
+export AMBIVO_AGENTS_ENABLE_ANALYTICS="true"
+export AMBIVO_AGENTS_MODERATOR_ENABLED_AGENTS="youtube_download,web_search,analytics,assistant"
 
 # Run your application
 python your_app.py
@@ -512,6 +534,7 @@ services:
       - AMBIVO_AGENTS_REDIS_PORT=6379
       - AMBIVO_AGENTS_OPENAI_API_KEY=${OPENAI_API_KEY}
       - AMBIVO_AGENTS_ENABLE_YOUTUBE_DOWNLOAD=true
+      - AMBIVO_AGENTS_ENABLE_ANALYTICS=true
     volumes:
       - ./downloads:/app/downloads
       - /var/run/docker.sock:/var/run/docker.sock
@@ -531,6 +554,7 @@ services:
 ```
 ambivo_agents/
 ├── agents/          # Agent implementations
+│   ├── analytics.py     # Analytics Agent (DuckDB data analysis)
 │   ├── assistant.py
 │   ├── code_executor.py
 │   ├── knowledge_base.py
@@ -568,6 +592,7 @@ async def basic_moderator():
     examples = [
         "Download audio from https://youtube.com/watch?v=example",
         "Search for latest artificial intelligence news",  
+        "Load data from sales.csv and analyze trends",
         "Extract audio from video.mp4 as high quality MP3",
         "What is machine learning and how does it work?",
     ]
@@ -617,6 +642,57 @@ async def download_youtube():
         print(f"Path: {result['file_path']}")
     
     await agent.cleanup_session()
+```
+
+### Data Analytics
+
+```python
+from ambivo_agents import AnalyticsAgent
+
+async def analytics_demo():
+    agent, context = AnalyticsAgent.create(user_id="analyst_user")
+    
+    # Load and analyze CSV data
+    response = await agent.chat("load data from sales.csv and analyze it")
+    print(f"Analysis: {response}")
+    
+    # Schema exploration
+    schema = await agent.chat("show me the schema of the current dataset")
+    print(f"Schema: {schema}")
+    
+    # Natural language queries
+    top_sales = await agent.chat("what are the top 5 products by sales?")
+    print(f"Top Sales: {top_sales}")
+    
+    # SQL queries
+    sql_result = await agent.chat("SELECT region, SUM(sales) as total FROM data GROUP BY region")
+    print(f"SQL Result: {sql_result}")
+    
+    # Visualizations
+    chart = await agent.chat("create a bar chart showing sales by region")
+    print(f"Chart: {chart}")
+    
+    await agent.cleanup_session()
+
+# Context Preservation Example
+async def context_preservation_demo():
+    """Demonstrates context/state preservation between chat messages"""
+    agent = AnalyticsAgent.create_simple(user_id="user123")
+    
+    try:
+        # Load data once
+        await agent.chat("load data from transactions.xlsx and analyze it")
+        
+        # Multiple queries without reload - uses cached context
+        schema = await agent.chat("show schema")          # ✅ Uses cached data
+        top_items = await agent.chat("what are the top 5 amounts?")  # ✅ Uses cached data
+        summary = await agent.chat("summary statistics")   # ✅ Uses cached data
+        counts = await agent.chat("count by category")     # ✅ Uses cached data
+        
+        print("All queries executed using cached dataset - no reload needed!")
+        
+    finally:
+        await agent.cleanup_session()  # Clean up resources
 ```
 
 ### Knowledge Base Operations
@@ -1039,6 +1115,7 @@ ambivo-agents
 # Single queries
 ambivo-agents -q "Download audio from https://youtube.com/watch?v=example"
 ambivo-agents -q "Search for latest AI trends"
+ambivo-agents -q "Load data from sales.csv and show top products"
 ambivo-agents -q "Extract audio from video.mp4"
 
 # Check agent status

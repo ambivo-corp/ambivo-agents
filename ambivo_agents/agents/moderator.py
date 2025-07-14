@@ -91,6 +91,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     - youtube_download: Downloading content from YouTube (video/audio formats)
     - web_scraper: Extracting data from websites and web crawling operations
     - api_agent: Making HTTP/REST API calls with authentication, retries, and security features
+    - analytics: Data analysis with DuckDB, CSV/Excel ingestion, SQL queries, chart generation
 
     ROUTING PRINCIPLES:
     - Choose the most appropriate agent based on user's specific needs and conversation context
@@ -182,6 +183,8 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 enabled.append("youtube_download")
             if self.capabilities.get("enable_web_scraping", False):
                 enabled.append("web_scraper")
+            if self.capabilities.get("enable_analytics", False):
+                enabled.append("analytics")
 
         # CRITICAL: Always ensure assistant is included
         if "assistant" not in enabled:
@@ -204,6 +207,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             "media_editor": "enable_media_editor",
             "youtube_download": "enable_youtube_download",
             "web_scraper": "enable_web_scraping",
+            "analytics": "enable_analytics",
             "assistant": True,  # Always enabled
         }
 
@@ -222,6 +226,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         # Try importing all agents
         try:
             from . import (
+                AnalyticsAgent,
                 APIAgent,
                 AssistantAgent,
                 CodeExecutorAgent,
@@ -249,6 +254,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 ("youtube_download", ".youtube_download"),
                 ("web_scraper", ".web_scraper"),
                 ("api_agent", ".api_agent"),
+                ("analytics", ".analytics"),
             ]:
                 try:
                     if agent_type == "assistant":
@@ -283,6 +289,10 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                         from .api_agent import APIAgent
 
                         agent_imports["api_agent"] = APIAgent
+                    elif agent_type == "analytics":
+                        from .analytics import AnalyticsAgent
+
+                        agent_imports["analytics"] = AnalyticsAgent
 
                     self.logger.info(f"✅ Imported {agent_type}")
                 except ImportError as import_error:
@@ -298,6 +308,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             YouTubeDownloadAgent = agent_imports.get("youtube_download")
             WebScraperAgent = agent_imports.get("web_scraper")
             APIAgent = agent_imports.get("api_agent")
+            AnalyticsAgent = agent_imports.get("analytics")
 
         # CRITICAL: Ensure AssistantAgent is available
         if not AssistantAgent:
@@ -313,6 +324,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             "youtube_download": YouTubeDownloadAgent,
             "web_scraper": WebScraperAgent,
             "api_agent": APIAgent,
+            "analytics": AnalyticsAgent,
             "assistant": AssistantAgent,  # This should never be None now
         }
 
@@ -740,6 +752,10 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 available_agents_desc.append(
                     "- api_agent: HTTP/REST API calls, authentication, API integration"
                 )
+            elif agent_type == "analytics":
+                available_agents_desc.append(
+                    "- analytics: Data analysis, CSV/Excel files, SQL queries, charts"
+                )
             elif agent_type == "assistant":
                 available_agents_desc.append("- assistant: General conversation, explanations")
 
@@ -783,6 +799,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         - Route to media_editor for: video/audio processing, conversion, editing
         - Route to knowledge_base for: document storage, semantic search, Q&A
         - Route to web_scraper for: data extraction, crawling websites
+        - Route to analytics for: CSV/Excel files, data analysis, SQL queries, charts, DuckDB, statistics
         - Route to code_executor for: code execution, programming tasks
         - Route to assistant for: general conversation, explanations
 

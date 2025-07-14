@@ -27,6 +27,7 @@ import yaml
 
 # Import agents directly using clean imports
 from ambivo_agents import (
+    AnalyticsAgent,
     APIAgent,
     AssistantAgent,
     CodeExecutorAgent,
@@ -639,6 +640,57 @@ class AmbivoAgentsCLI:
         
         return False
 
+    def _detect_analytics_request(self, message: str) -> bool:
+        """
+        Enhanced detection for analytics and data analysis requests
+        
+        Called by: _route_with_builtin_logic()
+        Returns: True if message indicates analytics/data analysis intent
+        """
+        message_lower = message.lower()
+        
+        # Strong analytics indicators with regex
+        strong_patterns = [
+            r"(?:load|import|read|analyze|process).*(?:csv|excel|xls|xlsx|data|dataset)",  # Data loading
+            r"(?:analyze|analysis).*(?:data|dataset|file)",  # Data analysis
+            r"(?:create|generate|show).*(?:chart|graph|plot|visualization)",  # Visualization
+            r"(?:sql|query).*(?:data|dataset|table)",  # SQL queries
+            r"(?:schema|structure|columns).*(?:data|dataset|table)",  # Schema exploration
+            r"(?:statistics|stats|summary).*(?:data|dataset)",  # Statistical analysis
+            r"duckdb.*(?:query|analyze|load)",  # DuckDB specific
+        ]
+        
+        # Check regex patterns first (strongest indicators)
+        import re
+        
+        for pattern in strong_patterns:
+            if re.search(pattern, message_lower):
+                return True
+        
+        # Check for file extensions in message
+        file_extensions = [".csv", ".xlsx", ".xls"]
+        has_data_file = any(ext in message_lower for ext in file_extensions)
+        
+        # Check keyword combinations
+        has_data = any(word in message_lower for word in ["data", "dataset", "csv", "excel", "spreadsheet"])
+        has_analysis = any(word in message_lower for word in ["analyze", "analysis", "chart", "graph", "plot", "visualize", "statistics", "summary"])
+        has_sql = any(word in message_lower for word in ["sql", "query", "select", "from", "where", "group by"])
+        has_schema = any(word in message_lower for word in ["schema", "structure", "columns", "fields", "describe"])
+        
+        # Strong combinations that indicate analytics intent
+        if has_data_file:  # File extension found
+            return True
+        if has_data and has_analysis:  # Data + analysis keywords
+            return True
+        if has_data and has_sql:  # Data + SQL keywords
+            return True
+        if has_data and has_schema:  # Data + schema keywords
+            return True
+        if any(word in message_lower for word in ["duckdb", "analytics", "dataframe", "pandas"]):  # Direct analytics tools
+            return True
+        
+        return False
+
     async def _route_with_builtin_logic(self, message: str, session_id: str) -> str:
         """Built-in routing logic using cached agents"""
         """Built-in routing logic using cached agents - ENHANCED WITH CODE DETECTION"""
@@ -699,6 +751,34 @@ class AmbivoAgentsCLI:
 
             except Exception as e:
                 return f"❌ Error in API request: {str(e)}"
+
+        # Analytics Agent Detection - for data analysis and visualization
+        elif self._detect_analytics_request(message):
+            # ✅ ROUTE TO ANALYTICS AGENT
+            agent, context = await self.get_or_create_agent(
+                AnalyticsAgent, session_id, {"operation": "data_analysis"}
+            )
+
+            try:
+                from ambivo_agents.core.base import AgentMessage, MessageType
+
+                agent_message = AgentMessage(
+                    id=f"msg_{str(uuid.uuid4())[:8]}",
+                    sender_id="cli_user",
+                    recipient_id=agent.agent_id,
+                    content=message,
+                    message_type=MessageType.USER_INPUT,
+                    session_id=context.session_id,
+                    conversation_id=context.conversation_id,
+                )
+
+                response_message = await agent.process_message(
+                    agent_message, context.to_execution_context()
+                )
+                return f"{response_message.content}\n\n📊 *Processed by AnalyticsAgent with DuckDB and Docker execution*"
+
+            except Exception as e:
+                return f"❌ Error in data analysis: {str(e)}"
 
         # YouTube Download Detection
         elif any(keyword in message_lower for keyword in ["youtube", "download", "youtu.be"]) and (

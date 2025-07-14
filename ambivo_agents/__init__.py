@@ -7,6 +7,7 @@ A minimalistic agent framework for building AI applications.
 __version__ = "1.0.0"
 
 # Agent imports
+from .agents.analytics import AnalyticsAgent
 from .agents.api_agent import APIAgent
 from .agents.assistant import AssistantAgent
 from .agents.code_executor import CodeExecutorAgent
@@ -67,6 +68,7 @@ __all__ = [
     "AgentService",
     "create_agent_service",
     # Agents
+    "AnalyticsAgent",
     "APIAgent",
     "AssistantAgent",
     "CodeExecutorAgent",

@@ -184,6 +184,29 @@ ENV_VARIABLE_MAPPING = {
         "routing",
         "confidence_threshold",
     ),  # Alternative
+    # API Agent Configuration
+    f"{ENV_PREFIX}API_AGENT_AUTO_SAVE_LARGE_RESPONSES": ("api_agent", "auto_save_large_responses"),
+    f"{ENV_PREFIX}API_AUTO_SAVE_LARGE_RESPONSES": ("api_agent", "auto_save_large_responses"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_SIZE_THRESHOLD_KB": ("api_agent", "size_threshold_kb"),
+    f"{ENV_PREFIX}API_SIZE_THRESHOLD_KB": ("api_agent", "size_threshold_kb"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_OUTPUT_DIRECTORY": ("api_agent", "output_directory"),
+    f"{ENV_PREFIX}API_OUTPUT_DIRECTORY": ("api_agent", "output_directory"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_FILENAME_TEMPLATE": ("api_agent", "filename_template"),
+    f"{ENV_PREFIX}API_FILENAME_TEMPLATE": ("api_agent", "filename_template"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_DETECT_CONTENT_TYPE": ("api_agent", "detect_content_type"),
+    f"{ENV_PREFIX}API_DETECT_CONTENT_TYPE": ("api_agent", "detect_content_type"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_MAX_INLINE_SIZE_KB": ("api_agent", "max_inline_size_kb"),
+    f"{ENV_PREFIX}API_MAX_INLINE_SIZE_KB": ("api_agent", "max_inline_size_kb"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_CREATE_SUMMARY": ("api_agent", "create_summary"),
+    f"{ENV_PREFIX}API_CREATE_SUMMARY": ("api_agent", "create_summary"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_COMPRESS_JSON": ("api_agent", "compress_json"),
+    f"{ENV_PREFIX}API_COMPRESS_JSON": ("api_agent", "compress_json"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_ALLOWED_DOMAINS": ("api_agent", "allowed_domains"),
+    f"{ENV_PREFIX}API_ALLOWED_DOMAINS": ("api_agent", "allowed_domains"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_BLOCKED_DOMAINS": ("api_agent", "blocked_domains"),
+    f"{ENV_PREFIX}API_BLOCKED_DOMAINS": ("api_agent", "blocked_domains"),  # Alternative
+    f"{ENV_PREFIX}API_AGENT_TIMEOUT_SECONDS": ("api_agent", "timeout_seconds"),
+    f"{ENV_PREFIX}API_TIMEOUT_SECONDS": ("api_agent", "timeout_seconds"),  # Alternative
     # Add these to the existing ENV_VARIABLE_MAPPING dictionary
 }
 
