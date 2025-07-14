@@ -555,15 +555,15 @@ services:
 ambivo_agents/
 ├── agents/          # Agent implementations
 │   ├── analytics.py     # Analytics Agent (DuckDB data analysis)
-│   ├── assistant.py
-│   ├── code_executor.py
-│   ├── knowledge_base.py
-│   ├── media_editor.py
+│   ├── api_agent.py     # API Agent (HTTP/REST integration)
+│   ├── assistant.py     # Assistant Agent (general conversation)
+│   ├── code_executor.py # Code Executor Agent (Docker-based execution)
+│   ├── knowledge_base.py # Knowledge Base Agent (Qdrant vector search)
+│   ├── media_editor.py  # Media Editor Agent (FFmpeg processing)
 │   ├── moderator.py     # ModeratorAgent (main orchestrator)
-│   ├── simple_web_search.py
-│   ├── web_scraper.py
-│   ├── web_search.py
-│   └── youtube_download.py
+│   ├── web_scraper.py   # Web Scraper Agent (Playwright-based)
+│   ├── web_search.py    # Web Search Agent (Brave/AVES search)
+│   └── youtube_download.py # YouTube Download Agent (pytubefix)
 ├── config/          # Configuration management
 ├── core/            # Core functionality
 │   ├── base.py
@@ -1010,18 +1010,6 @@ eventSource.onmessage = function(event) {
 - **Error Handling** - Structured error information
 - **Analytics** - Performance metrics and usage tracking
 
-**Migration from Old System:**
-```python
-# Old way (deprecated)
-if chunk.startswith("x-amb-info:"):
-    status_text = chunk[11:]  # String manipulation
-
-# New way (recommended)
-if chunk.sub_type == StreamSubType.STATUS:
-    status_text = chunk.text
-    phase = chunk.metadata.get('phase')
-    agent = chunk.metadata.get('agent')
-```
 
 ## Session Management
 
@@ -1281,6 +1269,57 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Email: info@ambivo.com
 - Website: https://www.ambivo.com
 - Issues: [GitHub Issues](https://github.com/ambivo-corp/ambivo-agents/issues)
+
+## Attributions & Third-Party Technologies
+
+This project leverages several open-source libraries and commercial services:
+
+### Core Technologies
+- **Docker**: Container runtime for secure code execution
+- **Redis**: In-memory data store for session management
+- **Python**: Core programming language
+
+### AI/ML Frameworks
+- **OpenAI**: GPT models and API services
+- **Anthropic**: Claude models and API services  
+- **AWS Bedrock**: Cloud-based AI model access
+- **LangChain**: Framework for building AI applications (by LangChain, Inc.)
+- **LlamaIndex**: Data framework for LLM applications (by Jerry Liu)
+- **Hugging Face**: Model hub and transformers library
+
+### Data Processing
+- **pandas**: Data analysis and manipulation library
+- **DuckDB**: In-process SQL OLAP database
+- **Qdrant**: Vector database for semantic search
+- **tabulate**: ASCII table formatting library
+
+### Media & Web
+- **FFmpeg**: Multimedia processing framework
+- **YouTube**: Video platform (via public APIs)
+- **pytubefix**: YouTube video downloader library
+- **Brave Search**: Web search API service
+- **Beautiful Soup**: HTML/XML parsing library
+
+### Development Tools
+- **pytest**: Testing framework
+- **black**: Code formatting tool
+- **Docker Hub**: Container image repository
+
+## Legal Disclaimer
+
+**IMPORTANT**: This software is provided "as is" without warranty of any kind. Users are responsible for:
+
+1. **API Compliance**: Ensuring compliance with all third-party service terms (OpenAI, Anthropic, AWS, YouTube, etc.)
+2. **Data Privacy**: Protecting user data and complying with applicable privacy laws
+3. **Usage Limits**: Respecting rate limits and usage policies of external services
+4. **Security**: Implementing appropriate security measures for production use
+5. **Licensing**: Ensuring compliance with all third-party library licenses
+
+The authors and contributors are not liable for any damages arising from the use of this software. Users should thoroughly test and validate the software before production deployment.
+
+**Third-Party Services**: This library integrates with external services that have their own terms of service, privacy policies, and usage limitations. Users must comply with all applicable terms.
+
+**Web Scraping & Content Access**: Users must practice ethical web scraping by respecting robots.txt, rate limits, and website terms of service. YouTube content access must comply with YouTube's Terms of Service and API policies - downloading copyrighted content without permission is prohibited.
 
 ---
 
