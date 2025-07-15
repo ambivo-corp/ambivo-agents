@@ -156,6 +156,15 @@ await agent.cleanup_session()
 - Session management and cleanup
 - Workflow execution and coordination
 
+### Database Agent
+- Secure connections to MongoDB, MySQL, and PostgreSQL databases
+- Schema inspection and table structure exploration
+- Natural language to SQL/MongoDB query conversion
+- Safe query execution with read-only mode by default
+- Data export to CSV for analytics handoff
+- Automatic integration with Analytics Agent for visualization
+- Query result formatting with tables and statistics
+
 ### Analytics Agent
 - CSV/XLS file ingestion into in-memory DuckDB
 - Schema exploration and data quality assessment  
@@ -558,6 +567,7 @@ ambivo_agents/
 │   ├── api_agent.py     # API Agent (HTTP/REST integration)
 │   ├── assistant.py     # Assistant Agent (general conversation)
 │   ├── code_executor.py # Code Executor Agent (Docker-based execution)
+│   ├── database_agent.py # Database Agent (MongoDB, MySQL, PostgreSQL)
 │   ├── knowledge_base.py # Knowledge Base Agent (Qdrant vector search)
 │   ├── media_editor.py  # Media Editor Agent (FFmpeg processing)
 │   ├── moderator.py     # ModeratorAgent (main orchestrator)
@@ -642,6 +652,52 @@ async def download_youtube():
         print(f"Path: {result['file_path']}")
     
     await agent.cleanup_session()
+```
+
+### Database Operations
+
+```python
+from ambivo_agents import DatabaseAgent
+
+async def database_demo():
+    agent, context = DatabaseAgent.create(user_id="db_user")
+    
+    # Connect to MySQL database
+    response = await agent.chat("Connect to MySQL database at localhost:3306, database: mydb, username: user, password: pass")
+    print(f"Connection: {response}")
+    
+    # Explore database schema
+    schema = await agent.chat("show me the database schema")
+    print(f"Schema: {schema}")
+    
+    # Natural language queries
+    result = await agent.chat("show me all users from the users table")
+    print(f"Users: {result}")
+    
+    # Query with analytics handoff
+    analytics_result = await agent.chat("get sales data and create visualizations")
+    print(f"Analytics: {analytics_result}")
+    
+    await agent.cleanup_session()
+
+# Database to Analytics Workflow
+async def database_analytics_workflow():
+    from ambivo_agents import ModeratorAgent
+    
+    # Use ModeratorAgent for automatic routing
+    moderator, context = ModeratorAgent.create(
+        user_id="workflow_user",
+        enabled_agents=["database_agent", "analytics", "assistant"]
+    )
+    
+    # Connect and query database
+    await moderator.chat("Connect to MySQL localhost:3306 database mydb user admin password secret")
+    
+    # Query data with automatic analytics handoff
+    response = await moderator.chat("Get sales data from orders table and create charts showing trends")
+    print(response)
+    
+    await moderator.cleanup_session()
 ```
 
 ### Data Analytics
