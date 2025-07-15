@@ -11,6 +11,15 @@ from .agents.analytics import AnalyticsAgent
 from .agents.api_agent import APIAgent
 from .agents.assistant import AssistantAgent
 from .agents.code_executor import CodeExecutorAgent
+
+# Database agent - optional import
+try:
+    from .agents.database_agent import DatabaseAgent
+    _DATABASE_AGENT_AVAILABLE = True
+except ImportError:
+    _DATABASE_AGENT_AVAILABLE = False
+    DatabaseAgent = None
+
 from .agents.knowledge_base import KnowledgeBaseAgent
 from .agents.media_editor import MediaEditorAgent
 from .agents.moderator import ModeratorAgent
@@ -82,3 +91,7 @@ __all__ = [
     "load_config",
     "ConfigurationError",
 ]
+
+# Add DatabaseAgent to __all__ if available
+if _DATABASE_AGENT_AVAILABLE:
+    __all__.append("DatabaseAgent")

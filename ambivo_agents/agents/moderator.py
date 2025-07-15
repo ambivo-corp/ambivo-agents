@@ -7,6 +7,7 @@ Intelligent orchestrator that routes queries to specialized agents with full con
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 import uuid
@@ -92,6 +93,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     - web_scraper: Extracting data from websites and web crawling operations
     - api_agent: Making HTTP/REST API calls with authentication, retries, and security features
     - analytics: Data analysis with DuckDB, CSV/Excel ingestion, SQL queries, chart generation
+    - database_agent: Database operations with MongoDB, MySQL, PostgreSQL connections and safe query execution
 
     ROUTING PRINCIPLES:
     - Choose the most appropriate agent based on user's specific needs and conversation context
@@ -185,6 +187,8 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 enabled.append("web_scraper")
             if self.capabilities.get("enable_analytics", False):
                 enabled.append("analytics")
+            if self.capabilities.get("enable_database_agent", False):
+                enabled.append("database_agent")
 
         # CRITICAL: Always ensure assistant is included
         if "assistant" not in enabled:
@@ -208,6 +212,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             "youtube_download": "enable_youtube_download",
             "web_scraper": "enable_web_scraping",
             "analytics": "enable_analytics",
+            "database_agent": "enable_database_agent",
             "assistant": True,  # Always enabled
         }
 
@@ -236,6 +241,11 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 WebSearchAgent,
                 YouTubeDownloadAgent,
             )
+            # Import DatabaseAgent separately due to optional dependencies
+            try:
+                from .database_agent import DatabaseAgent
+            except ImportError:
+                DatabaseAgent = None
 
             self.logger.info("Successfully imported all agent classes")
         except ImportError as e:
@@ -255,6 +265,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 ("web_scraper", ".web_scraper"),
                 ("api_agent", ".api_agent"),
                 ("analytics", ".analytics"),
+                ("database_agent", ".database_agent"),
             ]:
                 try:
                     if agent_type == "assistant":
@@ -293,6 +304,10 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                         from .analytics import AnalyticsAgent
 
                         agent_imports["analytics"] = AnalyticsAgent
+                    elif agent_type == "database_agent":
+                        from .database_agent import DatabaseAgent
+
+                        agent_imports["database_agent"] = DatabaseAgent
 
                     self.logger.info(f"✅ Imported {agent_type}")
                 except ImportError as import_error:
@@ -309,6 +324,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             WebScraperAgent = agent_imports.get("web_scraper")
             APIAgent = agent_imports.get("api_agent")
             AnalyticsAgent = agent_imports.get("analytics")
+            DatabaseAgent = agent_imports.get("database_agent")
 
         # CRITICAL: Ensure AssistantAgent is available
         if not AssistantAgent:
@@ -325,6 +341,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             "web_scraper": WebScraperAgent,
             "api_agent": APIAgent,
             "analytics": AnalyticsAgent,
+            "database_agent": DatabaseAgent,
             "assistant": AssistantAgent,  # This should never be None now
         }
 
@@ -670,6 +687,90 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 ],
                 "priority": 1,
             },
+            "database_agent": {
+                "keywords": [
+                    "database",
+                    "sql query",
+                    "mongodb",
+                    "mysql",
+                    "postgresql",
+                    "connect database",
+                    "table schema",
+                    "show tables",
+                    "database connection",
+                    "select from",
+                    "count rows",
+                    "describe table",
+                    "database query",
+                    "sql statement",
+                    "query database",
+                    "database operations",
+                    "run sql",
+                    "execute query",
+                    "database info",
+                    "table structure",
+                    "database schema",
+                    "db connection",
+                    "data query",
+                    "sql select",
+                    # Academic data queries that need database access first
+                    "faculty data",
+                    "faculty members",
+                    "faculty distribution",
+                    "researchers",
+                    "publication data",
+                    "publication venues",
+                    "top researchers",
+                    "research profiles",
+                    "academic data",
+                    "university data",
+                    "professor data",
+                    "citation data",
+                    "h-index",
+                    "research interest",
+                ],
+                "patterns": [
+                    r"(?:connect|connection)\s+(?:to\s+)?(?:database|db|mongodb|mysql|postgresql)",
+                    r"(?:sql|database)\s+(?:query|statement|select)",
+                    r"(?:select|count|show|describe)\s+(?:from\s+|tables?|rows?|schema)",
+                    r"(?:mongodb|mysql|postgresql|database)\s+(?:connection|query|operations)",
+                    r"(?:run|execute)\s+(?:sql|query|database)",
+                    r"(?:table|database)\s+(?:schema|structure|info)",
+                    r"(?:show|list)\s+tables?",
+                    r"describe\s+table",
+                    r"count\s+rows?",
+                    r"database\s+(?:info|operations|management)",
+                    # Academic query patterns that should go to database first
+                    r"(?:faculty|researcher|professor)\s+(?:data|members|distribution|profiles)",
+                    r"(?:publication|research)\s+(?:data|venues|trends|analysis)",
+                    r"(?:top|best)\s+(?:researchers|faculty|professors)",
+                    r"(?:find|get|show|query)\s+(?:faculty|publication|university)\s+(?:data|members|information)",
+                    r"(?:academic|university|research)\s+(?:data|database|information)",
+                    r"h-index|citation\s+(?:data|analysis)",
+                ],
+                "indicators": [
+                    "database",
+                    "sql",
+                    "mongodb", 
+                    "mysql",
+                    "postgresql",
+                    "table",
+                    "schema",
+                    "query",
+                    "select",
+                    "connect",
+                    "connection",
+                    "db",
+                    # Academic data indicators
+                    "faculty",
+                    "researchers", 
+                    "publications",
+                    "academic",
+                    "university",
+                    "research",
+                ],
+                "priority": 2,  # Higher priority for academic data queries
+            },
             "assistant": {
                 "keywords": [
                     "help",
@@ -756,6 +857,10 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 available_agents_desc.append(
                     "- analytics: Data analysis, CSV/Excel files, SQL queries, charts"
                 )
+            elif agent_type == "database_agent":
+                available_agents_desc.append(
+                    "- database_agent: Database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, academic data queries"
+                )
             elif agent_type == "assistant":
                 available_agents_desc.append("- assistant: General conversation, explanations")
 
@@ -794,6 +899,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
         ROUTING GUIDELINES:
         - Route to api_agent for: HTTP method calls (GET/POST/PUT/DELETE), API endpoints, REST API requests, webhook calls, authentication requests, API integration tasks
+        - Route to database_agent for: database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, table schemas, database operations, academic data queries (faculty, publications, researchers, universities) even when analysis is requested
         - Route to web_search for: "search", "find information", "look up", research queries
         - Route to youtube_download for: YouTube URLs, video/audio downloads
         - Route to media_editor for: video/audio processing, conversion, editing
@@ -1115,7 +1221,18 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             }
 
             # Create message with COMPLETE context package and Markdown formatting instruction
-            enhanced_user_message = f"{user_message}\n\n**Formatting Instruction:** Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
+            enhanced_user_message = user_message
+            
+            # Check if this is a database→analytics workflow
+            if (llm_context and 
+                llm_context.get("intent_analysis", {}).get("workflow_type") == "database_to_analytics"):
+                
+                # Use enhanced message from workflow analysis
+                enhanced_user_message = llm_context["intent_analysis"].get("enhanced_message", user_message)
+                self.logger.info(f"🔄 Using enhanced message for database→analytics workflow")
+            
+            # Add markdown formatting instruction
+            enhanced_user_message = f"{enhanced_user_message}\n\n**Formatting Instruction:** Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
 
             agent_message = AgentMessage(
                 id=f"msg_{str(uuid.uuid4())[:8]}",
@@ -1349,8 +1466,33 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 except Exception as e:
                     self.logger.warning(f"Could not get conversation history: {e}")
 
+            # Check for database→analytics handoff in conversation history
+            database_handoff_detected = await self._check_for_database_analytics_handoff(conversation_history)
+            
+            # Check if this requires academic database access first
+            academic_data_required = self._needs_academic_database_access(user_message)
+            
             # Analyze intent with complete context
             intent_analysis = await self._analyze_query_intent(user_message, conversation_context)
+            
+            # Override intent if academic data is required and no connection exists
+            if academic_data_required and not database_handoff_detected:
+                self.logger.info("🎓 Academic data query detected, creating database→analytics workflow")
+                intent_analysis = {
+                    "primary_agent": "database_agent",
+                    "confidence": 0.95,
+                    "requires_multiple_agents": True,
+                    "workflow_type": "academic_data_analysis",
+                    "enhanced_message": f"First, query the database for: {user_message}\nThen export the results for analysis and visualization.",
+                    "agent_scores": {"database_agent": 0.95, "analytics": 0.85, "assistant": 0.1}
+                }
+            
+            # Override intent if database→analytics workflow is detected
+            elif database_handoff_detected:
+                self.logger.info("🔄 Database→Analytics handoff detected, routing to analytics workflow")
+                intent_analysis = await self._create_database_analytics_workflow(
+                    user_message, database_handoff_detected, intent_analysis
+                )
 
             self.logger.info(
                 f"Intent analysis: Primary={intent_analysis['primary_agent']}, "
@@ -1977,6 +2119,91 @@ Please continue with the next step for {agent_type} processing."""
         moderator_cleanup = await super().cleanup_session()
 
         return success and moderator_cleanup
+
+    async def _check_for_database_analytics_handoff(self, conversation_history: List[Dict[str, Any]]) -> Optional[str]:
+        """Check if recent conversation contains database handoff for analytics"""
+        if not conversation_history:
+            return None
+        
+        # Look for ANALYTICS_HANDOFF messages in recent history
+        for message in conversation_history[-5:]:  # Check last 5 messages
+            content = message.get("content", "")
+            if "ANALYTICS_HANDOFF:" in content:
+                # Extract CSV path from handoff message
+                try:
+                    csv_path = content.split("ANALYTICS_HANDOFF:")[1].strip()
+                    # Verify file exists
+                    if os.path.exists(csv_path):
+                        return csv_path
+                except (IndexError, AttributeError):
+                    continue
+        
+        return None
+
+    def _needs_academic_database_access(self, user_message: str) -> bool:
+        """Check if query requires academic data from database first"""
+        message_lower = user_message.lower()
+        
+        # Academic data keywords
+        academic_keywords = [
+            "faculty", "professors", "researchers", "academic", "university", 
+            "publication", "research", "citation", "h-index", "department",
+            "venue", "academic data", "research data", "university data"
+        ]
+        
+        # Analysis keywords that suggest processing after data retrieval
+        analysis_keywords = [
+            "analyze", "analysis", "distribution", "trends", "insights", 
+            "visualize", "visualization", "visualizations", "chart", "graph", 
+            "statistics", "compare", "top", "best", "ranking", "summary",
+            "show", "display", "create", "generate", "plot", "analytics",
+            "get", "retrieve", "find", "list", "view", "explore"
+        ]
+        
+        # Check if message contains both academic data and analysis requests
+        has_academic_data = any(keyword in message_lower for keyword in academic_keywords)
+        has_analysis_request = any(keyword in message_lower for keyword in analysis_keywords)
+        
+        return has_academic_data and has_analysis_request
+
+    async def _create_database_analytics_workflow(
+        self, 
+        user_message: str, 
+        csv_path: str, 
+        original_intent: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Create workflow configuration for database→analytics handoff"""
+        
+        # Check if user is asking for analytics/visualization
+        analytics_request = any(word in user_message.lower() for word in [
+            "analyze", "chart", "graph", "visualize", "plot", "statistics",
+            "summary", "insights", "trends", "correlation", "dashboard"
+        ])
+        
+        if analytics_request:
+            # Create enhanced analytics prompt with CSV path and load command
+            rel_path = os.path.relpath(csv_path)
+            enhanced_message = f"""Database query results have been exported. 
+
+First, load the data using: load data from {rel_path}
+
+Then proceed with the user's request: {user_message}
+
+The CSV file contains database query results and is ready for analysis and visualization."""
+
+            return {
+                "primary_agent": "analytics",
+                "confidence": 0.95,
+                "requires_multiple_agents": False,
+                "workflow_type": "database_to_analytics",
+                "enhanced_message": enhanced_message,
+                "csv_path": csv_path,
+                "original_intent": original_intent,
+                "agent_scores": {"analytics": 0.95, "database_agent": 0.1, "assistant": 0.1}
+            }
+        else:
+            # User might be asking about the data or something else
+            return original_intent
 
 
 # integration_guide.py

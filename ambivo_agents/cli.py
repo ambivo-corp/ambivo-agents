@@ -38,6 +38,18 @@ from ambivo_agents import (
     YouTubeDownloadAgent,
 )
 
+# Import DatabaseAgent with error handling for optional dependency
+try:
+    from ambivo_agents import DatabaseAgent
+    DATABASE_AGENT_AVAILABLE = True
+except ImportError:
+    try:
+        from ambivo_agents.agents.database_agent import DatabaseAgent
+        DATABASE_AGENT_AVAILABLE = True
+    except ImportError:
+        DATABASE_AGENT_AVAILABLE = False
+        DatabaseAgent = None
+
 # Import AgentSession with fallback
 try:
     from ambivo_agents import AgentSession
@@ -691,6 +703,36 @@ class AmbivoAgentsCLI:
         
         return False
 
+    def _detect_database_request(self, message: str) -> bool:
+        """Enhanced database operation detection with comprehensive keyword matching"""
+        message_lower = message.lower()
+        
+        # Database connection keywords
+        db_connection_keywords = [
+            "database", "db", "sql", "mongodb", "mysql", "postgresql", "connect",
+            "connection", "schema", "table", "query", "select", "count"
+        ]
+        
+        # Check for explicit database keywords
+        if any(keyword in message_lower for keyword in db_connection_keywords):
+            return True
+        
+        # Check for SQL-like patterns
+        sql_patterns = [
+            r"select\s+.*\s+from",
+            r"count\s+.*\s+from",
+            r"show\s+tables",
+            r"describe\s+table",
+            r"database\s+schema",
+            r"connect\s+to\s+database",
+            r"(?:mongodb|mysql|postgresql)\s+(?:connection|query)",
+        ]
+        
+        if any(re.search(pattern, message_lower) for pattern in sql_patterns):
+            return True
+        
+        return False
+
     async def _route_with_builtin_logic(self, message: str, session_id: str) -> str:
         """Built-in routing logic using cached agents"""
         """Built-in routing logic using cached agents - ENHANCED WITH CODE DETECTION"""
@@ -779,6 +821,34 @@ class AmbivoAgentsCLI:
 
             except Exception as e:
                 return f"❌ Error in data analysis: {str(e)}"
+
+        # Database Agent Detection - for database operations and queries
+        elif self._detect_database_request(message) and DATABASE_AGENT_AVAILABLE:
+            # ✅ ROUTE TO DATABASE AGENT
+            agent, context = await self.get_or_create_agent(
+                DatabaseAgent, session_id, {"operation": "database_operations"}
+            )
+
+            try:
+                from ambivo_agents.core.base import AgentMessage, MessageType
+
+                agent_message = AgentMessage(
+                    id=f"msg_{str(uuid.uuid4())[:8]}",
+                    sender_id="cli_user",
+                    recipient_id=agent.agent_id,
+                    content=message,
+                    message_type=MessageType.USER_INPUT,
+                    session_id=context.session_id,
+                    conversation_id=context.conversation_id,
+                )
+
+                response_message = await agent.process_message(
+                    agent_message, context.to_execution_context()
+                )
+                return f"{response_message.content}\n\n🗄️ *Processed by DatabaseAgent with secure query execution*"
+
+            except Exception as e:
+                return f"❌ Error in database operation: {str(e)}"
 
         # YouTube Download Detection
         elif any(keyword in message_lower for keyword in ["youtube", "download", "youtu.be"]) and (
@@ -1186,6 +1256,7 @@ def shell():
    youtube info <url>         - Get video information
    search <query>             - Web search (cached agent)
    scrape <url>              - Web scraping (cached agent)
+   database <message>         - Database operations (cached agent)
 
 🤖 **Agent Management:**
    agents                     - Show all cached agents
@@ -1611,6 +1682,7 @@ def status():
         ("Web Search", "agent_capabilities.enable_web_search"),
         ("Knowledge Base", "agent_capabilities.enable_knowledge_base"),
         ("API Agent", "agent_capabilities.enable_api_agent"),
+        ("Database Agent", "agent_capabilities.enable_database_agent"),
         ("MCP Enabled", "mcp.enabled"),
         ("YouTube Downloads", "agent_capabilities.enable_youtube_download"),
     ]

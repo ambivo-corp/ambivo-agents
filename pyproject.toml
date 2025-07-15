@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.1.6"
+version = "1.1.7"
 description = "Multi-Agent AI System for automation"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}
@@ -98,6 +98,14 @@ anthropic = [
     "anthropic>=0.55.0",
 ]
 
+# Database capabilities
+database = [
+    "pymongo>=4.0.0",
+    "mysql-connector-python>=8.0.0",
+    "psycopg2-binary>=2.9.0",
+    "tabulate>=0.9.0",
+]
+
 # Development tools
 test = [
     "pytest>=8.4.1",
@@ -116,7 +124,7 @@ dev = [
 
 # Convenience combinations
 full = [
-    "ambivo-agents[web,media,anthropic]"
+    "ambivo-agents[web,media,anthropic,database]"
 ]
 
 all = [
@@ -129,6 +137,10 @@ all = [
     "playwright>=1.40.0",
     "pytubefix>=6.0.0",
     "anthropic>=0.55.0",
+    "pymongo>=4.0.0",
+    "mysql-connector-python>=8.0.0",
+    "psycopg2-binary>=2.9.0",
+    "tabulate>=0.9.0",
     "pre-commit>=3.0.0",
 ]
 
