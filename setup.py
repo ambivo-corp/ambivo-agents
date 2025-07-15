@@ -80,7 +80,7 @@ def read_requirements():
 
 setup(
     name="ambivo-agents",
-    version="1.1.7",
+    version="1.1.8",
     author="Hemant Gosain 'Sunny'",
     author_email="info@ambivo.com",
     description="Multi-Agent AI System for automation",

@@ -156,7 +156,7 @@ await agent.cleanup_session()
 - Session management and cleanup
 - Workflow execution and coordination
 
-### Database Agent
+### Database Agent (Optional)
 - Secure connections to MongoDB, MySQL, and PostgreSQL databases
 - Schema inspection and table structure exploration
 - Natural language to SQL/MongoDB query conversion
@@ -164,6 +164,7 @@ await agent.cleanup_session()
 - Data export to CSV for analytics handoff
 - Automatic integration with Analytics Agent for visualization
 - Query result formatting with tables and statistics
+- **Note**: Requires installation with `pip install ambivo-agents[database]`
 
 ### Analytics Agent
 - CSV/XLS file ingestion into in-memory DuckDB
@@ -366,9 +367,25 @@ moderator, context = ModeratorAgent.create(
 ## Installation
 
 ### 1. Install Dependencies
+
+**Core Installation (without database support):**
 ```bash
 pip install -r requirements.txt
 ```
+
+**With Optional Database Support:**
+```bash
+# Install with database capabilities (MongoDB, MySQL, PostgreSQL)
+pip install ambivo-agents[database]
+
+# Or install all optional features including database support
+pip install ambivo-agents[all]
+```
+
+The database agents are optional and require additional dependencies:
+- **MongoDB**: `pymongo>=4.0.0`
+- **MySQL**: `mysql-connector-python>=8.0.0`
+- **PostgreSQL**: `psycopg2-binary>=2.9.0`
 
 ### 2. Setup Docker Images
 ```bash
