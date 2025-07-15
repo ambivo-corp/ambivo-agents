@@ -1236,17 +1236,290 @@ The **ModeratorAgent** acts as an intelligent orchestrator:
 
 ## Docker Setup
 
-### Custom Docker Image
+### Consolidated Docker File Sharing System
+
+Ambivo Agents uses a **consolidated Docker-shared directory structure** for all file operations across agents. This provides consistent, secure, and efficient file sharing between your host filesystem and Docker containers.
+
+#### Consolidated Directory Structure
+
+All Docker-based agents (AnalyticsAgent, MediaEditorAgent, CodeExecutorAgent, WebScraperAgent, APIAgent) use the same base structure:
+
+```
+Your Project Directory/
+└── docker_shared/                           # Consolidated base directory
+    ├── input/                              # Read-only input files
+    │   ├── analytics/     →  /docker_shared/input/analytics     (AnalyticsAgent)
+    │   ├── media/         →  /docker_shared/input/media         (MediaEditorAgent)
+    │   ├── code/          →  /docker_shared/input/code          (CodeExecutorAgent)
+    │   └── scraper/       →  /docker_shared/input/scraper       (WebScraperAgent)
+    ├── output/                             # Read-write output files
+    │   ├── analytics/     →  /docker_shared/output/analytics    (Analysis results)
+    │   ├── media/         →  /docker_shared/output/media        (Processed media)
+    │   ├── code/          →  /docker_shared/output/code         (Code execution results)
+    │   └── scraper/       →  /docker_shared/output/scraper      (Scraped data)
+    ├── temp/                               # Read-write temporary workspace
+    │   ├── analytics/     →  /docker_shared/temp/analytics      (Analytics temp files)
+    │   ├── media/         →  /docker_shared/temp/media          (Media processing temp)
+    │   └── code/          →  /docker_shared/temp/code           (Code execution temp)
+    ├── handoff/                            # Read-write inter-agent file sharing
+    │   ├── database/      →  /docker_shared/handoff/database    (Database exports)
+    │   ├── analytics/     →  /docker_shared/handoff/analytics   (Analytics results)
+    │   └── media/         →  /docker_shared/handoff/media       (Media for processing)
+    └── work/              →  /docker_shared/work                # General workspace
+```
+
+#### How the System Works
+
+When you request operations like "convert data.csv to xlsx" or "process video.mp4":
+
+1. **File Detection**: System detects file paths in your request
+2. **Directory Setup**: Auto-creates agent-specific subdirectories in `./docker_shared/`
+3. **File Copying**: Copies your files to appropriate input directories
+4. **Docker Execution**: Runs containers with consistent `/docker_shared/` mount points
+5. **Result Retrieval**: Outputs appear in agent-specific output directories
+
+#### Inter-Agent Workflows
+
+The consolidated structure enables seamless workflows between agents:
+
+**Database → Analytics Workflow:**
+```
+1. DatabaseAgent exports data     →  ./docker_shared/handoff/database/export.csv
+2. AnalyticsAgent automatically  →  reads from /docker_shared/handoff/database/
+3. AnalyticsAgent processes data  →  outputs to /docker_shared/output/analytics/
+4. Results available at           →  ./docker_shared/output/analytics/results.json
+```
+
+**Enhanced Fallback (CSV→XLSX Conversion):**
+```
+1. User: "convert sales.csv to xlsx"
+2. ModeratorAgent detects file operation need
+3. Copies sales.csv               →  ./docker_shared/input/code/sales.csv
+4. CodeExecutorAgent processes    →  from /docker_shared/input/code/sales.csv
+5. Outputs converted file         →  to /docker_shared/output/code/sales.xlsx
+6. User accesses result at        →  ./docker_shared/output/code/sales.xlsx
+```
+
+**Media Processing Workflow:**
+```
+1. User places video              →  ./docker_shared/input/media/input.mp4
+2. MediaEditorAgent processes     →  from /docker_shared/input/media/input.mp4
+3. Outputs processed file         →  to /docker_shared/output/media/output.mp3
+4. User gets result from          →  ./docker_shared/output/media/output.mp3
+```
+
+#### Third-Party Developer Integration
+
+For developers building custom agents:
+
+```python
+from ambivo_agents.core import get_shared_manager
+
+# Get the consolidated shared manager
+shared_manager = get_shared_manager()
+
+# Prepare environment for your custom agent
+input_path, output_path = shared_manager.prepare_agent_environment(
+    agent="my_custom_agent",
+    input_files=["./my_data.csv"]
+)
+
+# Get Docker volume configuration
+volumes = shared_manager.get_docker_volumes()
+# volumes = {
+#     '/path/to/docker_shared/input': {'bind': '/docker_shared/input', 'mode': 'ro'},
+#     '/path/to/docker_shared/output': {'bind': '/docker_shared/output', 'mode': 'rw'},
+#     # ... other mounts
+# }
+
+# In your Docker container, access files at:
+# - Input:   /docker_shared/input/my_custom_agent/
+# - Output:  /docker_shared/output/my_custom_agent/
+# - Temp:    /docker_shared/temp/my_custom_agent/
+# - Handoff: /docker_shared/handoff/my_custom_agent/
+
+# After processing, check results:
+output_files = shared_manager.list_outputs("my_custom_agent")
+latest_output = shared_manager.get_latest_output("my_custom_agent", ".xlsx")
+```
+
+#### Example Usage
+
+```python
+import asyncio
+from ambivo_agents import ModeratorAgent
+
+async def process_files_with_consolidated_structure():
+    # Create moderator with auto-routing
+    moderator, context = ModeratorAgent.create(user_id="file_processor")
+    
+    # File operations use consolidated Docker structure
+    await moderator.chat("convert sales_data.csv to xlsx format")  # → ./docker_shared/output/code/
+    await moderator.chat("extract audio from video.mp4 as MP3")     # → ./docker_shared/output/media/
+    await moderator.chat("analyze customer_data.csv and chart")     # → ./docker_shared/output/analytics/
+    
+    # All results organized by agent type in docker_shared/output/
+    await moderator.cleanup_session()
+
+# Run the example
+asyncio.run(process_files_with_consolidated_structure())
+```
+
+#### File Locations After Operations
+
+```bash
+# Directory structure after various operations
+your-project/
+├── sales_data.csv              # Your original files
+├── video.mp4
+├── customer_data.csv
+└── docker_shared/              # Consolidated results
+    └── output/
+        ├── code/
+        │   └── sales_data.xlsx         # CSV→XLSX conversion
+        ├── media/
+        │   └── video_audio.mp3         # Audio extraction
+        └── analytics/
+            ├── analysis_report.json    # Data analysis
+            └── customer_charts.png     # Generated charts
+```
+
+#### Configuration
+
+The consolidated structure is configured in `agent_config.yaml`:
+
+```yaml
+docker:
+  shared_base_dir: "./docker_shared"     # Host base directory
+  container_mounts:
+    input: "/docker_shared/input"        # Read-only input
+    output: "/docker_shared/output"      # Read-write output
+    temp: "/docker_shared/temp"          # Read-write temp
+    handoff: "/docker_shared/handoff"    # Read-write handoffs
+    work: "/docker_shared/work"          # Read-write workspace
+  agent_subdirs:
+    analytics: ["input/analytics", "output/analytics", "temp/analytics", "handoff/analytics"]
+    media: ["input/media", "output/media", "temp/media", "handoff/media"]
+    code: ["input/code", "output/code", "temp/code", "handoff/code"]
+    # ... other agents
+```
+
+#### Security & Permissions
+
+- **Input Security**: All input directories mounted read-only (`ro`)
+- **Output Isolation**: Each agent has isolated output directories
+- **Network Isolation**: Docker containers run with `network_disabled=True`
+- **Memory Limits**: Configurable memory restrictions per agent
+- **Auto-Cleanup**: Temporary files cleaned based on age (configurable)
+- **Permission Control**: Directory permissions managed automatically
+
+#### Monitoring & Maintenance
+
+```python
+from ambivo_agents.core import get_shared_manager
+
+shared_manager = get_shared_manager()
+
+# Monitor disk usage
+usage = shared_manager.get_disk_usage()
+print(f"Total usage: {usage['total_bytes'] / (1024**3):.2f} GB")
+
+# Cleanup old temporary files
+cleaned_count = shared_manager.cleanup_temp_files(max_age_hours=24)
+print(f"Cleaned {cleaned_count} temporary files")
+
+# List outputs for specific agent
+output_files = shared_manager.list_outputs("analytics")
+print(f"Analytics outputs: {output_files}")
+```
+
+#### Supported File Types & Detection
+
+The system automatically detects file paths in natural language and supports:
+
+**Data Files**: `.csv`, `.xlsx`, `.xls`, `.json`, `.xml`, `.parquet`  
+**Media Files**: `.mp4`, `.avi`, `.mov`, `.mp3`, `.wav`, `.flac`  
+**Text Files**: `.txt`, `.md`, `.log`, `.py`, `.js`, `.sql`  
+**Documents**: `.pdf` (read-only)
+
+```
+# These requests automatically trigger file sharing:
+"convert data.csv to xlsx"                    → Detects: data.csv → ./docker_shared/input/code/
+"extract audio from video.mp4"               → Detects: video.mp4 → ./docker_shared/input/media/
+"analyze quarterly_report.xlsx"              → Detects: quarterly_report.xlsx → ./docker_shared/input/analytics/
+"scrape data from website"                   → No file detected → ./docker_shared/output/scraper/
+```
+
+#### Docker Image Configuration
+
+**Default Image**: `sgosain/amb-ubuntu-python-public-pod`
+
+**Custom Docker Image for Consolidated Structure**:
 
 ```dockerfile
 FROM sgosain/amb-ubuntu-python-public-pod
 
-# Install additional packages
-RUN pip install your-additional-packages
+# Install additional packages for your use case
+RUN pip install openpyxl xlsxwriter plotly seaborn
 
-# Add custom scripts
+# Create consolidated mount points
+RUN mkdir -p /docker_shared/{input,output,temp,handoff,work}
+
+# Add custom scripts that work with consolidated structure
 COPY your-scripts/ /opt/scripts/
+
+# Set working directory
+WORKDIR /docker_shared/work
+
+# Example script that uses consolidated paths
+RUN echo '#!/bin/bash\n\
+echo "Input files: $(ls -la /docker_shared/input/)"\n\
+echo "Output directory: /docker_shared/output/"\n\
+echo "Temp directory: /docker_shared/temp/"\n\
+echo "Handoff directory: /docker_shared/handoff/"' > /opt/scripts/show_structure.sh
+
+RUN chmod +x /opt/scripts/show_structure.sh
 ```
+
+#### Troubleshooting
+
+**Directory Issues:**
+```bash
+# Check if docker_shared structure exists
+ls -la docker_shared/
+
+# Verify agent subdirectories
+ls -la docker_shared/output/
+```
+
+**File Access Issues:**
+```bash
+# Check permissions
+chmod 755 docker_shared/
+find docker_shared/ -type d -exec chmod 755 {} \;
+
+# Verify Docker can access the directory
+docker run --rm -v $(pwd)/docker_shared:/docker_shared alpine ls -la /docker_shared
+```
+
+**Volume Mount Issues:**
+```bash
+# Test consolidated volume mounting
+docker run --rm \
+  -v $(pwd)/docker_shared/input:/docker_shared/input:ro \
+  -v $(pwd)/docker_shared/output:/docker_shared/output:rw \
+  alpine ls -la /docker_shared/
+```
+
+#### Benefits of Consolidated Structure
+
+✅ **Consistency**: All agents use the same directory structure  
+✅ **Inter-Agent Workflows**: Seamless file handoffs between agents  
+✅ **Security**: Proper read-only/read-write permissions  
+✅ **Organization**: Files organized by agent and purpose  
+✅ **Monitoring**: Centralized disk usage and cleanup  
+✅ **Third-Party Integration**: Easy for custom agent development  
+✅ **Auto-Management**: Directories created and managed automatically
 
 ## Troubleshooting
 

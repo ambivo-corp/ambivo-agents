@@ -165,6 +165,23 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}DOCKER_IMAGES": ("docker", "images"),
     f"{ENV_PREFIX}DOCKER_IMAGE": ("docker", "images"),  # Alternative - will be converted to list
     f"{ENV_PREFIX}DOCKER_WORK_DIR": ("docker", "work_dir"),
+    
+    # Consolidated Docker Configuration
+    f"{ENV_PREFIX}DOCKER_SHARED_BASE_DIR": ("docker", "shared_base_dir"),
+    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_INPUT": ("docker", "container_mounts", "input"),
+    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_OUTPUT": ("docker", "container_mounts", "output"),
+    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_TEMP": ("docker", "container_mounts", "temp"),
+    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_HANDOFF": ("docker", "container_mounts", "handoff"),
+    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_WORK": ("docker", "container_mounts", "work"),
+    f"{ENV_PREFIX}DOCKER_NETWORK_DISABLED": ("docker", "network_disabled"),
+    f"{ENV_PREFIX}DOCKER_AUTO_REMOVE": ("docker", "auto_remove"),
+    
+    # Docker Agent Subdirectories (comma-separated lists)
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_ANALYTICS": ("docker", "agent_subdirs", "analytics"),
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_MEDIA": ("docker", "agent_subdirs", "media"),
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_CODE": ("docker", "agent_subdirs", "code"),
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_DATABASE": ("docker", "agent_subdirs", "database"),
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_SCRAPER": ("docker", "agent_subdirs", "scraper"),
     # Service Configuration
     f"{ENV_PREFIX}SERVICE_MAX_SESSIONS": ("service", "max_sessions"),
     f"{ENV_PREFIX}SERVICE_LOG_LEVEL": ("service", "log_level"),
@@ -207,7 +224,105 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}API_BLOCKED_DOMAINS": ("api_agent", "blocked_domains"),  # Alternative
     f"{ENV_PREFIX}API_AGENT_TIMEOUT_SECONDS": ("api_agent", "timeout_seconds"),
     f"{ENV_PREFIX}API_TIMEOUT_SECONDS": ("api_agent", "timeout_seconds"),  # Alternative
-    # Add these to the existing ENV_VARIABLE_MAPPING dictionary
+    
+    # Analytics Agent (Consolidated Docker Structure)
+    f"{ENV_PREFIX}ANALYTICS_INPUT_SUBDIR": ("analytics", "input_subdir"),
+    f"{ENV_PREFIX}ANALYTICS_OUTPUT_SUBDIR": ("analytics", "output_subdir"),
+    f"{ENV_PREFIX}ANALYTICS_TEMP_SUBDIR": ("analytics", "temp_subdir"),
+    f"{ENV_PREFIX}ANALYTICS_HANDOFF_SUBDIR": ("analytics", "handoff_subdir"),
+    f"{ENV_PREFIX}ANALYTICS_DATABASE_HANDOFF_SOURCE": ("analytics", "database_handoff_source"),
+    f"{ENV_PREFIX}ANALYTICS_TIMEOUT": ("analytics", "timeout"),
+    f"{ENV_PREFIX}ANALYTICS_MEMORY_LIMIT": ("analytics", "memory_limit"),
+    f"{ENV_PREFIX}ANALYTICS_MAX_FILE_SIZE_MB": ("analytics", "max_file_size_mb"),
+    f"{ENV_PREFIX}ANALYTICS_MAX_ROWS_PREVIEW": ("analytics", "max_rows_preview"),
+    f"{ENV_PREFIX}ANALYTICS_ENABLE_VISUALIZATIONS": ("analytics", "enable_visualizations"),
+    f"{ENV_PREFIX}ANALYTICS_ENABLE_SQL_QUERIES": ("analytics", "enable_sql_queries"),
+    f"{ENV_PREFIX}ANALYTICS_DOCKER_IMAGE": ("analytics", "docker_image"),
+    
+    # Code Executor Agent (Enhanced Fallback)
+    f"{ENV_PREFIX}CODE_EXECUTOR_INPUT_SUBDIR": ("code_executor", "input_subdir"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_OUTPUT_SUBDIR": ("code_executor", "output_subdir"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_TEMP_SUBDIR": ("code_executor", "temp_subdir"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_HANDOFF_SUBDIR": ("code_executor", "handoff_subdir"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_ENHANCED_FALLBACK_ENABLED": ("code_executor", "enhanced_fallback_enabled"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_AUTO_DETECT_FILE_OPERATIONS": ("code_executor", "auto_detect_file_operations"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_FALLBACK_TIMEOUT": ("code_executor", "fallback_timeout"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_TIMEOUT": ("code_executor", "timeout"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_MEMORY_LIMIT": ("code_executor", "memory_limit"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_MAX_OUTPUT_SIZE_MB": ("code_executor", "max_output_size_mb"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_RESTRICTED_IMPORTS": ("code_executor", "restricted_imports"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_SANDBOX_MODE": ("code_executor", "sandbox_mode"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_ALLOW_NETWORK": ("code_executor", "allow_network"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_DOCKER_IMAGE": ("code_executor", "docker_image"),
+    
+    # Media Editor Agent (Consolidated Docker Structure)
+    f"{ENV_PREFIX}MEDIA_EDITOR_INPUT_SUBDIR": ("media_editor", "input_subdir"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_OUTPUT_SUBDIR": ("media_editor", "output_subdir"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_TEMP_SUBDIR": ("media_editor", "temp_subdir"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_HANDOFF_SUBDIR": ("media_editor", "handoff_subdir"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_MAX_FILE_SIZE_GB": ("media_editor", "max_file_size_gb"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_MAX_CONCURRENT_JOBS": ("media_editor", "max_concurrent_jobs"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_FFMPEG_THREADS": ("media_editor", "ffmpeg_threads"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_ENABLE_GPU_ACCELERATION": ("media_editor", "enable_gpu_acceleration"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_MEMORY_LIMIT": ("media_editor", "memory_limit"),
+    
+    # Database Agent (Consolidated Docker Structure)
+    f"{ENV_PREFIX}DATABASE_AGENT_LOCAL_EXPORT_DIR": ("database_agent", "local_export_dir"),
+    f"{ENV_PREFIX}DATABASE_AGENT_HANDOFF_SUBDIR": ("database_agent", "handoff_subdir"),
+    f"{ENV_PREFIX}DATABASE_AGENT_AUTO_COPY_TO_SHARED": ("database_agent", "auto_copy_to_shared"),
+    f"{ENV_PREFIX}DATABASE_AGENT_STRICT_MODE": ("database_agent", "strict_mode"),
+    f"{ENV_PREFIX}DATABASE_AGENT_MAX_RESULT_ROWS": ("database_agent", "max_result_rows"),
+    f"{ENV_PREFIX}DATABASE_AGENT_QUERY_TIMEOUT": ("database_agent", "query_timeout"),
+    f"{ENV_PREFIX}DATABASE_AGENT_ENABLE_ANALYTICS_HANDOFF": ("database_agent", "enable_analytics_handoff"),
+    f"{ENV_PREFIX}DATABASE_AGENT_SUPPORTED_TYPES": ("database_agent", "supported_types"),
+    
+    # Web Scraping Agent (Consolidated Docker Structure)
+    f"{ENV_PREFIX}WEB_SCRAPING_OUTPUT_SUBDIR": ("web_scraping", "output_subdir"),
+    f"{ENV_PREFIX}WEB_SCRAPING_TEMP_SUBDIR": ("web_scraping", "temp_subdir"),
+    f"{ENV_PREFIX}WEB_SCRAPING_HANDOFF_SUBDIR": ("web_scraping", "handoff_subdir"),
+    f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_MEMORY_LIMIT": ("web_scraping", "docker_memory_limit"),
+    f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_CLEANUP": ("web_scraping", "docker_cleanup"),
+    
+    # Cross-Agent Workflow Configurations
+    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_ENABLED": ("workflows", "database_to_analytics", "enabled"),
+    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_SOURCE_PATH": ("workflows", "database_to_analytics", "source_path"),
+    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_TARGET_PATH": ("workflows", "database_to_analytics", "target_path"),
+    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_AUTO_TRIGGER": ("workflows", "database_to_analytics", "auto_trigger"),
+    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_FILE_FORMATS": ("workflows", "database_to_analytics", "file_formats"),
+    
+    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_ENABLED": ("workflows", "media_to_host", "enabled"),
+    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_SOURCE_PATH": ("workflows", "media_to_host", "source_path"),
+    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_TARGET_PATH": ("workflows", "media_to_host", "target_path"),
+    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_AUTO_COPY": ("workflows", "media_to_host", "auto_copy"),
+    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_FILE_FORMATS": ("workflows", "media_to_host", "file_formats"),
+    
+    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_ENABLED": ("workflows", "code_executor_fallback", "enabled"),
+    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_INPUT_DETECTION": ("workflows", "code_executor_fallback", "input_detection"),
+    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_OUTPUT_ORGANIZATION": ("workflows", "code_executor_fallback", "output_organization"),
+    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_CLEANUP_TEMP": ("workflows", "code_executor_fallback", "cleanup_temp"),
+    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_PRESERVE_LOGS": ("workflows", "code_executor_fallback", "preserve_logs"),
+    
+    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_ENABLED": ("workflows", "scraper_to_analytics", "enabled"),
+    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_SOURCE_PATH": ("workflows", "scraper_to_analytics", "source_path"),
+    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_TARGET_PATH": ("workflows", "scraper_to_analytics", "target_path"),
+    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_AUTO_CONVERT": ("workflows", "scraper_to_analytics", "auto_convert"),
+    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_FILE_FORMATS": ("workflows", "scraper_to_analytics", "file_formats"),
+    
+    # Docker Directory Management
+    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_AUTO_CREATE_STRUCTURE": ("docker_directory_management", "auto_create_structure"),
+    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_CLEANUP_ON_EXIT": ("docker_directory_management", "cleanup_on_exit"),
+    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_BACKUP_BEFORE_CLEANUP": ("docker_directory_management", "backup_before_cleanup"),
+    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_MAX_TEMP_FILE_AGE_HOURS": ("docker_directory_management", "max_temp_file_age_hours"),
+    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_DIRECTORY_PERMISSIONS": ("docker_directory_management", "directory_permissions"),
+    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_FILE_PERMISSIONS": ("docker_directory_management", "file_permissions"),
+    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_LOG_FILE_OPERATIONS": ("docker_directory_management", "log_file_operations"),
+    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_TRACK_DISK_USAGE": ("docker_directory_management", "track_disk_usage"),
+    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_MAX_SHARED_SIZE_GB": ("docker_directory_management", "max_shared_size_gb"),
+    
+    # Additional Agent Capabilities
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_API_AGENT": ("agent_capabilities", "enable_api_agent"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_ANALYTICS": ("agent_capabilities", "enable_analytics"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_DATABASE_AGENT": ("agent_capabilities", "enable_database_agent"),
 }
 
 # Required environment variables for minimal configuration
@@ -441,6 +556,34 @@ def _set_nested_value(config: Dict[str, Any], path: tuple, value: Any) -> None:
             current[final_key] = [value]
             return
 
+        # Docker agent subdirs handling (comma-separated lists)
+        elif (
+            path[0] == "docker" 
+            and len(path) >= 3 
+            and path[1] == "agent_subdirs" 
+            and isinstance(value, str)
+        ):
+            current[final_key] = [subdir.strip() for subdir in value.split(",")]
+            return
+
+        # Workflow file formats handling (comma-separated lists)
+        elif (
+            path[0] == "workflows"
+            and final_key == "file_formats"
+            and isinstance(value, str)
+        ):
+            current[final_key] = [fmt.strip() for fmt in value.split(",")]
+            return
+            
+        # Database agent supported types handling (comma-separated lists)
+        elif (
+            path[0] == "database_agent"
+            and final_key == "supported_types"
+            and isinstance(value, str)
+        ):
+            current[final_key] = [db_type.strip() for db_type in value.split(",")]
+            return
+
         # Moderator enabled agents handling
         elif (
             path[0] == "moderator"
@@ -560,6 +703,31 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         docker.setdefault("work_dir", "/opt/ambivo/work_dir")
         if "images" not in docker:
             docker["images"] = ["sgosain/amb-ubuntu-python-public-pod"]
+        
+        # Consolidated Docker structure defaults
+        docker.setdefault("shared_base_dir", "./docker_shared")
+        docker.setdefault("network_disabled", True)
+        docker.setdefault("auto_remove", True)
+        
+        # Container mounts defaults
+        if "container_mounts" not in docker:
+            docker["container_mounts"] = {}
+        container_mounts = docker["container_mounts"]
+        container_mounts.setdefault("input", "/docker_shared/input")
+        container_mounts.setdefault("output", "/docker_shared/output")
+        container_mounts.setdefault("temp", "/docker_shared/temp")
+        container_mounts.setdefault("handoff", "/docker_shared/handoff")
+        container_mounts.setdefault("work", "/docker_shared/work")
+        
+        # Agent subdirs defaults
+        if "agent_subdirs" not in docker:
+            docker["agent_subdirs"] = {}
+        agent_subdirs = docker["agent_subdirs"]
+        agent_subdirs.setdefault("analytics", ["input/analytics", "output/analytics", "temp/analytics", "handoff/analytics"])
+        agent_subdirs.setdefault("media", ["input/media", "output/media", "temp/media", "handoff/media"])
+        agent_subdirs.setdefault("code", ["input/code", "output/code", "temp/code", "handoff/code"])
+        agent_subdirs.setdefault("database", ["handoff/database"])
+        agent_subdirs.setdefault("scraper", ["output/scraper", "temp/scraper", "handoff/scraper"])
 
     # Set service defaults
     if "service" in config:
@@ -607,6 +775,89 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
             "backup": {"enabled": True, "interval_minutes": 60, "backup_directory": "./backups"},
         },
     )
+
+    # Set Analytics Agent defaults (consolidated structure)
+    if "analytics" in config:
+        analytics = config["analytics"]
+        analytics.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
+        analytics.setdefault("input_subdir", "analytics")
+        analytics.setdefault("output_subdir", "analytics")
+        analytics.setdefault("temp_subdir", "analytics")
+        analytics.setdefault("handoff_subdir", "analytics")
+        analytics.setdefault("database_handoff_source", "database")
+        analytics.setdefault("timeout", 120)
+        analytics.setdefault("memory_limit", "2g")
+        analytics.setdefault("max_file_size_mb", 100)
+        analytics.setdefault("max_rows_preview", 1000)
+        analytics.setdefault("enable_visualizations", True)
+        analytics.setdefault("enable_sql_queries", True)
+
+    # Set Code Executor defaults (enhanced fallback)
+    if "code_executor" in config:
+        code_exec = config["code_executor"]
+        code_exec.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
+        code_exec.setdefault("input_subdir", "code")
+        code_exec.setdefault("output_subdir", "code")
+        code_exec.setdefault("temp_subdir", "code")
+        code_exec.setdefault("handoff_subdir", "code")
+        code_exec.setdefault("enhanced_fallback_enabled", True)
+        code_exec.setdefault("auto_detect_file_operations", True)
+        code_exec.setdefault("fallback_timeout", 120)
+        code_exec.setdefault("timeout", 120)
+        code_exec.setdefault("memory_limit", "2g")
+        code_exec.setdefault("max_output_size_mb", 50)
+        code_exec.setdefault("restricted_imports", True)
+        code_exec.setdefault("sandbox_mode", True)
+        code_exec.setdefault("allow_network", False)
+
+    # Set Database Agent defaults (consolidated structure)
+    if "database_agent" in config:
+        db_agent = config["database_agent"]
+        db_agent.setdefault("local_export_dir", "./database_exports")
+        db_agent.setdefault("handoff_subdir", "database")
+        db_agent.setdefault("auto_copy_to_shared", True)
+        db_agent.setdefault("strict_mode", True)
+        db_agent.setdefault("max_result_rows", 1000)
+        db_agent.setdefault("query_timeout", 30)
+        db_agent.setdefault("enable_analytics_handoff", True)
+        db_agent.setdefault("supported_types", ["mongodb", "mysql", "postgresql"])
+
+    # Set Workflow defaults
+    if "workflows" in config:
+        workflows = config["workflows"]
+        
+        # Database to Analytics workflow
+        if "database_to_analytics" not in workflows:
+            workflows["database_to_analytics"] = {}
+        db_analytics = workflows["database_to_analytics"]
+        db_analytics.setdefault("enabled", True)
+        db_analytics.setdefault("source_path", "database")
+        db_analytics.setdefault("target_path", "database")
+        db_analytics.setdefault("auto_trigger", True)
+        db_analytics.setdefault("file_formats", [".csv", ".xlsx", ".json"])
+        
+        # Code Executor fallback workflow
+        if "code_executor_fallback" not in workflows:
+            workflows["code_executor_fallback"] = {}
+        code_fallback = workflows["code_executor_fallback"]
+        code_fallback.setdefault("enabled", True)
+        code_fallback.setdefault("input_detection", True)
+        code_fallback.setdefault("output_organization", True)
+        code_fallback.setdefault("cleanup_temp", True)
+        code_fallback.setdefault("preserve_logs", True)
+
+    # Set Docker Directory Management defaults
+    if "docker_directory_management" in config:
+        dir_mgmt = config["docker_directory_management"]
+        dir_mgmt.setdefault("auto_create_structure", True)
+        dir_mgmt.setdefault("cleanup_on_exit", False)
+        dir_mgmt.setdefault("backup_before_cleanup", True)
+        dir_mgmt.setdefault("max_temp_file_age_hours", 24)
+        dir_mgmt.setdefault("directory_permissions", "755")
+        dir_mgmt.setdefault("file_permissions", "644")
+        dir_mgmt.setdefault("log_file_operations", True)
+        dir_mgmt.setdefault("track_disk_usage", True)
+        dir_mgmt.setdefault("max_shared_size_gb", 10)
 
 
 def _merge_configs(yaml_config: Dict[str, Any], env_config: Dict[str, Any]) -> Dict[str, Any]:
