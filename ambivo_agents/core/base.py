@@ -17,6 +17,25 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
+# Additional imports for file operations
+try:
+    import aiohttp
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    AIOHTTP_AVAILABLE = False
+
+try:
+    import aiofiles
+    AIOFILES_AVAILABLE = True
+except ImportError:
+    AIOFILES_AVAILABLE = False
+
+try:
+    import yaml
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
+
 # Docker imports
 try:
     import docker
@@ -1065,6 +1084,387 @@ class BaseAgent(ABC):
 
         # Subclasses must implement this
         pass
+
+    # 📁 FILE OPERATIONS (Available to all agents)
+    
+    async def read_file(self, file_path: str, encoding: str = 'utf-8') -> Dict[str, Any]:
+        """
+        Read a file from local filesystem or URL
+        
+        Args:
+            file_path: Local file path or URL (http/https)
+            encoding: Text encoding (default: utf-8)
+            
+        Returns:
+            Dict with success status, content, and metadata
+        """
+        try:
+            import mimetypes
+            
+            # Check if it's a URL
+            if file_path.startswith(('http://', 'https://')):
+                if not AIOHTTP_AVAILABLE:
+                    return {
+                        'success': False,
+                        'error': 'aiohttp not available. Install with: pip install aiohttp'
+                    }
+                
+                import aiohttp
+                # Read from URL
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(file_path) as response:
+                        response.raise_for_status()
+                        content = await response.text()
+                        
+                        return {
+                            'success': True,
+                            'content': content,
+                            'source': 'url',
+                            'path': file_path,
+                            'size': len(content),
+                            'content_type': response.headers.get('Content-Type', 'text/plain'),
+                            'encoding': encoding
+                        }
+            else:
+                # Read from local file
+                path = Path(file_path)
+                
+                # Try multiple path resolutions
+                if not path.is_absolute():
+                    # Try relative to current directory
+                    if not path.exists():
+                        # Try relative to project root or common directories
+                        possible_paths = [
+                            Path.cwd() / path,
+                            Path.home() / path,
+                        ]
+                        for p in possible_paths:
+                            if p.exists():
+                                path = p
+                                break
+                
+                if not path.exists():
+                    return {
+                        'success': False,
+                        'error': f'File not found: {file_path}',
+                        'tried_paths': [str(p) for p in possible_paths] if 'possible_paths' in locals() else [str(path)]
+                    }
+                
+                # Detect file type
+                mime_type, _ = mimetypes.guess_type(str(path))
+                
+                # Read file
+                if path.suffix.lower() in ['.json', '.csv', '.txt', '.xml', '.yml', '.yaml']:
+                    if AIOFILES_AVAILABLE:
+                        import aiofiles
+                        async with aiofiles.open(path, mode='r', encoding=encoding) as f:
+                            content = await f.read()
+                    else:
+                        # Fallback to sync read
+                        with open(path, 'r', encoding=encoding) as f:
+                            content = f.read()
+                else:
+                    # Binary file
+                    if AIOFILES_AVAILABLE:
+                        import aiofiles
+                        async with aiofiles.open(path, mode='rb') as f:
+                            content = await f.read()
+                    else:
+                        # Fallback to sync read
+                        with open(path, 'rb') as f:
+                            content = f.read()
+                    
+                    return {
+                        'success': True,
+                        'content': content,
+                        'source': 'local',
+                        'path': str(path),
+                        'size': len(content),
+                        'content_type': mime_type or 'application/octet-stream',
+                        'encoding': None,
+                        'is_binary': True
+                    }
+                
+                return {
+                    'success': True,
+                    'content': content,
+                    'source': 'local',
+                    'path': str(path),
+                    'size': len(content),
+                    'content_type': mime_type or 'text/plain',
+                    'encoding': encoding,
+                    'extension': path.suffix
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'path': file_path
+            }
+    
+    async def parse_file_content(self, content: str, file_type: str = None, file_path: str = None) -> Dict[str, Any]:
+        """
+        Parse file content based on type
+        
+        Args:
+            content: File content as string
+            file_type: Type of file (json, csv, xml, txt)
+            file_path: Optional file path to infer type
+            
+        Returns:
+            Parsed content as appropriate data structure
+        """
+        try:
+            import json
+            import csv
+            import xml.etree.ElementTree as ET
+            import yaml
+            from io import StringIO
+            
+            # Infer file type from path if not provided
+            if not file_type and file_path:
+                ext = Path(file_path).suffix.lower()
+                file_type = ext[1:] if ext else 'txt'
+            
+            file_type = (file_type or 'txt').lower()
+            
+            if file_type == 'json':
+                # Parse JSON
+                data = json.loads(content)
+                return {
+                    'success': True,
+                    'data': data,
+                    'type': 'json',
+                    'is_array': isinstance(data, list),
+                    'is_object': isinstance(data, dict),
+                    'count': len(data) if isinstance(data, (list, dict)) else 1
+                }
+                
+            elif file_type == 'csv':
+                # Parse CSV
+                reader = csv.DictReader(StringIO(content))
+                data = list(reader)
+                
+                # Get column names
+                columns = data[0].keys() if data else []
+                
+                return {
+                    'success': True,
+                    'data': data,
+                    'type': 'csv',
+                    'columns': list(columns),
+                    'row_count': len(data)
+                }
+                
+            elif file_type == 'xml':
+                # Parse XML
+                root = ET.fromstring(content)
+                
+                def xml_to_dict(element):
+                    result = {}
+                    for child in element:
+                        if len(child) == 0:
+                            result[child.tag] = child.text
+                        else:
+                            result[child.tag] = xml_to_dict(child)
+                    return result
+                
+                data = {root.tag: xml_to_dict(root)}
+                
+                return {
+                    'success': True,
+                    'data': data,
+                    'type': 'xml',
+                    'root_tag': root.tag
+                }
+                
+            elif file_type in ['yml', 'yaml']:
+                # Parse YAML
+                if not YAML_AVAILABLE:
+                    return {
+                        'success': False,
+                        'error': 'PyYAML not available. Install with: pip install PyYAML'
+                    }
+                import yaml
+                data = yaml.safe_load(content)
+                return {
+                    'success': True,
+                    'data': data,
+                    'type': 'yaml'
+                }
+                
+            else:
+                # Plain text
+                return {
+                    'success': True,
+                    'data': content,
+                    'type': 'text',
+                    'lines': content.count('\n') + 1,
+                    'characters': len(content)
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'content_preview': content[:200] + '...' if len(content) > 200 else content
+            }
+    
+    async def convert_json_to_csv(self, json_data: Union[str, list, dict]) -> Dict[str, Any]:
+        """
+        Convert JSON data to CSV format
+        
+        Args:
+            json_data: JSON string, list of dicts, or single dict
+            
+        Returns:
+            Dict with CSV content and metadata
+        """
+        try:
+            import json
+            import csv
+            from io import StringIO
+            
+            # Parse JSON if string
+            if isinstance(json_data, str):
+                data = json.loads(json_data)
+            else:
+                data = json_data
+            
+            # Ensure data is a list
+            if isinstance(data, dict):
+                data = [data]
+            elif not isinstance(data, list):
+                return {
+                    'success': False,
+                    'error': 'JSON data must be an object or array of objects'
+                }
+            
+            if not data:
+                return {
+                    'success': True,
+                    'csv': '',
+                    'rows': 0,
+                    'columns': []
+                }
+            
+            # Get all unique keys
+            all_keys = set()
+            for item in data:
+                if isinstance(item, dict):
+                    all_keys.update(item.keys())
+            
+            # Create CSV
+            output = StringIO()
+            writer = csv.DictWriter(output, fieldnames=sorted(all_keys))
+            writer.writeheader()
+            writer.writerows(data)
+            
+            csv_content = output.getvalue()
+            
+            return {
+                'success': True,
+                'csv': csv_content,
+                'rows': len(data),
+                'columns': sorted(all_keys)
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    async def convert_csv_to_json(self, csv_data: str, numeric_conversion: bool = True) -> Dict[str, Any]:
+        """
+        Convert CSV data to JSON format
+        
+        Args:
+            csv_data: CSV content as string
+            numeric_conversion: Convert numeric strings to numbers
+            
+        Returns:
+            Dict with JSON data and metadata
+        """
+        try:
+            import csv
+            import json
+            from io import StringIO
+            
+            # Parse CSV
+            reader = csv.DictReader(StringIO(csv_data))
+            data = []
+            
+            for row in reader:
+                if numeric_conversion:
+                    # Convert numeric strings
+                    converted_row = {}
+                    for key, value in row.items():
+                        if value == '':
+                            converted_row[key] = None
+                        elif value.isdigit():
+                            converted_row[key] = int(value)
+                        else:
+                            try:
+                                converted_row[key] = float(value)
+                            except ValueError:
+                                converted_row[key] = value
+                    data.append(converted_row)
+                else:
+                    data.append(row)
+            
+            return {
+                'success': True,
+                'json': data,
+                'json_string': json.dumps(data, indent=2),
+                'rows': len(data),
+                'columns': list(data[0].keys()) if data else []
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    async def read_and_parse_file(self, file_path: str, auto_parse: bool = True) -> Dict[str, Any]:
+        """
+        Convenience method to read and parse a file in one operation
+        
+        Args:
+            file_path: Local path or URL
+            auto_parse: Automatically parse based on file type
+            
+        Returns:
+            Combined result with content and parsed data
+        """
+        # Read file
+        read_result = await self.read_file(file_path)
+        
+        if not read_result['success']:
+            return read_result
+        
+        if not auto_parse or read_result.get('is_binary'):
+            return read_result
+        
+        # Parse content
+        content = read_result['content']
+        file_type = None
+        
+        if 'extension' in read_result:
+            file_type = read_result['extension'][1:]  # Remove dot
+        elif '.' in file_path:
+            file_type = file_path.split('.')[-1]
+        
+        parse_result = await self.parse_file_content(content, file_type, file_path)
+        
+        # Combine results
+        return {
+            **read_result,
+            'parsed': parse_result['success'],
+            'parse_result': parse_result
+        }
 
     def register_agent(self, agent: "BaseAgent"):
         """Default implementation - only ProxyAgent should override this"""
