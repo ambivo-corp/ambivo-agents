@@ -713,6 +713,17 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     "db connection",
                     "data query",
                     "sql select",
+                    # File ingestion keywords
+                    "ingest file",
+                    "ingest json",
+                    "ingest csv",
+                    "load file to mongodb",
+                    "import file to database",
+                    "insert file",
+                    "load csv to mongodb",
+                    "load json to mongodb",
+                    "file to database",
+                    "import data",
                     # Academic data queries that need database access first
                     "faculty data",
                     "faculty members",
@@ -740,6 +751,13 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     r"describe\s+table",
                     r"count\s+rows?",
                     r"database\s+(?:info|operations|management)",
+                    # File ingestion patterns
+                    r"(?:ingest|import|load)\s+.*\.(?:json|csv)\s*(?:into|to)?\s*(?:mongodb|database|collection)?",
+                    r"(?:read|load|import)\s+(?:file|data)\s+(?:to|into)\s+(?:mongodb|database|collection)",
+                    r"(?:insert|add)\s+(?:file|json|csv)\s+(?:to|into)\s+(?:mongodb|database)",
+                    r"(?:file|csv|json)\s+(?:to|into)\s+mongodb",
+                    r"ingest\s+.*\.(?:json|csv)",
+                    r"load\s+.*\.(?:json|csv)\s+(?:to|into)",
                     # Academic query patterns that should go to database first
                     r"(?:faculty|researcher|professor)\s+(?:data|members|distribution|profiles)",
                     r"(?:publication|research)\s+(?:data|venues|trends|analysis)",
@@ -761,6 +779,13 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     "connect",
                     "connection",
                     "db",
+                    # File ingestion indicators
+                    "ingest",
+                    "import",
+                    ".json",
+                    ".csv",
+                    "load file",
+                    "insert file",
                     # Academic data indicators
                     "faculty",
                     "researchers", 
@@ -859,7 +884,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 )
             elif agent_type == "database_agent":
                 available_agents_desc.append(
-                    "- database_agent: Database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, academic data queries"
+                    "- database_agent: Database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, academic data queries, file ingestion (JSON/CSV to MongoDB)"
                 )
             elif agent_type == "assistant":
                 available_agents_desc.append("- assistant: General conversation, explanations")
@@ -899,7 +924,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
         ROUTING GUIDELINES:
         - Route to api_agent for: HTTP method calls (GET/POST/PUT/DELETE), API endpoints, REST API requests, webhook calls, authentication requests, API integration tasks
-        - Route to database_agent for: database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, table schemas, database operations, academic data queries (faculty, publications, researchers, universities) even when analysis is requested
+        - Route to database_agent for: database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, table schemas, database operations, academic data queries (faculty, publications, researchers, universities) even when analysis is requested, file ingestion to MongoDB (ingest/import/load JSON/CSV files)
         - Route to web_search for: "search", "find information", "look up", research queries
         - Route to youtube_download for: YouTube URLs, video/audio downloads
         - Route to media_editor for: video/audio processing, conversion, editing

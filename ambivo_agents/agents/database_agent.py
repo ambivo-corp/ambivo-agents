@@ -133,8 +133,9 @@ class DatabaseAgent(BaseAgent, WebAgentHistoryMixin):
 Your capabilities include:
 - Connecting to MongoDB, MySQL, and PostgreSQL databases
 - Inspecting database schemas and table structures
-- Converting natural language queries to SQL
+- Converting natural language queries to SQL/MongoDB queries
 - Executing safe database queries (SELECT operations by default)
+- Ingesting JSON and CSV files into MongoDB collections
 - Providing formatted query results with visualizations
 - Analyzing data patterns and relationships
 
@@ -143,12 +144,21 @@ SECURITY FEATURES:
 - SQL injection prevention through parameterized queries
 - Input sanitization and validation
 - Query type classification and filtering
+- Temporary strict mode bypass for file ingestion operations
 
 SUPPORTED OPERATIONS:
 - Schema inspection: "show tables", "describe table users"
 - Data queries: "show me all users", "count rows in orders table"
 - Natural language: "find customers who bought products last month"
 - Analysis: "what are the most popular products?"
+- File ingestion: "ingest data.json into users collection", "load sales.csv to mongodb"
+
+FILE INGESTION:
+- Supports JSON and CSV file formats
+- Automatically converts CSV to JSON documents
+- Uses filename as default collection name if not specified
+- Handles both single documents and arrays
+- Provides detailed ingestion statistics
 
 Always prioritize data security and provide clear, formatted results."""
 
@@ -228,6 +238,8 @@ Always prioritize data security and provide clear, formatted results."""
             # Analyze the message to determine action
             if await self._is_connection_request(message_content):
                 response = await self._handle_connection_request(message_content)
+            elif await self._is_file_ingestion_request(message_content):
+                response = await self._handle_file_ingestion_request(message_content)
             elif await self._is_schema_request(message_content):
                 response = await self._handle_schema_request(message_content)
             elif await self._is_query_request(message_content):
@@ -1379,6 +1391,270 @@ Use: `load data from {rel_path}`
 🔄 **Ready for Analytics** - The data has been exported and is ready for visualization and analysis."""
         
         return prompt
+
+    async def ingest_file_to_mongodb(self, file_path: str, collection_name: Optional[str] = None, database_name: Optional[str] = None) -> Dict[str, Any]:
+        """Ingest a file (JSON or CSV) into MongoDB collection"""
+        try:
+            # Validate MongoDB connection
+            if not self._current_db_config or self._current_db_config.db_type != DatabaseType.MONGODB:
+                return {
+                    "success": False,
+                    "error": "No MongoDB connection established. Please connect to MongoDB first."
+                }
+            
+            # Get MongoDB client
+            client = self._connections.get('mongodb')
+            if not client:
+                return {"success": False, "error": "MongoDB client not available"}
+            
+            # Resolve file path
+            if not os.path.isabs(file_path):
+                # Try multiple resolution strategies
+                possible_paths = [
+                    file_path,  # Relative to current directory
+                    os.path.join(os.getcwd(), file_path),  # Absolute from cwd
+                    os.path.join(self.export_dir, file_path),  # In export directory
+                    os.path.join(os.path.dirname(self.export_dir), file_path),  # Parent of export dir
+                ]
+                
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        file_path = path
+                        break
+                else:
+                    return {
+                        "success": False,
+                        "error": f"File not found: {file_path}. Tried paths: {possible_paths}"
+                    }
+            
+            # Check file exists
+            if not os.path.exists(file_path):
+                return {"success": False, "error": f"File not found: {file_path}"}
+            
+            # Determine file type
+            file_ext = Path(file_path).suffix.lower()
+            file_name = Path(file_path).stem
+            
+            # Use provided database or current database
+            if database_name:
+                db = client[database_name]
+            elif self._current_db_config.database:
+                db = client[self._current_db_config.database]
+            else:
+                return {"success": False, "error": "No database selected. Use 'use <database>' first."}
+            
+            # Use provided collection name or derive from filename
+            if not collection_name:
+                collection_name = file_name.replace('-', '_').replace(' ', '_').lower()
+            
+            collection = db[collection_name]
+            
+            # Read and parse file
+            documents = []
+            
+            if file_ext == '.json':
+                # Handle JSON files
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    try:
+                        # Try parsing as JSON array
+                        data = json.loads(content)
+                        if isinstance(data, list):
+                            documents = data
+                        elif isinstance(data, dict):
+                            # Single document
+                            documents = [data]
+                        else:
+                            return {"success": False, "error": "JSON must be an object or array of objects"}
+                    except json.JSONDecodeError as e:
+                        # Try parsing as JSONL (newline-delimited JSON)
+                        try:
+                            lines = content.strip().split('\n')
+                            for line in lines:
+                                if line.strip():
+                                    documents.append(json.loads(line))
+                        except Exception as jsonl_error:
+                            return {"success": False, "error": f"Invalid JSON format: {str(e)}"}
+            
+            elif file_ext == '.csv':
+                # Handle CSV files
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        # Convert numeric strings to appropriate types
+                        cleaned_row = {}
+                        for key, value in row.items():
+                            if value == '':
+                                cleaned_row[key] = None
+                            elif value.isdigit():
+                                cleaned_row[key] = int(value)
+                            else:
+                                try:
+                                    cleaned_row[key] = float(value)
+                                except ValueError:
+                                    cleaned_row[key] = value
+                        documents.append(cleaned_row)
+            
+            else:
+                return {"success": False, "error": f"Unsupported file format: {file_ext}. Supported: .json, .csv"}
+            
+            if not documents:
+                return {"success": False, "error": "No documents found in file"}
+            
+            # Temporarily bypass strict mode for inserts
+            original_strict_mode = self.strict_mode
+            try:
+                self.strict_mode = False  # Allow inserts
+                
+                # Insert documents
+                start_time = asyncio.get_event_loop().time()
+                
+                if len(documents) == 1:
+                    result = collection.insert_one(documents[0])
+                    inserted_count = 1
+                    inserted_ids = [str(result.inserted_id)]
+                else:
+                    result = collection.insert_many(documents)
+                    inserted_count = len(result.inserted_ids)
+                    inserted_ids = [str(oid) for oid in result.inserted_ids[:5]]  # First 5 IDs
+                
+                execution_time = (asyncio.get_event_loop().time() - start_time) * 1000
+                
+                # Get collection stats
+                stats = db.command("collStats", collection_name)
+                
+                return {
+                    "success": True,
+                    "database": db.name,
+                    "collection": collection_name,
+                    "documents_inserted": inserted_count,
+                    "sample_ids": inserted_ids,
+                    "execution_time_ms": execution_time,
+                    "collection_count": stats.get('count', inserted_count),
+                    "file_info": {
+                        "path": file_path,
+                        "format": file_ext,
+                        "size_mb": os.path.getsize(file_path) / (1024 * 1024)
+                    }
+                }
+                
+            finally:
+                self.strict_mode = original_strict_mode  # Restore original setting
+                
+        except Exception as e:
+            self.logger.error(f"File ingestion error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def _is_file_ingestion_request(self, message: str) -> bool:
+        """Check if message is requesting file ingestion to database"""
+        message_lower = message.lower()
+        
+        # File ingestion indicators
+        ingestion_keywords = [
+            "ingest", "import", "load file", "insert file", "add file",
+            "read .json", "read .csv", "load .json", "load .csv",
+            "import json", "import csv", "ingest json", "ingest csv",
+            "file to mongodb", "csv to mongodb", "json to mongodb",
+            "insert from file", "load from file", "import from file"
+        ]
+        
+        # Check for file extensions in message
+        has_file_extension = any(ext in message_lower for ext in ['.json', '.csv', '.xlsx', '.xls'])
+        
+        # Check for ingestion keywords
+        has_ingestion_keyword = any(keyword in message_lower for keyword in ingestion_keywords)
+        
+        # Check for MongoDB context
+        has_mongodb_context = self._current_db_config and self._current_db_config.db_type == DatabaseType.MONGODB
+        
+        return (has_file_extension and has_ingestion_keyword) or (has_mongodb_context and has_ingestion_keyword and "file" in message_lower)
+    
+    async def _handle_file_ingestion_request(self, message_content: str) -> str:
+        """Handle file ingestion requests"""
+        try:
+            # Check if MongoDB URI is provided in the message
+            mongodb_uri_pattern = r'mongodb(?:\+srv)?://[^\s]+'
+            uri_match = re.search(mongodb_uri_pattern, message_content)
+            
+            if uri_match and not self._current_db_config:
+                # Connect to MongoDB first if URI is provided
+                connection_response = await self._handle_connection_request(message_content)
+                if "failed" in connection_response.lower():
+                    return connection_response
+            
+            # Extract file path and collection name using LLM
+            ingestion_prompt = f"""
+            Extract file ingestion details from this message: "{message_content}"
+            
+            Look for:
+            - File path (can be relative or absolute)
+            - Collection name (optional, if not provided use filename)
+            - Database name (optional, use current if not provided)
+            
+            Return ONLY a valid JSON object:
+            {{
+                "file_path": "path/to/file.json",
+                "collection_name": "collection_name_or_null",
+                "database_name": "database_name_or_null"
+            }}
+            
+            Examples:
+            "ingest data.json into users collection" -> {{"file_path": "data.json", "collection_name": "users", "database_name": null}}
+            "load sales.csv" -> {{"file_path": "sales.csv", "collection_name": null, "database_name": null}}
+            """
+            
+            llm_response = await self.llm_service.generate_response(
+                ingestion_prompt, context={"system_message": "You are a file path parser. Return only valid JSON."}
+            )
+            
+            # Parse response
+            try:
+                import re
+                json_match = re.search(r'\{[^}]+\}', llm_response.replace('\n', ' '))
+                if json_match:
+                    ingestion_info = json.loads(json_match.group())
+                else:
+                    # Fallback: try to extract file path manually
+                    file_match = re.search(r'([^\s]+\.(?:json|csv))', message_content, re.IGNORECASE)
+                    if file_match:
+                        ingestion_info = {
+                            "file_path": file_match.group(1),
+                            "collection_name": None,
+                            "database_name": None
+                        }
+                    else:
+                        return "❌ Could not extract file path from request. Please specify the file path clearly."
+            except:
+                return "❌ Could not parse ingestion request. Please provide: 'ingest <file_path> [into <collection>]'"
+            
+            # Perform ingestion
+            result = await self.ingest_file_to_mongodb(
+                file_path=ingestion_info.get("file_path"),
+                collection_name=ingestion_info.get("collection_name"),
+                database_name=ingestion_info.get("database_name")
+            )
+            
+            if result["success"]:
+                return f"""✅ **File Ingestion Successful**
+
+📁 **File**: `{result['file_info']['path']}` ({result['file_info']['size_mb']:.2f} MB)
+🗄️ **Database**: {result['database']}
+📂 **Collection**: {result['collection']}
+📊 **Documents Inserted**: {result['documents_inserted']:,}
+⏱️ **Execution Time**: {result['execution_time_ms']:.1f}ms
+📈 **Total Documents in Collection**: {result['collection_count']:,}
+
+Sample inserted IDs: {', '.join(result['sample_ids'])}
+
+You can now query this data using:
+- `db.{result['collection']}.find().limit(10)`
+- `db.{result['collection']}.count()`
+- `db.{result['collection']}.findOne()`"""
+            else:
+                return f"❌ Ingestion failed: {result['error']}"
+                
+        except Exception as e:
+            return f"❌ File ingestion error: {str(e)}"
 
     async def cleanup_session(self):
         """Clean up database connections and session resources"""
