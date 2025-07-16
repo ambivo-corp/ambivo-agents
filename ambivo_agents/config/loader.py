@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+logger = logging.getLogger(__name__)
+
 # Try to import yaml, but make it optional
 try:
     import yaml
@@ -29,300 +31,129 @@ class ConfigurationError(Exception):
 ENV_PREFIX = "AMBIVO_AGENTS_"
 
 # Environment variable mapping for configuration sections
+# Environment variable mapping for configuration sections
+# Only includes variables that are actually used in the codebase
 ENV_VARIABLE_MAPPING = {
-    # Redis Configuration
+    # Redis Configuration (Core - all used)
     f"{ENV_PREFIX}REDIS_HOST": ("redis", "host"),
     f"{ENV_PREFIX}REDIS_PORT": ("redis", "port"),
     f"{ENV_PREFIX}REDIS_PASSWORD": ("redis", "password"),
     f"{ENV_PREFIX}REDIS_DB": ("redis", "db"),
-    # LLM Configuration
+    
+    # LLM Configuration (Core - all used)
     f"{ENV_PREFIX}LLM_PREFERRED_PROVIDER": ("llm", "preferred_provider"),
     f"{ENV_PREFIX}LLM_TEMPERATURE": ("llm", "temperature"),
-    f"{ENV_PREFIX}LLM_MAX_TOKENS": ("llm", "max_tokens"),
     f"{ENV_PREFIX}LLM_OPENAI_API_KEY": ("llm", "openai_api_key"),
-    f"{ENV_PREFIX}OPENAI_API_KEY": ("llm", "openai_api_key"),  # Alternative
     f"{ENV_PREFIX}LLM_ANTHROPIC_API_KEY": ("llm", "anthropic_api_key"),
-    f"{ENV_PREFIX}ANTHROPIC_API_KEY": ("llm", "anthropic_api_key"),  # Alternative
     f"{ENV_PREFIX}LLM_VOYAGE_API_KEY": ("llm", "voyage_api_key"),
-    f"{ENV_PREFIX}VOYAGE_API_KEY": ("llm", "voyage_api_key"),  # Alternative
     f"{ENV_PREFIX}LLM_AWS_ACCESS_KEY_ID": ("llm", "aws_access_key_id"),
-    f"{ENV_PREFIX}AWS_ACCESS_KEY_ID": ("llm", "aws_access_key_id"),  # Alternative
     f"{ENV_PREFIX}LLM_AWS_SECRET_ACCESS_KEY": ("llm", "aws_secret_access_key"),
-    f"{ENV_PREFIX}AWS_SECRET_ACCESS_KEY": ("llm", "aws_secret_access_key"),  # Alternative
     f"{ENV_PREFIX}LLM_AWS_REGION": ("llm", "aws_region"),
-    f"{ENV_PREFIX}AWS_REGION": ("llm", "aws_region"),  # Alternative
-    # Agent Capabilities
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_KNOWLEDGE_BASE": (
-        "agent_capabilities",
-        "enable_knowledge_base",
-    ),
-    f"{ENV_PREFIX}ENABLE_KNOWLEDGE_BASE": (
-        "agent_capabilities",
-        "enable_knowledge_base",
-    ),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SEARCH": (
-        "agent_capabilities",
-        "enable_web_search",
-    ),
-    f"{ENV_PREFIX}ENABLE_WEB_SEARCH": ("agent_capabilities", "enable_web_search"),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_CODE_EXECUTION": (
-        "agent_capabilities",
-        "enable_code_execution",
-    ),
-    f"{ENV_PREFIX}ENABLE_CODE_EXECUTION": (
-        "agent_capabilities",
-        "enable_code_execution",
-    ),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SCRAPING": (
-        "agent_capabilities",
-        "enable_web_scraping",
-    ),
-    f"{ENV_PREFIX}ENABLE_WEB_SCRAPING": (
-        "agent_capabilities",
-        "enable_web_scraping",
-    ),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_MEDIA_EDITOR": (
-        "agent_capabilities",
-        "enable_media_editor",
-    ),
-    f"{ENV_PREFIX}ENABLE_MEDIA_EDITOR": (
-        "agent_capabilities",
-        "enable_media_editor",
-    ),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_YOUTUBE_DOWNLOAD": (
-        "agent_capabilities",
-        "enable_youtube_download",
-    ),
-    f"{ENV_PREFIX}ENABLE_YOUTUBE_DOWNLOAD": (
-        "agent_capabilities",
-        "enable_youtube_download",
-    ),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_PROXY_MODE": (
-        "agent_capabilities",
-        "enable_proxy_mode",
-    ),
-    f"{ENV_PREFIX}ENABLE_PROXY_MODE": ("agent_capabilities", "enable_proxy_mode"),  # Alternative
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_FILE_PROCESSING": (
-        "agent_capabilities",
-        "enable_file_processing",
-    ),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_INGESTION": (
-        "agent_capabilities",
-        "enable_web_ingestion",
-    ),
+    
+    # Agent Capabilities (Used by ModeratorAgent)
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_KNOWLEDGE_BASE": ("agent_capabilities", "enable_knowledge_base"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SEARCH": ("agent_capabilities", "enable_web_search"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_CODE_EXECUTION": ("agent_capabilities", "enable_code_execution"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_FILE_PROCESSING": ("agent_capabilities", "enable_file_processing"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_INGESTION": ("agent_capabilities", "enable_web_ingestion"),
     f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_API_CALLS": ("agent_capabilities", "enable_api_calls"),
-    # Web Search Configuration
-    f"{ENV_PREFIX}WEB_SEARCH_BRAVE_API_KEY": ("web_search", "brave_api_key"),
-    f"{ENV_PREFIX}BRAVE_API_KEY": ("web_search", "brave_api_key"),  # Alternative
-    f"{ENV_PREFIX}WEB_SEARCH_AVESAPI_API_KEY": ("web_search", "avesapi_api_key"),
-    f"{ENV_PREFIX}AVES_API_KEY": ("web_search", "avesapi_api_key"),  # Alternative
-    f"{ENV_PREFIX}WEB_SEARCH_DEFAULT_MAX_RESULTS": ("web_search", "default_max_results"),
-    f"{ENV_PREFIX}WEB_SEARCH_MAX_RESULTS": ("web_search", "default_max_results"),  # Alternative
-    # Knowledge Base Configuration
-    f"{ENV_PREFIX}KNOWLEDGE_BASE_QDRANT_URL": ("knowledge_base", "qdrant_url"),
-    f"{ENV_PREFIX}QDRANT_URL": ("knowledge_base", "qdrant_url"),  # Alternative
-    f"{ENV_PREFIX}KNOWLEDGE_BASE_QDRANT_API_KEY": ("knowledge_base", "qdrant_api_key"),
-    f"{ENV_PREFIX}QDRANT_API_KEY": ("knowledge_base", "qdrant_api_key"),  # Alternative
-    f"{ENV_PREFIX}KNOWLEDGE_BASE_CHUNK_SIZE": ("knowledge_base", "chunk_size"),
-    f"{ENV_PREFIX}KB_CHUNK_SIZE": ("knowledge_base", "chunk_size"),  # Alternative
-    f"{ENV_PREFIX}KNOWLEDGE_BASE_SIMILARITY_TOP_K": ("knowledge_base", "similarity_top_k"),
-    f"{ENV_PREFIX}KB_SIMILARITY_TOP_K": ("knowledge_base", "similarity_top_k"),  # Alternative
-    f"{ENV_PREFIX}DEFAULT_COLLECTION_PREFIX": ("knowledge_base", "default_collection_prefix"),
-    # Web Scraping Configuration
-    f"{ENV_PREFIX}WEB_SCRAPING_PROXY_CONFIG_HTTP_PROXY": (
-        "web_scraping",
-        "proxy_config",
-        "http_proxy",
-    ),
-    f"{ENV_PREFIX}SCRAPER_PROXY": ("web_scraping", "proxy_config", "http_proxy"),  # Alternative
-    f"{ENV_PREFIX}WEB_SCRAPING_PROXY_ENABLED": ("web_scraping", "proxy_enabled"),
-    f"{ENV_PREFIX}SCRAPER_PROXY_ENABLED": ("web_scraping", "proxy_enabled"),  # Alternative
-    f"{ENV_PREFIX}WEB_SCRAPING_TIMEOUT": ("web_scraping", "timeout"),
-    f"{ENV_PREFIX}SCRAPER_TIMEOUT": ("web_scraping", "timeout"),  # Alternative
-    f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_IMAGE": ("web_scraping", "docker_image"),
-    # YouTube Download Configuration
-    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DOWNLOAD_DIR": ("youtube_download", "download_dir"),
-    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DIR": ("youtube_download", "download_dir"),  # Alternative
-    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DEFAULT_AUDIO_ONLY": ("youtube_download", "default_audio_only"),
-    f"{ENV_PREFIX}YOUTUBE_DEFAULT_AUDIO_ONLY": (
-        "youtube_download",
-        "default_audio_only",
-    ),  # Alternative
-    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_TIMEOUT": ("youtube_download", "timeout"),
-    f"{ENV_PREFIX}YOUTUBE_TIMEOUT": ("youtube_download", "timeout"),  # Alternative
-    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DOCKER_IMAGE": ("youtube_download", "docker_image"),
-    # Media Editor Configuration
-    f"{ENV_PREFIX}MEDIA_EDITOR_INPUT_DIR": ("media_editor", "input_dir"),
-    f"{ENV_PREFIX}MEDIA_INPUT_DIR": ("media_editor", "input_dir"),  # Alternative
-    f"{ENV_PREFIX}MEDIA_EDITOR_OUTPUT_DIR": ("media_editor", "output_dir"),
-    f"{ENV_PREFIX}MEDIA_OUTPUT_DIR": ("media_editor", "output_dir"),  # Alternative
-    f"{ENV_PREFIX}MEDIA_EDITOR_TIMEOUT": ("media_editor", "timeout"),
-    f"{ENV_PREFIX}MEDIA_TIMEOUT": ("media_editor", "timeout"),  # Alternative
-    f"{ENV_PREFIX}MEDIA_EDITOR_DOCKER_IMAGE": ("media_editor", "docker_image"),
-    # Docker Configuration
-    f"{ENV_PREFIX}DOCKER_MEMORY_LIMIT": ("docker", "memory_limit"),
-    f"{ENV_PREFIX}DOCKER_TIMEOUT": ("docker", "timeout"),
-    f"{ENV_PREFIX}DOCKER_IMAGES": ("docker", "images"),
-    f"{ENV_PREFIX}DOCKER_IMAGE": ("docker", "images"),  # Alternative - will be converted to list
-    f"{ENV_PREFIX}DOCKER_WORK_DIR": ("docker", "work_dir"),
-    
-    # Consolidated Docker Configuration
-    f"{ENV_PREFIX}DOCKER_SHARED_BASE_DIR": ("docker", "shared_base_dir"),
-    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_INPUT": ("docker", "container_mounts", "input"),
-    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_OUTPUT": ("docker", "container_mounts", "output"),
-    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_TEMP": ("docker", "container_mounts", "temp"),
-    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_HANDOFF": ("docker", "container_mounts", "handoff"),
-    f"{ENV_PREFIX}DOCKER_CONTAINER_MOUNTS_WORK": ("docker", "container_mounts", "work"),
-    f"{ENV_PREFIX}DOCKER_NETWORK_DISABLED": ("docker", "network_disabled"),
-    f"{ENV_PREFIX}DOCKER_AUTO_REMOVE": ("docker", "auto_remove"),
-    
-    # Docker Agent Subdirectories (comma-separated lists)
-    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_ANALYTICS": ("docker", "agent_subdirs", "analytics"),
-    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_MEDIA": ("docker", "agent_subdirs", "media"),
-    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_CODE": ("docker", "agent_subdirs", "code"),
-    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_DATABASE": ("docker", "agent_subdirs", "database"),
-    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_SCRAPER": ("docker", "agent_subdirs", "scraper"),
-    # Service Configuration
-    f"{ENV_PREFIX}SERVICE_MAX_SESSIONS": ("service", "max_sessions"),
-    f"{ENV_PREFIX}SERVICE_LOG_LEVEL": ("service", "log_level"),
-    f"{ENV_PREFIX}SERVICE_SESSION_TIMEOUT": ("service", "session_timeout"),
-    f"{ENV_PREFIX}SERVICE_ENABLE_METRICS": ("service", "enable_metrics"),
-    f"{ENV_PREFIX}SERVICE_LOG_TO_FILE": ("service", "log_to_file"),
-    # Moderator Configuration
-    f"{ENV_PREFIX}MODERATOR_DEFAULT_ENABLED_AGENTS": ("moderator", "default_enabled_agents"),
-    f"{ENV_PREFIX}MODERATOR_ENABLED_AGENTS": ("moderator", "default_enabled_agents"),  # Alternative
-    f"{ENV_PREFIX}MODERATOR_ROUTING_CONFIDENCE_THRESHOLD": (
-        "moderator",
-        "routing",
-        "confidence_threshold",
-    ),
-    f"{ENV_PREFIX}MODERATOR_CONFIDENCE_THRESHOLD": (
-        "moderator",
-        "routing",
-        "confidence_threshold",
-    ),  # Alternative
-    # API Agent Configuration
-    f"{ENV_PREFIX}API_AGENT_AUTO_SAVE_LARGE_RESPONSES": ("api_agent", "auto_save_large_responses"),
-    f"{ENV_PREFIX}API_AUTO_SAVE_LARGE_RESPONSES": ("api_agent", "auto_save_large_responses"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_SIZE_THRESHOLD_KB": ("api_agent", "size_threshold_kb"),
-    f"{ENV_PREFIX}API_SIZE_THRESHOLD_KB": ("api_agent", "size_threshold_kb"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_OUTPUT_DIRECTORY": ("api_agent", "output_directory"),
-    f"{ENV_PREFIX}API_OUTPUT_DIRECTORY": ("api_agent", "output_directory"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_FILENAME_TEMPLATE": ("api_agent", "filename_template"),
-    f"{ENV_PREFIX}API_FILENAME_TEMPLATE": ("api_agent", "filename_template"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_DETECT_CONTENT_TYPE": ("api_agent", "detect_content_type"),
-    f"{ENV_PREFIX}API_DETECT_CONTENT_TYPE": ("api_agent", "detect_content_type"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_MAX_INLINE_SIZE_KB": ("api_agent", "max_inline_size_kb"),
-    f"{ENV_PREFIX}API_MAX_INLINE_SIZE_KB": ("api_agent", "max_inline_size_kb"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_CREATE_SUMMARY": ("api_agent", "create_summary"),
-    f"{ENV_PREFIX}API_CREATE_SUMMARY": ("api_agent", "create_summary"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_COMPRESS_JSON": ("api_agent", "compress_json"),
-    f"{ENV_PREFIX}API_COMPRESS_JSON": ("api_agent", "compress_json"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_ALLOWED_DOMAINS": ("api_agent", "allowed_domains"),
-    f"{ENV_PREFIX}API_ALLOWED_DOMAINS": ("api_agent", "allowed_domains"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_BLOCKED_DOMAINS": ("api_agent", "blocked_domains"),
-    f"{ENV_PREFIX}API_BLOCKED_DOMAINS": ("api_agent", "blocked_domains"),  # Alternative
-    f"{ENV_PREFIX}API_AGENT_TIMEOUT_SECONDS": ("api_agent", "timeout_seconds"),
-    f"{ENV_PREFIX}API_TIMEOUT_SECONDS": ("api_agent", "timeout_seconds"),  # Alternative
-    
-    # Analytics Agent (Consolidated Docker Structure)
-    f"{ENV_PREFIX}ANALYTICS_INPUT_SUBDIR": ("analytics", "input_subdir"),
-    f"{ENV_PREFIX}ANALYTICS_OUTPUT_SUBDIR": ("analytics", "output_subdir"),
-    f"{ENV_PREFIX}ANALYTICS_TEMP_SUBDIR": ("analytics", "temp_subdir"),
-    f"{ENV_PREFIX}ANALYTICS_HANDOFF_SUBDIR": ("analytics", "handoff_subdir"),
-    f"{ENV_PREFIX}ANALYTICS_DATABASE_HANDOFF_SOURCE": ("analytics", "database_handoff_source"),
-    f"{ENV_PREFIX}ANALYTICS_TIMEOUT": ("analytics", "timeout"),
-    f"{ENV_PREFIX}ANALYTICS_MEMORY_LIMIT": ("analytics", "memory_limit"),
-    f"{ENV_PREFIX}ANALYTICS_MAX_FILE_SIZE_MB": ("analytics", "max_file_size_mb"),
-    f"{ENV_PREFIX}ANALYTICS_MAX_ROWS_PREVIEW": ("analytics", "max_rows_preview"),
-    f"{ENV_PREFIX}ANALYTICS_ENABLE_VISUALIZATIONS": ("analytics", "enable_visualizations"),
-    f"{ENV_PREFIX}ANALYTICS_ENABLE_SQL_QUERIES": ("analytics", "enable_sql_queries"),
-    f"{ENV_PREFIX}ANALYTICS_DOCKER_IMAGE": ("analytics", "docker_image"),
-    
-    # Code Executor Agent (Enhanced Fallback)
-    f"{ENV_PREFIX}CODE_EXECUTOR_INPUT_SUBDIR": ("code_executor", "input_subdir"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_OUTPUT_SUBDIR": ("code_executor", "output_subdir"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_TEMP_SUBDIR": ("code_executor", "temp_subdir"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_HANDOFF_SUBDIR": ("code_executor", "handoff_subdir"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_ENHANCED_FALLBACK_ENABLED": ("code_executor", "enhanced_fallback_enabled"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_AUTO_DETECT_FILE_OPERATIONS": ("code_executor", "auto_detect_file_operations"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_FALLBACK_TIMEOUT": ("code_executor", "fallback_timeout"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_TIMEOUT": ("code_executor", "timeout"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_MEMORY_LIMIT": ("code_executor", "memory_limit"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_MAX_OUTPUT_SIZE_MB": ("code_executor", "max_output_size_mb"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_RESTRICTED_IMPORTS": ("code_executor", "restricted_imports"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_SANDBOX_MODE": ("code_executor", "sandbox_mode"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_ALLOW_NETWORK": ("code_executor", "allow_network"),
-    f"{ENV_PREFIX}CODE_EXECUTOR_DOCKER_IMAGE": ("code_executor", "docker_image"),
-    
-    # Media Editor Agent (Consolidated Docker Structure)
-    f"{ENV_PREFIX}MEDIA_EDITOR_INPUT_SUBDIR": ("media_editor", "input_subdir"),
-    f"{ENV_PREFIX}MEDIA_EDITOR_OUTPUT_SUBDIR": ("media_editor", "output_subdir"),
-    f"{ENV_PREFIX}MEDIA_EDITOR_TEMP_SUBDIR": ("media_editor", "temp_subdir"),
-    f"{ENV_PREFIX}MEDIA_EDITOR_HANDOFF_SUBDIR": ("media_editor", "handoff_subdir"),
-    f"{ENV_PREFIX}MEDIA_EDITOR_MAX_FILE_SIZE_GB": ("media_editor", "max_file_size_gb"),
-    f"{ENV_PREFIX}MEDIA_EDITOR_MAX_CONCURRENT_JOBS": ("media_editor", "max_concurrent_jobs"),
-    f"{ENV_PREFIX}MEDIA_EDITOR_FFMPEG_THREADS": ("media_editor", "ffmpeg_threads"),
-    f"{ENV_PREFIX}MEDIA_EDITOR_ENABLE_GPU_ACCELERATION": ("media_editor", "enable_gpu_acceleration"),
-    f"{ENV_PREFIX}MEDIA_EDITOR_MEMORY_LIMIT": ("media_editor", "memory_limit"),
-    
-    # Database Agent (Consolidated Docker Structure)
-    f"{ENV_PREFIX}DATABASE_AGENT_LOCAL_EXPORT_DIR": ("database_agent", "local_export_dir"),
-    f"{ENV_PREFIX}DATABASE_AGENT_HANDOFF_SUBDIR": ("database_agent", "handoff_subdir"),
-    f"{ENV_PREFIX}DATABASE_AGENT_AUTO_COPY_TO_SHARED": ("database_agent", "auto_copy_to_shared"),
-    f"{ENV_PREFIX}DATABASE_AGENT_STRICT_MODE": ("database_agent", "strict_mode"),
-    f"{ENV_PREFIX}DATABASE_AGENT_MAX_RESULT_ROWS": ("database_agent", "max_result_rows"),
-    f"{ENV_PREFIX}DATABASE_AGENT_QUERY_TIMEOUT": ("database_agent", "query_timeout"),
-    f"{ENV_PREFIX}DATABASE_AGENT_ENABLE_ANALYTICS_HANDOFF": ("database_agent", "enable_analytics_handoff"),
-    f"{ENV_PREFIX}DATABASE_AGENT_SUPPORTED_TYPES": ("database_agent", "supported_types"),
-    
-    # Web Scraping Agent (Consolidated Docker Structure)
-    f"{ENV_PREFIX}WEB_SCRAPING_OUTPUT_SUBDIR": ("web_scraping", "output_subdir"),
-    f"{ENV_PREFIX}WEB_SCRAPING_TEMP_SUBDIR": ("web_scraping", "temp_subdir"),
-    f"{ENV_PREFIX}WEB_SCRAPING_HANDOFF_SUBDIR": ("web_scraping", "handoff_subdir"),
-    f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_MEMORY_LIMIT": ("web_scraping", "docker_memory_limit"),
-    f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_CLEANUP": ("web_scraping", "docker_cleanup"),
-    
-    # Cross-Agent Workflow Configurations
-    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_ENABLED": ("workflows", "database_to_analytics", "enabled"),
-    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_SOURCE_PATH": ("workflows", "database_to_analytics", "source_path"),
-    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_TARGET_PATH": ("workflows", "database_to_analytics", "target_path"),
-    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_AUTO_TRIGGER": ("workflows", "database_to_analytics", "auto_trigger"),
-    f"{ENV_PREFIX}WORKFLOWS_DATABASE_TO_ANALYTICS_FILE_FORMATS": ("workflows", "database_to_analytics", "file_formats"),
-    
-    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_ENABLED": ("workflows", "media_to_host", "enabled"),
-    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_SOURCE_PATH": ("workflows", "media_to_host", "source_path"),
-    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_TARGET_PATH": ("workflows", "media_to_host", "target_path"),
-    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_AUTO_COPY": ("workflows", "media_to_host", "auto_copy"),
-    f"{ENV_PREFIX}WORKFLOWS_MEDIA_TO_HOST_FILE_FORMATS": ("workflows", "media_to_host", "file_formats"),
-    
-    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_ENABLED": ("workflows", "code_executor_fallback", "enabled"),
-    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_INPUT_DETECTION": ("workflows", "code_executor_fallback", "input_detection"),
-    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_OUTPUT_ORGANIZATION": ("workflows", "code_executor_fallback", "output_organization"),
-    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_CLEANUP_TEMP": ("workflows", "code_executor_fallback", "cleanup_temp"),
-    f"{ENV_PREFIX}WORKFLOWS_CODE_EXECUTOR_FALLBACK_PRESERVE_LOGS": ("workflows", "code_executor_fallback", "preserve_logs"),
-    
-    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_ENABLED": ("workflows", "scraper_to_analytics", "enabled"),
-    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_SOURCE_PATH": ("workflows", "scraper_to_analytics", "source_path"),
-    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_TARGET_PATH": ("workflows", "scraper_to_analytics", "target_path"),
-    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_AUTO_CONVERT": ("workflows", "scraper_to_analytics", "auto_convert"),
-    f"{ENV_PREFIX}WORKFLOWS_SCRAPER_TO_ANALYTICS_FILE_FORMATS": ("workflows", "scraper_to_analytics", "file_formats"),
-    
-    # Docker Directory Management
-    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_AUTO_CREATE_STRUCTURE": ("docker_directory_management", "auto_create_structure"),
-    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_CLEANUP_ON_EXIT": ("docker_directory_management", "cleanup_on_exit"),
-    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_BACKUP_BEFORE_CLEANUP": ("docker_directory_management", "backup_before_cleanup"),
-    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_MAX_TEMP_FILE_AGE_HOURS": ("docker_directory_management", "max_temp_file_age_hours"),
-    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_DIRECTORY_PERMISSIONS": ("docker_directory_management", "directory_permissions"),
-    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_FILE_PERMISSIONS": ("docker_directory_management", "file_permissions"),
-    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_LOG_FILE_OPERATIONS": ("docker_directory_management", "log_file_operations"),
-    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_TRACK_DISK_USAGE": ("docker_directory_management", "track_disk_usage"),
-    f"{ENV_PREFIX}DOCKER_DIRECTORY_MANAGEMENT_MAX_SHARED_SIZE_GB": ("docker_directory_management", "max_shared_size_gb"),
-    
-    # Additional Agent Capabilities
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SCRAPING": ("agent_capabilities", "enable_web_scraping"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_PROXY_MODE": ("agent_capabilities", "enable_proxy_mode"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_MEDIA_EDITOR": ("agent_capabilities", "enable_media_editor"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_YOUTUBE_DOWNLOAD": ("agent_capabilities", "enable_youtube_download"),
     f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_API_AGENT": ("agent_capabilities", "enable_api_agent"),
     f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_ANALYTICS": ("agent_capabilities", "enable_analytics"),
     f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_DATABASE_AGENT": ("agent_capabilities", "enable_database_agent"),
+    
+    # Web Search Configuration (Only API keys used)
+    f"{ENV_PREFIX}WEB_SEARCH_BRAVE_API_KEY": ("web_search", "brave_api_key"),
+    f"{ENV_PREFIX}WEB_SEARCH_AVESAPI_API_KEY": ("web_search", "avesapi_api_key"),
+    
+    # Knowledge Base Configuration (Core settings only)
+    f"{ENV_PREFIX}KNOWLEDGE_BASE_QDRANT_URL": ("knowledge_base", "qdrant_url"),
+    f"{ENV_PREFIX}KNOWLEDGE_BASE_QDRANT_API_KEY": ("knowledge_base", "qdrant_api_key"),
+    f"{ENV_PREFIX}KNOWLEDGE_BASE_CHUNK_SIZE": ("knowledge_base", "chunk_size"),
+    f"{ENV_PREFIX}KNOWLEDGE_BASE_CHUNK_OVERLAP": ("knowledge_base", "chunk_overlap"),
+    f"{ENV_PREFIX}KNOWLEDGE_BASE_SIMILARITY_TOP_K": ("knowledge_base", "similarity_top_k"),
+    f"{ENV_PREFIX}KNOWLEDGE_BASE_VECTOR_SIZE": ("knowledge_base", "vector_size"),
+    f"{ENV_PREFIX}KNOWLEDGE_BASE_DISTANCE_METRIC": ("knowledge_base", "distance_metric"),
+    f"{ENV_PREFIX}KNOWLEDGE_BASE_DEFAULT_COLLECTION_PREFIX": ("knowledge_base", "default_collection_prefix"),
+    
+    # YouTube Download Configuration (Used settings only)
+    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DOWNLOAD_DIR": ("youtube_download", "download_dir"),
+    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DEFAULT_AUDIO_ONLY": ("youtube_download", "default_audio_only"),
+    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_TIMEOUT": ("youtube_download", "timeout"),
+    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DOCKER_IMAGE": ("youtube_download", "docker_image"),
+    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_MEMORY_LIMIT": ("youtube_download", "memory_limit"),
+    
+    # Media Editor Configuration (Basic settings only)
+    f"{ENV_PREFIX}MEDIA_EDITOR_INPUT_DIR": ("media_editor", "input_dir"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_OUTPUT_DIR": ("media_editor", "output_dir"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_TIMEOUT": ("media_editor", "timeout"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_DOCKER_IMAGE": ("media_editor", "docker_image"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_MEMORY_LIMIT": ("media_editor", "memory_limit"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_MAX_FILE_SIZE_GB": ("media_editor", "max_file_size_gb"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_MAX_CONCURRENT_JOBS": ("media_editor", "max_concurrent_jobs"),
+    
+    # Code Executor Configuration (Basic settings only)
+    f"{ENV_PREFIX}CODE_EXECUTOR_DOCKER_IMAGE": ("code_executor", "docker_image"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_TIMEOUT": ("code_executor", "timeout"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_MEMORY_LIMIT": ("code_executor", "memory_limit"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_SANDBOX_MODE": ("code_executor", "sandbox_mode"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_ALLOW_NETWORK": ("code_executor", "allow_network"),
+    
+    # Analytics Configuration (Basic settings only)
+    f"{ENV_PREFIX}ANALYTICS_DOCKER_IMAGE": ("analytics", "docker_image"),
+    f"{ENV_PREFIX}ANALYTICS_TIMEOUT": ("analytics", "timeout"),
+    f"{ENV_PREFIX}ANALYTICS_MEMORY_LIMIT": ("analytics", "memory_limit"),
+    
+    # API Agent Configuration (Security settings used)
+    f"{ENV_PREFIX}API_AGENT_ALLOWED_DOMAINS": ("api_agent", "allowed_domains"),
+    f"{ENV_PREFIX}API_AGENT_BLOCKED_DOMAINS": ("api_agent", "blocked_domains"),
+    f"{ENV_PREFIX}API_AGENT_ALLOWED_METHODS": ("api_agent", "allowed_methods"),
+    f"{ENV_PREFIX}API_AGENT_VERIFY_SSL": ("api_agent", "verify_ssl"),
+    f"{ENV_PREFIX}API_AGENT_TIMEOUT_SECONDS": ("api_agent", "timeout_seconds"),
+    f"{ENV_PREFIX}API_AGENT_MAX_SAFE_TIMEOUT": ("api_agent", "max_safe_timeout"),
+    f"{ENV_PREFIX}API_AGENT_FORCE_DOCKER_ABOVE_TIMEOUT": ("api_agent", "force_docker_above_timeout"),
+    f"{ENV_PREFIX}API_AGENT_DOCKER_IMAGE": ("api_agent", "docker_image"),
+    
+    # Web Scraping Configuration (Basic Docker/proxy settings)
+    f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_IMAGE": ("web_scraping", "docker_image"),
+    f"{ENV_PREFIX}WEB_SCRAPING_PROXY_ENABLED": ("web_scraping", "proxy_enabled"),
+    f"{ENV_PREFIX}WEB_SCRAPING_TIMEOUT": ("web_scraping", "timeout"),
+    f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_MEMORY_LIMIT": ("web_scraping", "docker_memory_limit"),
+    
+    # Database Agent Configuration (Basic settings only)
+    f"{ENV_PREFIX}DATABASE_AGENT_STRICT_MODE": ("database_agent", "strict_mode"),
+    f"{ENV_PREFIX}DATABASE_AGENT_MAX_RESULT_ROWS": ("database_agent", "max_result_rows"),
+    f"{ENV_PREFIX}DATABASE_AGENT_QUERY_TIMEOUT": ("database_agent", "query_timeout"),
+    f"{ENV_PREFIX}DATABASE_AGENT_LOCAL_EXPORT_DIR": ("database_agent", "local_export_dir"),
+    f"{ENV_PREFIX}DATABASE_AGENT_ENABLE_ANALYTICS_HANDOFF": ("database_agent", "enable_analytics_handoff"),
+    f"{ENV_PREFIX}DATABASE_AGENT_AUTO_COPY_TO_SHARED": ("database_agent", "auto_copy_to_shared"),
+    f"{ENV_PREFIX}DATABASE_AGENT_SUPPORTED_TYPES": ("database_agent", "supported_types"),
+    
+    # Docker Configuration (Core infrastructure)
+    f"{ENV_PREFIX}DOCKER_IMAGES": ("docker", "images"),
+    f"{ENV_PREFIX}DOCKER_MEMORY_LIMIT": ("docker", "memory_limit"),
+    f"{ENV_PREFIX}DOCKER_TIMEOUT": ("docker", "timeout"),
+    f"{ENV_PREFIX}DOCKER_WORK_DIR": ("docker", "work_dir"),
+    
+    # Service Configuration (All used)
+    f"{ENV_PREFIX}SERVICE_LOG_LEVEL": ("service", "log_level"),
+    f"{ENV_PREFIX}SERVICE_MAX_SESSIONS": ("service", "max_sessions"),
+    f"{ENV_PREFIX}SERVICE_SESSION_TIMEOUT": ("service", "session_timeout"),
+    f"{ENV_PREFIX}SERVICE_LOG_TO_FILE": ("service", "log_to_file"),
+    
+    # Agent Enablement Configuration (New - all used)
+    f"{ENV_PREFIX}MODERATOR_ENABLED": ("agents", "moderator", "enabled"),
+    f"{ENV_PREFIX}ANALYTICS_ENABLED": ("agents", "analytics", "enabled"),
+    f"{ENV_PREFIX}CODE_EXECUTOR_ENABLED": ("agents", "code_executor", "enabled"),
+    f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_ENABLED": ("agents", "youtube_download", "enabled"),
+    f"{ENV_PREFIX}MEDIA_EDITOR_ENABLED": ("agents", "media_editor", "enabled"),
+    f"{ENV_PREFIX}WEB_SCRAPER_ENABLED": ("agents", "web_scraper", "enabled"),
+    
+    # File Access Security Configuration (New feature - used)
+    f"{ENV_PREFIX}FILE_ACCESS_RESTRICTED_DIRS": ("security", "file_access", "restricted_directories"),
 }
 
 # Required environment variables for minimal configuration
@@ -460,14 +291,26 @@ def _load_config_from_env() -> Dict[str, Any]:
     # Set defaults for sections that exist
     _set_env_config_defaults(config)
 
-    # Validate that we have minimum required configuration
-    if not config.get("redis") or not config.get("llm"):
-        missing = []
-        if not config.get("redis"):
-            missing.append("redis")
-        if not config.get("llm"):
-            missing.append("llm")
-        raise ConfigurationError(f"Missing required sections from environment variables: {missing}")
+    # Provide defaults for missing required sections
+    if not config.get("redis"):
+        config["redis"] = {
+            "host": "localhost",
+            "port": 6379,
+            "db": 0,
+            "password": None
+        }
+        logger.warning("Redis configuration not found in environment variables. Using defaults: redis://localhost:6379/0")
+    
+    if not config.get("llm"):
+        config["llm"] = {
+            "preferred_provider": "openai",
+            "temperature": 0.7,
+            "max_tokens": 4000
+        }
+        logger.warning("LLM configuration not found in environment variables. Using defaults (API keys still required)")
+    
+    # Note: This allows the system to start with defaults even if API keys aren't set,
+    # but the agents will fail gracefully when actually trying to use missing API keys
 
     return config
 
@@ -495,6 +338,8 @@ def _load_config_from_yaml(config_path: str = None) -> Dict[str, Any]:
         if not config:
             raise ConfigurationError("agent_config.yaml is empty or contains invalid YAML")
 
+        # Apply defaults to YAML configuration
+        _set_env_config_defaults(config)
         _validate_config(config)
         return config
 
@@ -526,6 +371,26 @@ def _get_minimal_defaults() -> Dict[str, Any]:
             "log_level": "INFO",
             "max_sessions": 100,
             "session_timeout": 3600,
+        },
+        "agents": {
+            "moderator": {
+                "enabled": True,  # ModeratorAgent enabled by default
+            },
+            "analytics": {
+                "enabled": True,  # AnalyticsAgent enabled by default when Docker available
+            },
+            "code_executor": {
+                "enabled": True,  # CodeExecutorAgent enabled by default when Docker available
+            },
+            "youtube_download": {
+                "enabled": True,  # YouTubeDownloadAgent enabled by default when Docker available
+            },
+            "media_editor": {
+                "enabled": True,  # MediaEditorAgent enabled by default when Docker available
+            },
+            "web_scraper": {
+                "enabled": True,  # WebScraperAgent enabled by default when Docker available
+            }
         },
         "moderator": {"default_enabled_agents": ["assistant"]},
         "docker": {
@@ -582,6 +447,17 @@ def _set_nested_value(config: Dict[str, Any], path: tuple, value: Any) -> None:
             and isinstance(value, str)
         ):
             current[final_key] = [db_type.strip() for db_type in value.split(",")]
+            return
+            
+        # Security restricted directories handling (comma-separated lists)
+        elif (
+            path[0] == "security"
+            and len(path) >= 3
+            and path[1] == "file_access"
+            and final_key == "restricted_directories"
+            and isinstance(value, str)
+        ):
+            current[final_key] = [dir_path.strip() for dir_path in value.split(",")]
             return
 
         # Moderator enabled agents handling
@@ -670,30 +546,71 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         kb.setdefault("default_collection_prefix", "")
         kb.setdefault("max_file_size_mb", 50)
 
-    # Set web scraping defaults
+    # Set web scraping defaults with Docker-accessible directories  
     if "web_scraping" in config:
         ws = config["web_scraping"]
         ws.setdefault("timeout", 120)
         ws.setdefault("proxy_enabled", False)
         ws.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
+        ws.setdefault("output_dir", "./scraper_output")  # Docker-accessible with shared volume
+        ws.setdefault("docker_shared_mode", True)  # Enable Docker volume sharing
 
-    # Set YouTube download defaults
+    # Set YouTube download defaults with Docker-accessible directories
     if "youtube_download" in config:
         yt = config["youtube_download"]
-        yt.setdefault("download_dir", "./youtube_downloads")
+        yt.setdefault("download_dir", "./youtube_downloads")  # Docker-accessible with shared volume
         yt.setdefault("timeout", 600)
         yt.setdefault("memory_limit", "1g")
         yt.setdefault("default_audio_only", True)
         yt.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
+        yt.setdefault("docker_shared_mode", True)  # Enable Docker volume sharing
 
-    # Set media editor defaults
+    # Set media editor defaults with Docker-accessible directories
     if "media_editor" in config:
         me = config["media_editor"]
-        me.setdefault("input_dir", "./examples/media_input")
-        me.setdefault("output_dir", "./examples/media_output")
+        me.setdefault("input_dir", "./media_input")   # Docker-accessible with shared volume
+        me.setdefault("output_dir", "./media_output") # Docker-accessible with shared volume
         me.setdefault("timeout", 300)
         me.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
         me.setdefault("work_dir", "/opt/ambivo/work_dir")
+        me.setdefault("docker_shared_mode", True)  # Enable Docker volume sharing
+
+    # Set agents defaults - ensure all agents are enabled by default when Docker available
+    if "agents" not in config:
+        config["agents"] = {}
+    
+    agents = config["agents"]
+    agents.setdefault("moderator", {}).setdefault("enabled", True)
+    agents.setdefault("analytics", {}).setdefault("enabled", True)  # Default to True when Docker available
+    agents.setdefault("code_executor", {}).setdefault("enabled", True)  # Default to True when Docker available
+    agents.setdefault("youtube_download", {}).setdefault("enabled", True)  # Default to True when Docker available
+    agents.setdefault("media_editor", {}).setdefault("enabled", True)  # Default to True when Docker available
+    agents.setdefault("web_scraper", {}).setdefault("enabled", True)  # Default to True when Docker available
+
+    # Set security defaults - file access restrictions
+    if "security" not in config:
+        config["security"] = {}
+    
+    security = config["security"]
+    if "file_access" not in security:
+        security["file_access"] = {}
+    
+    file_access = security["file_access"]
+    # Default restricted directories - common sensitive locations
+    file_access.setdefault("restricted_directories", [
+        "/etc",           # System configuration files
+        "/root",          # Root user home directory  
+        "/var/log",       # System logs
+        "/proc",          # Process filesystem
+        "/sys",           # System filesystem
+        "/dev",           # Device files
+        "/boot",          # Boot files
+        "~/.ssh",         # SSH keys
+        "~/.aws",         # AWS credentials
+        "~/.config",      # User configuration files
+        "/usr/bin",       # System binaries
+        "/usr/sbin",      # System admin binaries
+    ])
 
     # Set Docker defaults
     if "docker" in config:

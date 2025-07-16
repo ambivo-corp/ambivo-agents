@@ -1431,6 +1431,13 @@ Use: `load data from {rel_path}`
             if not os.path.exists(file_path):
                 return {"success": False, "error": f"File not found: {file_path}"}
             
+            # Check for restricted paths
+            if self._is_path_restricted(file_path):
+                return {
+                    "success": False,
+                    "error": f"Access denied: File path '{file_path}' is in a restricted directory for security reasons"
+                }
+            
             # Determine file type
             file_ext = Path(file_path).suffix.lower()
             file_name = Path(file_path).stem
@@ -1571,6 +1578,8 @@ Use: `load data from {rel_path}`
     
     async def _handle_file_ingestion_request(self, message_content: str) -> str:
         """Handle file ingestion requests"""
+        import re
+        
         try:
             # Check if MongoDB URI is provided in the message
             mongodb_uri_pattern = r'mongodb(?:\+srv)?://[^\s]+'

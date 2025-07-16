@@ -1087,6 +1087,50 @@ class BaseAgent(ABC):
 
     # 📁 FILE OPERATIONS (Available to all agents)
     
+    def _is_path_restricted(self, file_path: str) -> bool:
+        """
+        Check if a file path is in a restricted directory
+        
+        Args:
+            file_path: File path to check
+            
+        Returns:
+            True if the path is restricted, False otherwise
+        """
+        try:
+            from pathlib import Path
+            import os
+            
+            # Get restricted directories from config
+            restricted_dirs = []
+            if hasattr(self, 'config') and self.config:
+                restricted_dirs = self.config.get('security', {}).get('file_access', {}).get('restricted_directories', [])
+            
+            if not restricted_dirs:
+                return False
+            
+            # Resolve the file path to absolute path
+            resolved_path = Path(file_path).expanduser().resolve()
+            
+            # Check each restricted directory
+            for restricted_dir in restricted_dirs:
+                # Expand user home directory (~) and resolve to absolute path
+                restricted_path = Path(restricted_dir).expanduser().resolve()
+                
+                # Check if the file path is within this restricted directory
+                try:
+                    resolved_path.relative_to(restricted_path)
+                    return True  # Path is within restricted directory
+                except ValueError:
+                    # Not within this restricted directory, continue checking
+                    continue
+                    
+            return False
+            
+        except Exception:
+            # If any error occurs in checking, err on the side of caution
+            return True
+
     async def read_file(self, file_path: str, encoding: str = 'utf-8') -> Dict[str, Any]:
         """
         Read a file from local filesystem or URL
@@ -1099,6 +1143,13 @@ class BaseAgent(ABC):
             Dict with success status, content, and metadata
         """
         try:
+            # Check for restricted paths first (only for local files)
+            if not file_path.startswith(('http://', 'https://')):
+                if self._is_path_restricted(file_path):
+                    return {
+                        'success': False,
+                        'error': f'Access denied: File path "{file_path}" is in a restricted directory for security reasons'
+                    }
             import mimetypes
             
             # Check if it's a URL

@@ -32,6 +32,8 @@ For production scenarios, we recommend:
 - [Command Line Interface](#command-line-interface)
 - [Architecture](#architecture)
 - [Docker Setup](#docker-setup)
+  - [Agent Handoff Mechanism](#agent-handoff-mechanism)
+  - [File Access Security Configuration](#file-access-security-configuration)
 - [Troubleshooting](#troubleshooting)
 - [Security Considerations](#security-considerations)
 - [Contributing](#contributing)
@@ -139,6 +141,7 @@ await agent.cleanup_session()
 - **ModeratorAgent**: Intelligent multi-agent orchestrator with automatic routing
 - **Smart Routing**: Automatically routes queries to appropriate specialized agents
 - **Data Analytics**: In-memory DuckDB integration with CSV/XLS ingestion and text-based visualizations
+- **File Ingestion & Processing**: All agents can read/parse JSON, CSV, XML, YAML files and insert into databases
 - **Context Memory**: Maintains conversation history across interactions
 - **Docker Integration**: Secure, isolated execution environment
 - **Redis Memory**: Persistent conversation memory with compression
@@ -161,6 +164,7 @@ await agent.cleanup_session()
 - Schema inspection and table structure exploration
 - Natural language to SQL/MongoDB query conversion
 - Safe query execution with read-only mode by default
+- **File ingestion support**: Insert JSON/CSV files directly into database tables
 - Data export to CSV for analytics handoff
 - Automatic integration with Analytics Agent for visualization
 - Query result formatting with tables and statistics
@@ -715,6 +719,87 @@ async def database_analytics_workflow():
     print(response)
     
     await moderator.cleanup_session()
+```
+
+### File Reading and Database Ingestion
+
+All agents have built-in file reading capabilities for JSON, CSV, XML, and YAML files. Database insertion requires the optional database package.
+
+```python
+from ambivo_agents import AssistantAgent
+
+async def read_file_and_insert_to_database():
+    """Reads a JSON file and attempts database insertion with graceful fallback"""
+    
+    # Step 1: Read and parse file (always available)
+    agent = AssistantAgent.create_simple(user_id="file_user")
+    
+    result = await agent.read_and_parse_file("./data/users.json")
+    if not result['success']:
+        print(f"❌ Failed to read file: {result.get('error', 'Unknown error')}")
+        await agent.cleanup_session()
+        return
+    
+    json_data = result['parse_result']['data']
+    print(f"✅ Successfully loaded {len(json_data)} records from users.json")
+    
+    # Step 2: Attempt database insertion
+    try:
+        from ambivo_agents import DatabaseAgent
+        
+        # DatabaseAgent is available - proceed with insertion
+        db_agent = DatabaseAgent.create_simple(user_id="db_user")
+        
+        # Connect to MongoDB
+        await db_agent.chat("connect to mongodb://localhost:27017 database myapp")
+        
+        # Insert the data
+        response = await db_agent.chat(f"insert this data into users collection: {json_data}")
+        print(f"✅ Successfully inserted data into MongoDB: {response}")
+        
+        await db_agent.cleanup_session()
+        
+    except ImportError:
+        # DatabaseAgent not available - provide polite warning and alternatives
+        print("\n⚠️  Database insertion not available")
+        print("💡 To enable database features, install with: pip install ambivo-agents[database]")
+        print("\n📁 Available alternatives:")
+        print("   • File successfully read and parsed")
+        print("   • Data can be transformed to other formats")
+        
+        # Show what we can still do
+        csv_result = await agent.convert_json_to_csv(json_data)
+        if csv_result['success']:
+            print("   • ✅ Converted to CSV format (available for export)")
+    
+    await agent.cleanup_session()
+
+# Alternative: Natural language approach with graceful handling
+async def natural_language_file_ingestion():
+    """Uses natural language commands with automatic fallback"""
+    
+    try:
+        from ambivo_agents import DatabaseAgent
+        agent = DatabaseAgent.create_simple(user_id="user")
+        
+        # Full database workflow available
+        await agent.chat("connect to mongodb://localhost:27017 database myapp")
+        response = await agent.chat("read users.json file and insert all records into users collection")
+        print(f"✅ Database ingestion completed: {response}")
+        
+        await agent.cleanup_session()
+        
+    except ImportError:
+        # Fallback to file reading only
+        from ambivo_agents import AssistantAgent
+        agent = AssistantAgent.create_simple(user_id="user")
+        
+        print("⚠️  DatabaseAgent not installed. Reading file only...")
+        response = await agent.chat("read and analyze the users.json file structure")
+        print(f"📁 File analysis: {response}")
+        print("💡 Install database support with: pip install ambivo-agents[database]")
+        
+        await agent.cleanup_session()
 ```
 
 ### Data Analytics
@@ -1290,6 +1375,42 @@ The consolidated structure enables seamless workflows between agents:
 4. Results available at           →  ./docker_shared/output/analytics/results.json
 ```
 
+#### Agent Handoff Mechanism
+
+The handoff system uses the `handoff_subdir` parameter to enable seamless file transfers between agents:
+
+**DatabaseAgent → AnalyticsAgent Handoff:**
+```python
+# DatabaseAgent automatically exports to handoff directory
+result = await db_agent.chat("export sales data for analytics", 
+                            handoff_subdir="sales_analysis_2024")
+# Creates: ./docker_shared/handoff/database/sales_analysis_2024/
+
+# AnalyticsAgent automatically detects handoff files
+analytics_result = await analytics_agent.chat("analyze sales data",
+                                              handoff_subdir="sales_analysis_2024")
+# Reads from: ./docker_shared/handoff/database/sales_analysis_2024/
+```
+
+**Handoff Directory Management:**
+- **Automatic creation**: Subdirectories created based on `handoff_subdir` parameter
+- **File naming**: `{agent_type}_{timestamp}_{operation}.{ext}`
+- **Cleanup**: Handoff files older than 24 hours automatically removed
+- **Thread-safe**: Multiple concurrent handoffs supported
+- **Cross-platform**: Works consistently across Windows, macOS, and Linux
+
+**Configuration in `agent_config.yaml`:**
+```yaml
+docker:
+  container_mounts:
+    handoff: "/docker_shared/handoff"
+  
+  agent_subdirs:
+    database: ["handoff/database"]
+    analytics: ["input/analytics", "output/analytics", "handoff/analytics"]
+    media: ["input/media", "output/media", "handoff/media"]
+```
+
 **Enhanced Fallback (CSV→XLSX Conversion):**
 ```
 1. User: "convert sales.csv to xlsx"
@@ -1412,6 +1533,64 @@ docker:
 - **Memory Limits**: Configurable memory restrictions per agent
 - **Auto-Cleanup**: Temporary files cleaned based on age (configurable)
 - **Permission Control**: Directory permissions managed automatically
+
+#### File Access Security Configuration
+
+**Restricted Directories Protection:**
+
+The system includes built-in protection against accessing sensitive system directories:
+
+```yaml
+# agent_config.yaml
+security:
+  file_access:
+    restricted_directories:
+      - "/etc"           # System configuration
+      - "/root"          # Root user directory
+      - "/var/log"       # System logs
+      - "/proc"          # Process information
+      - "/sys"           # System information
+      - "/dev"           # Device files
+      - "/boot"          # Boot files
+      - "~/.ssh"         # SSH keys
+      - "~/.aws"         # AWS credentials
+      - "~/.config"      # User configuration
+      - "/usr/bin"       # System binaries
+      - "/usr/sbin"      # System admin binaries
+```
+
+**Environment Variable Configuration:**
+```bash
+# Alternative to YAML configuration
+export AMBIVO_AGENTS_FILE_ACCESS_RESTRICTED_DIRS="/etc,/var/log,/sys,/proc,/dev"
+```
+
+**How Restricted Directories Work:**
+- **Path Resolution**: Uses `Path.expanduser().resolve()` for proper path handling
+- **Security by Default**: Common sensitive directories blocked by default
+- **Symbolic Link Protection**: Resolves symbolic links to prevent bypass attempts
+- **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Agent Coverage**: Protects both `BaseAgent.read_file()` and `DatabaseAgent.ingest_file_to_mongodb()`
+
+**Example Usage:**
+```python
+from ambivo_agents import DatabaseAgent
+
+# This will be blocked by default security settings
+result = await db_agent.chat("ingest data from /etc/passwd")
+# Returns: {"success": False, "error": "Access denied: File path '/etc/passwd' is in a restricted directory"}
+
+# This works normally (assuming file exists)
+result = await db_agent.chat("ingest data from ./data/users.csv")
+# Returns: {"success": True, ...}
+```
+
+**Security Best Practices:**
+- **Always use** the default restricted directories in production
+- **Add custom** restricted paths for your specific environment
+- **Test security** settings before deployment
+- **Monitor access** attempts to restricted directories
+- **Regular audits** of file access patterns
 
 #### Monitoring & Maintenance
 

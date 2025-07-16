@@ -95,6 +95,22 @@ except ImportError as e:
     ModeratorAgent = None
 
 
+# Check Docker availability for agents that require it
+try:
+    import docker
+    DOCKER_AVAILABLE = True
+    
+    # Test Docker connection
+    try:
+        client = docker.from_env()
+        client.ping()
+        DOCKER_AVAILABLE = True
+    except Exception:
+        DOCKER_AVAILABLE = False
+except ImportError:
+    DOCKER_AVAILABLE = False
+
+
 class EnhancedConfigManager:
     """Enhanced configuration manager that properly uses your loader.py system"""
 
@@ -542,8 +558,9 @@ class AmbivoAgentsCLI:
         if not current_session:
             raise ValueError("No active session for message processing")
 
-        # If ModeratorAgent is available and enabled, use it for routing
-        if MODERATOR_AVAILABLE and self.config.get("agents.moderator.enabled", False):
+        # If ModeratorAgent is available, use it for routing (enabled by default unless explicitly disabled)
+        moderator_enabled = self.config.get("agents.moderator.enabled", True)  # Default to True
+        if MODERATOR_AVAILABLE and moderator_enabled:
             return await self._route_with_moderator(message, current_session)
 
         # Otherwise use built-in routing logic with cached agents
@@ -684,18 +701,24 @@ class AmbivoAgentsCLI:
         file_extensions = [".csv", ".xlsx", ".xls"]
         has_data_file = any(ext in message_lower for ext in file_extensions)
         
-        # Check keyword combinations
+        # Check keyword combinations  
         has_data = any(word in message_lower for word in ["data", "dataset", "csv", "excel", "spreadsheet"])
         has_analysis = any(word in message_lower for word in ["analyze", "analysis", "chart", "graph", "plot", "visualize", "statistics", "summary"])
         has_sql = any(word in message_lower for word in ["sql", "query", "select", "from", "where", "group by"])
         has_schema = any(word in message_lower for word in ["schema", "structure", "columns", "fields", "describe"])
         
-        # Strong combinations that indicate analytics intent
+        # Check for explicit database context to avoid false positives
+        has_database_context = any(db_word in message_lower for db_word in ["mongodb", "mysql", "postgresql", "database", "db.", "connect to", "collection", "table"])
+        
+        # Strong combinations that indicate analytics intent (but avoid database operations)
+        if has_database_context:  # If it's clearly a database operation, don't route to analytics
+            return False
+            
         if has_data_file:  # File extension found
             return True
         if has_data and has_analysis:  # Data + analysis keywords
             return True
-        if has_data and has_sql:  # Data + SQL keywords
+        if has_data and has_sql:  # Data + SQL keywords (now safe since we checked database context above)
             return True
         if has_data and has_schema:  # Data + schema keywords
             return True
@@ -706,6 +729,8 @@ class AmbivoAgentsCLI:
 
     def _detect_database_request(self, message: str) -> bool:
         """Enhanced database operation detection with comprehensive keyword matching"""
+        import re
+        
         message_lower = message.lower()
         
         # Database connection keywords
@@ -739,33 +764,38 @@ class AmbivoAgentsCLI:
         """Built-in routing logic using cached agents - ENHANCED WITH CODE DETECTION"""
         message_lower = message.lower()
 
+        # CodeExecutorAgent - enabled by default when Docker is available unless explicitly disabled
         if self._detect_code_execution_request(message):
-            # ✅ ROUTE TO CODE EXECUTOR AGENT
-            agent, context = await self.get_or_create_agent(
-                CodeExecutorAgent, session_id, {"operation": "code_execution"}
-            )
-
-            try:
-                # Let CodeExecutorAgent handle both writing AND executing
-                from ambivo_agents.core.base import AgentMessage, MessageType
-
-                agent_message = AgentMessage(
-                    id=f"msg_{str(uuid.uuid4())[:8]}",
-                    sender_id="cli_user",
-                    recipient_id=agent.agent_id,
-                    content=message,
-                    message_type=MessageType.USER_INPUT,
-                    session_id=context.session_id,
-                    conversation_id=context.conversation_id,
+            code_executor_enabled = self.config.get("agents.code_executor.enabled", DOCKER_AVAILABLE)
+            if code_executor_enabled:
+                # ✅ ROUTE TO CODE EXECUTOR AGENT
+                agent, context = await self.get_or_create_agent(
+                    CodeExecutorAgent, session_id, {"operation": "code_execution"}
                 )
 
-                response_message = await agent.process_message(
-                    agent_message, context.to_execution_context()
-                )
-                return f"{response_message.content}\n\n🔧 *Processed by CodeExecutorAgent with code execution capabilities*"
+                try:
+                    # Let CodeExecutorAgent handle both writing AND executing
+                    from ambivo_agents.core.base import AgentMessage, MessageType
 
-            except Exception as e:
-                return f"❌ Error in code execution: {str(e)}"
+                    agent_message = AgentMessage(
+                        id=f"msg_{str(uuid.uuid4())[:8]}",
+                        sender_id="cli_user",
+                        recipient_id=agent.agent_id,
+                        content=message,
+                        message_type=MessageType.USER_INPUT,
+                        session_id=context.session_id,
+                        conversation_id=context.conversation_id,
+                    )
+
+                    response_message = await agent.process_message(
+                        agent_message, context.to_execution_context()
+                    )
+                    return f"{response_message.content}\n\n🔧 *Processed by CodeExecutorAgent with code execution capabilities*"
+
+                except Exception as e:
+                    return f"❌ Error in code execution: {str(e)}"
+            else:
+                return "❌ CodeExecutorAgent is disabled. Enable it by setting AMBIVO_AGENTS_CODE_EXECUTOR_ENABLED=true or ensure Docker is available."
 
         # API Agent Detection - for API calls and documentation parsing
         elif self._detect_api_request(message):
@@ -795,33 +825,37 @@ class AmbivoAgentsCLI:
             except Exception as e:
                 return f"❌ Error in API request: {str(e)}"
 
-        # Analytics Agent Detection - for data analysis and visualization
+        # AnalyticsAgent Detection - enabled by default when Docker is available unless explicitly disabled
         elif self._detect_analytics_request(message):
-            # ✅ ROUTE TO ANALYTICS AGENT
-            agent, context = await self.get_or_create_agent(
-                AnalyticsAgent, session_id, {"operation": "data_analysis"}
-            )
-
-            try:
-                from ambivo_agents.core.base import AgentMessage, MessageType
-
-                agent_message = AgentMessage(
-                    id=f"msg_{str(uuid.uuid4())[:8]}",
-                    sender_id="cli_user",
-                    recipient_id=agent.agent_id,
-                    content=message,
-                    message_type=MessageType.USER_INPUT,
-                    session_id=context.session_id,
-                    conversation_id=context.conversation_id,
+            analytics_enabled = self.config.get("agents.analytics.enabled", DOCKER_AVAILABLE)
+            if analytics_enabled:
+                # ✅ ROUTE TO ANALYTICS AGENT
+                agent, context = await self.get_or_create_agent(
+                    AnalyticsAgent, session_id, {"operation": "data_analysis"}
                 )
 
-                response_message = await agent.process_message(
-                    agent_message, context.to_execution_context()
-                )
-                return f"{response_message.content}\n\n📊 *Processed by AnalyticsAgent with DuckDB and Docker execution*"
+                try:
+                    from ambivo_agents.core.base import AgentMessage, MessageType
 
-            except Exception as e:
-                return f"❌ Error in data analysis: {str(e)}"
+                    agent_message = AgentMessage(
+                        id=f"msg_{str(uuid.uuid4())[:8]}",
+                        sender_id="cli_user",
+                        recipient_id=agent.agent_id,
+                        content=message,
+                        message_type=MessageType.USER_INPUT,
+                        session_id=context.session_id,
+                        conversation_id=context.conversation_id,
+                    )
+
+                    response_message = await agent.process_message(
+                        agent_message, context.to_execution_context()
+                    )
+                    return f"{response_message.content}\n\n📊 *Processed by AnalyticsAgent with DuckDB and Docker execution*"
+
+                except Exception as e:
+                    return f"❌ Error in data analysis: {str(e)}"
+            else:
+                return "❌ AnalyticsAgent is disabled. Enable it by setting AMBIVO_AGENTS_ANALYTICS_ENABLED=true or ensure Docker is available."
 
         # Database Agent Detection - for database operations and queries
         elif self._detect_database_request(message) and DATABASE_AGENT_AVAILABLE:
@@ -851,50 +885,54 @@ class AmbivoAgentsCLI:
             except Exception as e:
                 return f"❌ Error in database operation: {str(e)}"
 
-        # YouTube Download Detection
+        # YouTube Download Detection - enabled by default when Docker is available unless explicitly disabled
         elif any(keyword in message_lower for keyword in ["youtube", "download", "youtu.be"]) and (
             "http" in message or "www." in message
         ):
-            # ✅ REUSE CACHED YOUTUBE AGENT - Preserves download history
-            agent, context = await self.get_or_create_agent(
-                YouTubeDownloadAgent, session_id, {"operation": "youtube_download"}
-            )
+            youtube_enabled = self.config.get("agents.youtube_download.enabled", DOCKER_AVAILABLE)
+            if youtube_enabled:
+                # ✅ REUSE CACHED YOUTUBE AGENT - Preserves download history
+                agent, context = await self.get_or_create_agent(
+                    YouTubeDownloadAgent, session_id, {"operation": "youtube_download"}
+                )
 
-            try:
-                import re
+                try:
+                    import re
 
-                youtube_patterns = [
-                    r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
-                    r"https?://(?:www\.)?youtu\.be/[\w-]+",
-                ]
+                    youtube_patterns = [
+                        r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
+                        r"https?://(?:www\.)?youtu\.be/[\w-]+",
+                    ]
 
-                urls = []
-                for pattern in youtube_patterns:
-                    urls.extend(re.findall(pattern, message))
+                    urls = []
+                    for pattern in youtube_patterns:
+                        urls.extend(re.findall(pattern, message))
 
-                if urls:
-                    url = urls[0]
-                    default_audio_only = self.config.get("agents.youtube.default_audio_only", True)
-                    wants_video = any(
-                        keyword in message_lower for keyword in ["video", "mp4", "watch", "visual"]
-                    )
-                    audio_only = default_audio_only if not wants_video else False
+                    if urls:
+                        url = urls[0]
+                        default_audio_only = self.config.get("agents.youtube.default_audio_only", True)
+                        wants_video = any(
+                            keyword in message_lower for keyword in ["video", "mp4", "watch", "visual"]
+                        )
+                        audio_only = default_audio_only if not wants_video else False
 
-                    if "info" in message_lower or "information" in message_lower:
-                        result = await agent._get_youtube_info(url)
+                        if "info" in message_lower or "information" in message_lower:
+                            result = await agent._get_youtube_info(url)
+                        else:
+                            result = await agent._download_youtube(url, audio_only=audio_only)
+
+                        # ✅ AGENT STAYS CACHED - No cleanup_session() call
+                        if result["success"]:
+                            return f"✅ YouTube operation completed!\n{result.get('message', '')}\nSession: {context.session_id}\nAgent: {agent.agent_id}\n🔄 Agent cached for future use"
+                        else:
+                            return f"❌ YouTube operation failed: {result['error']}"
                     else:
-                        result = await agent._download_youtube(url, audio_only=audio_only)
+                        return "❌ No valid YouTube URLs found in message"
 
-                    # ✅ AGENT STAYS CACHED - No cleanup_session() call
-                    if result["success"]:
-                        return f"✅ YouTube operation completed!\n{result.get('message', '')}\nSession: {context.session_id}\nAgent: {agent.agent_id}\n🔄 Agent cached for future use"
-                    else:
-                        return f"❌ YouTube operation failed: {result['error']}"
-                else:
-                    return "❌ No valid YouTube URLs found in message"
-
-            except Exception as e:
-                return f"❌ YouTube operation error: {e}"
+                except Exception as e:
+                    return f"❌ YouTube operation error: {e}"
+            else:
+                return "❌ YouTubeDownloadAgent is disabled. Enable it by setting AMBIVO_AGENTS_YOUTUBE_DOWNLOAD_ENABLED=true or ensure Docker is available."
 
         # General Assistant (fallback)
         else:
