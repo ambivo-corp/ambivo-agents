@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from ..config.loader import get_config_section, load_config
+from ..core.docker_shared import DockerSharedManager, get_shared_manager
 
 try:
     import docker
@@ -39,13 +40,33 @@ class MediaDockerExecutor:
         self.timeout = config.get("timeout", 300)  # 5 minutes for media processing
         self.memory_limit = config.get("memory_limit", "2g")
 
-        # Media specific directories
-        self.input_dir = Path(config.get("input_dir", "./media_input"))
-        self.output_dir = Path(config.get("output_dir", "./media_output"))
-
-        # Ensure directories exist
-        self.input_dir.mkdir(exist_ok=True)
-        self.output_dir.mkdir(exist_ok=True)
+        # Initialize Docker shared manager
+        self.shared_manager = get_shared_manager()
+        self.shared_manager.setup_directories()
+        
+        # Get agent-specific subdirectory names from config
+        self.input_subdir = config.get("input_subdir", "media")
+        self.output_subdir = config.get("output_subdir", "media")
+        self.temp_subdir = config.get("temp_subdir", "media")
+        self.handoff_subdir = config.get("handoff_subdir", "media")
+        
+        # Set up proper directories using DockerSharedManager
+        self.input_dir = self.shared_manager.get_host_path(self.input_subdir, "input")
+        self.output_dir = self.shared_manager.get_host_path(self.output_subdir, "output")
+        self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
+        self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
+        
+        # Legacy support - also check old directories if they exist
+        self.legacy_input_dir = Path(config.get("input_dir", "./media_input"))
+        self.legacy_output_dir = Path(config.get("output_dir", "./media_output"))
+        
+        # Ensure all directories exist
+        self.input_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.handoff_dir.mkdir(parents=True, exist_ok=True)
+        self.legacy_input_dir.mkdir(exist_ok=True)
+        self.legacy_output_dir.mkdir(exist_ok=True)
 
         if not DOCKER_AVAILABLE:
             raise ImportError("Docker package is required for media processing")
@@ -56,6 +77,49 @@ class MediaDockerExecutor:
             self.available = True
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Docker for media processing: {e}")
+
+    def resolve_input_file(self, filename: str) -> Path:
+        """
+        Resolve input file path by checking multiple locations
+        
+        Args:
+            filename: File name or path to resolve
+            
+        Returns:
+            Path object if file exists, None otherwise
+        """
+        # If it's already an absolute path and exists, return it
+        if Path(filename).is_absolute() and Path(filename).exists():
+            return Path(filename)
+            
+        # Check various possible locations in order of priority
+        search_locations = [
+            # 1. Docker shared input directory (highest priority)
+            self.input_dir / filename,
+            self.input_dir / Path(filename).name,
+            
+            # 2. Legacy input directory
+            self.legacy_input_dir / filename,
+            self.legacy_input_dir / Path(filename).name,
+            
+            # 3. Relative to current directory
+            Path(filename),
+            Path(filename).resolve(),
+            
+            # 4. Other docker shared directories (for workflow handoffs)
+            self.handoff_dir / filename,
+            self.handoff_dir / Path(filename).name,
+            
+            # 5. Examples directory (for backward compatibility)
+            Path("examples/media_input") / filename,
+            Path("examples/media_input") / Path(filename).name,
+        ]
+        
+        for location in search_locations:
+            if location.exists():
+                return location
+                
+        return None
 
     def execute_ffmpeg_command(
         self,
@@ -87,15 +151,26 @@ class MediaDockerExecutor:
                 file_mapping = {}
                 if input_files:
                     for container_name, host_path in input_files.items():
-                        if Path(host_path).exists():
+                        # Try to resolve the file path using our search logic
+                        resolved_path = self.resolve_input_file(host_path)
+                        
+                        if resolved_path and resolved_path.exists():
                             dest_path = container_input / container_name
-                            shutil.copy2(host_path, dest_path)
+                            shutil.copy2(resolved_path, dest_path)
                             file_mapping[container_name] = f"/workspace/input/{container_name}"
                         else:
+                            # Provide helpful error message with search locations
+                            search_dirs = [
+                                str(self.input_dir),
+                                str(self.legacy_input_dir),
+                                "examples/media_input",
+                                str(self.handoff_dir)
+                            ]
                             return {
                                 "success": False,
-                                "error": f"Input file not found: {host_path}",
+                                "error": f"Input file not found: {host_path}\nSearched in: {', '.join(search_dirs)}",
                                 "command": ffmpeg_command,
+                                "searched_locations": search_dirs
                             }
 
                 # Copy additional work files

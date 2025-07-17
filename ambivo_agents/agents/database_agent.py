@@ -48,6 +48,7 @@ except ImportError:
     TABULATE_AVAILABLE = False
 
 from ..config.loader import get_config_section, load_config
+from ..core.docker_shared import DockerSharedManager, get_shared_manager
 from ..core.base import (
     AgentMessage,
     AgentRole,
@@ -195,16 +196,27 @@ Always prioritize data security and provide clear, formatted results."""
         self._connections = {}
         self._current_db_config = None
         
-        # Data export settings - use absolute path for Docker compatibility
+        # Initialize Docker shared manager
+        self.shared_manager = get_shared_manager()
+        self.shared_manager.setup_directories()
+        
+        # Get agent-specific subdirectory names from config
+        self.handoff_subdir = self.config.get("handoff_subdir", "database")
+        
+        # Set up proper directories using DockerSharedManager
+        self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
+        
+        # Legacy support - also support old export_dir
         export_dir = self.config.get("export_dir", "./database_exports")
         if not os.path.isabs(export_dir):
             # Make relative paths absolute based on current working directory
             export_dir = os.path.abspath(export_dir)
-        self.export_dir = export_dir
+        self.legacy_export_dir = Path(export_dir)
         self.enable_analytics_handoff = self.config.get("enable_analytics_handoff", True)
         
-        # Ensure export directory exists
-        Path(self.export_dir).mkdir(parents=True, exist_ok=True)
+        # Ensure directories exist
+        self.handoff_dir.mkdir(parents=True, exist_ok=True)
+        self.legacy_export_dir.mkdir(parents=True, exist_ok=True)
         
         # Setup logging
         self.logger = logging.getLogger(f"DatabaseAgent-{agent_id[:8]}")
@@ -1268,18 +1280,27 @@ Always prioritize data security and provide clear, formatted results."""
             timestamp = asyncio.get_event_loop().time()
             filename = f"query_export_{int(timestamp)}.csv"
         
-        export_path = Path(self.export_dir) / filename
+        # Export to handoff directory (Docker shared structure)
+        handoff_path = self.handoff_dir / filename
+        
+        # Also export to legacy directory for backward compatibility
+        legacy_path = self.legacy_export_dir / filename
         
         try:
-            with open(export_path, 'w', newline='', encoding='utf-8') as csvfile:
+            # Write to handoff directory
+            with open(handoff_path, 'w', newline='', encoding='utf-8') as csvfile:
                 if result.data:
                     fieldnames = result.columns or list(result.data[0].keys())
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                     writer.writeheader()
                     writer.writerows(result.data)
             
-            self.logger.info(f"Exported {result.row_count} rows to {export_path}")
-            return str(export_path)
+            # Also copy to legacy directory for backward compatibility
+            import shutil
+            shutil.copy2(handoff_path, legacy_path)
+            
+            self.logger.info(f"Exported {result.row_count} rows to {handoff_path} (and {legacy_path})")
+            return str(handoff_path)  # Return the shared path as primary
             
         except Exception as e:
             self.logger.error(f"CSV export error: {e}")
@@ -1413,8 +1434,9 @@ Use: `load data from {rel_path}`
                 possible_paths = [
                     file_path,  # Relative to current directory
                     os.path.join(os.getcwd(), file_path),  # Absolute from cwd
-                    os.path.join(self.export_dir, file_path),  # In export directory
-                    os.path.join(os.path.dirname(self.export_dir), file_path),  # Parent of export dir
+                    os.path.join(self.handoff_dir, file_path),  # In handoff directory
+                    os.path.join(self.legacy_export_dir, file_path),  # In legacy export directory
+                    os.path.join(os.path.dirname(str(self.handoff_dir)), file_path),  # Parent of handoff dir
                 ]
                 
                 for path in possible_paths:

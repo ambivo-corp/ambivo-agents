@@ -22,6 +22,7 @@ import urllib3
 from requests.adapters import HTTPAdapter
 
 from ..config.loader import get_config_section, load_config
+from ..core.docker_shared import DockerSharedManager, get_shared_manager
 from ..core.base import (
     AgentMessage,
     AgentRole,
@@ -78,6 +79,25 @@ class SimpleDockerExecutor:
         self.config = config or {}
         self.docker_image = self.config.get("docker_image", "sgosain/amb-ubuntu-python-public-pod")
         self.timeout = self.config.get("timeout", 60)
+        
+        # Initialize Docker shared manager
+        self.shared_manager = get_shared_manager()
+        self.shared_manager.setup_directories()
+        
+        # Get agent-specific subdirectory names from config
+        self.output_subdir = self.config.get("output_subdir", "scraper")
+        self.temp_subdir = self.config.get("temp_subdir", "scraper")
+        self.handoff_subdir = self.config.get("handoff_subdir", "scraper")
+        
+        # Set up proper directories using DockerSharedManager
+        self.output_dir = self.shared_manager.get_host_path(self.output_subdir, "output")
+        self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
+        self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
+        
+        # Ensure all directories exist
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.handoff_dir.mkdir(parents=True, exist_ok=True)
 
         if DOCKER_AVAILABLE:
             try:
@@ -176,10 +196,45 @@ asyncio.run(scrape_url())
 
             # Parse result
             output = container.decode("utf-8") if isinstance(container, bytes) else str(container)
-            return json.loads(output.strip().split("\n")[-1])
+            result = json.loads(output.strip().split("\n")[-1])
+            
+            # Save result to shared output directory
+            if result.get("success"):
+                self._save_scraping_result(task, result)
+            
+            return result
 
         except Exception as e:
             return {"success": False, "error": str(e), "url": task.url, "execution_mode": "docker"}
+    
+    def _save_scraping_result(self, task: ScrapingTask, result: Dict[str, Any]) -> None:
+        """Save scraping result to shared output directory"""
+        try:
+            import hashlib
+            import time
+            
+            # Create filename based on URL and timestamp
+            url_hash = hashlib.md5(task.url.encode()).hexdigest()[:8]
+            timestamp = int(time.time())
+            filename = f"scraping_result_{url_hash}_{timestamp}.json"
+            
+            # Save to shared output directory
+            output_file = self.output_dir / filename
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
+            
+            # Also save to handoff directory for analytics workflow
+            handoff_file = self.handoff_dir / filename
+            with open(handoff_file, 'w', encoding='utf-8') as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
+            
+            result["saved_files"] = {
+                "output": str(output_file),
+                "handoff": str(handoff_file)
+            }
+            
+        except Exception as e:
+            logging.warning(f"Failed to save scraping result: {e}")
 
 
 class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):

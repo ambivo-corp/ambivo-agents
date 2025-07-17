@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from ..config.loader import get_config_section, load_config
+from ..core.docker_shared import DockerSharedManager, get_shared_manager
 
 try:
     import docker
@@ -39,12 +40,32 @@ class YouTubeDockerExecutor:
         self.timeout = config.get("timeout", 600)  # 10 minutes for downloads
         self.memory_limit = config.get("memory_limit", "1g")
 
-        # YouTube specific directories
-        self.download_dir = Path(config.get("download_dir", "./youtube_downloads"))
+        # Initialize Docker shared manager
+        self.shared_manager = get_shared_manager()
+        self.shared_manager.setup_directories()
+        
+        # Get agent-specific subdirectory names from config
+        self.input_subdir = config.get("input_subdir", "youtube")
+        self.output_subdir = config.get("output_subdir", "youtube")
+        self.temp_subdir = config.get("temp_subdir", "youtube")
+        self.handoff_subdir = config.get("handoff_subdir", "youtube")
+        
+        # Set up proper directories using DockerSharedManager
+        self.input_dir = self.shared_manager.get_host_path(self.input_subdir, "input")
+        self.output_dir = self.shared_manager.get_host_path(self.output_subdir, "output")
+        self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
+        self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
+        
+        # Legacy support - also check old directories if they exist
+        self.legacy_download_dir = Path(config.get("download_dir", "./youtube_downloads"))
         self.default_audio_only = config.get("default_audio_only", True)
 
-        # Ensure directories exist
-        self.download_dir.mkdir(exist_ok=True)
+        # Ensure all directories exist
+        self.input_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.handoff_dir.mkdir(parents=True, exist_ok=True)
+        self.legacy_download_dir.mkdir(exist_ok=True)
 
         if not DOCKER_AVAILABLE:
             raise ImportError("Docker package is required for YouTube downloads")
@@ -138,10 +159,16 @@ ls -la /workspace/output/
                             "path": str(downloaded_file),
                         }
 
-                        # Move output file to permanent location
-                        permanent_output = self.download_dir / downloaded_file.name
-                        shutil.move(str(downloaded_file), str(permanent_output))
-                        output_info["final_path"] = str(permanent_output)
+                        # Move output file to shared output directory (Docker shared structure)
+                        shared_output = self.output_dir / downloaded_file.name
+                        shutil.move(str(downloaded_file), str(shared_output))
+                        output_info["final_path"] = str(shared_output)
+                        output_info["shared_path"] = str(shared_output)
+                        
+                        # Also copy to legacy directory for backward compatibility
+                        legacy_output = self.legacy_download_dir / downloaded_file.name
+                        shutil.copy2(str(shared_output), str(legacy_output))
+                        output_info["legacy_path"] = str(legacy_output)
 
                         # Try to parse JSON result from the script output
                         try:
@@ -162,6 +189,7 @@ ls -la /workspace/output/
                         "audio_only": audio_only,
                         "download_info": output_info,
                         "temp_dir": str(temp_path),
+                        "shared_manager": True,  # Indicate we're using shared manager
                     }
 
                 except Exception as container_error:

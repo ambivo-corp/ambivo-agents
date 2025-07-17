@@ -1176,6 +1176,22 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         self.media_executor = MediaDockerExecutor(self.media_config)
 
+    def _resolve_media_file(self, file_path: str) -> str:
+        """
+        Resolve media file path using executor's file resolution logic
+        
+        Args:
+            file_path: File name or path to resolve
+            
+        Returns:
+            Resolved path string if found, original path otherwise
+        """
+        if hasattr(self.media_executor, 'resolve_input_file'):
+            resolved = self.media_executor.resolve_input_file(file_path)
+            if resolved:
+                return str(resolved)
+        return file_path
+
     def _add_media_tools(self):
         """Add media processing tools"""
 
@@ -1396,8 +1412,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
     ):
         """FIXED: Extract audio from video file with proper FFmpeg syntax"""
         try:
-            if not Path(input_video).exists():
-                return {"success": False, "error": f"Input video file not found: {input_video}"}
+            # Resolve the input file path
+            resolved_input = self._resolve_media_file(input_video)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input video file not found: {input_video}. Searched in docker_shared/input/media/, media_input/, examples/media_input/, and current directory."}
 
             # Quality settings - FIXED: Proper bitrate syntax
             quality_settings = {"low": "128k", "medium": "192k", "high": "320k"}
@@ -1414,7 +1432,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
-                input_files={"input_video": input_video},
+                input_files={"input_video": resolved_input},
                 output_filename=output_filename,
             )
 
@@ -1423,7 +1441,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     "success": True,
                     "message": f"Audio extracted successfully to {output_format}",
                     "output_file": result.get("output_file", {}),
-                    "input_video": input_video,
+                    "input_video": resolved_input,
                     "execution_time": result["execution_time"],
                 }
             else:

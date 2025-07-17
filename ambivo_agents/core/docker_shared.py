@@ -37,7 +37,8 @@ class DockerSharedManager:
             "media": ["input/media", "output/media", "temp/media", "handoff/media"],
             "code": ["input/code", "output/code", "temp/code", "handoff/code"],
             "database": ["handoff/database"],  # Database only needs handoff
-            "scraper": ["output/scraper", "temp/scraper", "handoff/scraper"]
+            "scraper": ["output/scraper", "temp/scraper", "handoff/scraper"],
+            "youtube": ["output/youtube", "temp/youtube", "handoff/youtube"]  # YouTube download outputs
         }
     
     def setup_directories(self) -> bool:
@@ -184,6 +185,58 @@ class DockerSharedManager:
             "work_bytes": get_dir_size(self.subdirs["work"])
         }
     
+    def resolve_input_file(self, filename: str, agent: str, legacy_dirs: Optional[List[Path]] = None) -> Optional[Path]:
+        """
+        Resolve input file path by checking multiple locations in order of priority
+        Similar to MediaDockerExecutor.resolve_input_file but generalized for all agents
+        
+        Args:
+            filename: File name or path to resolve
+            agent: Agent name for directory structure
+            legacy_dirs: List of legacy directories to check for backward compatibility
+            
+        Returns:
+            Path object if file exists, None otherwise
+        """
+        # If it's already an absolute path and exists, return it
+        if Path(filename).is_absolute() and Path(filename).exists():
+            return Path(filename)
+            
+        # Check various possible locations in order of priority
+        search_locations = [
+            # 1. Docker shared input directory (highest priority)
+            self.get_host_path(agent, "input") / filename,
+            self.get_host_path(agent, "input") / Path(filename).name,
+            
+            # 2. Docker shared handoff directory (for workflow handoffs)
+            self.get_host_path(agent, "handoff") / filename,
+            self.get_host_path(agent, "handoff") / Path(filename).name,
+            
+            # 3. Relative to current directory
+            Path(filename),
+            Path(filename).resolve(),
+            
+            # 4. Examples directory (for backward compatibility)
+            Path("examples") / filename,
+            Path("examples") / Path(filename).name,
+        ]
+        
+        # 5. Add legacy directories if provided
+        if legacy_dirs:
+            for legacy_dir in legacy_dirs:
+                search_locations.extend([
+                    legacy_dir / filename,
+                    legacy_dir / Path(filename).name,
+                ])
+        
+        for location in search_locations:
+            if location.exists():
+                logger.debug(f"Resolved {filename} to {location}")
+                return location
+                
+        logger.warning(f"Could not resolve input file: {filename}")
+        return None
+
     def prepare_agent_environment(self, agent: str, input_files: Optional[List[str]] = None) -> Tuple[str, str]:
         """
         Prepare Docker environment for an agent
@@ -197,8 +250,9 @@ class DockerSharedManager:
         # Copy input files if provided
         if input_files:
             for file_path in input_files:
-                if os.path.exists(file_path):
-                    self.copy_to_input(file_path, agent)
+                resolved_path = self.resolve_input_file(file_path, agent)
+                if resolved_path:
+                    self.copy_to_input(str(resolved_path), agent)
                 else:
                     logger.warning(f"Input file not found: {file_path}")
         

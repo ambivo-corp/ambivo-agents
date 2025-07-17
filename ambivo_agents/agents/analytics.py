@@ -26,6 +26,7 @@ from ..core.base import (
 )
 from ..core.history import BaseAgentHistoryMixin
 from ..config.loader import get_config_section
+from ..core.docker_shared import DockerSharedManager, get_shared_manager
 
 
 class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
@@ -70,14 +71,59 @@ class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
         
         # Analytics agent specific settings
         self.docker_image = self.config.get("docker_image", "sgosain/amb-ubuntu-python-public-pod")
-        self.input_dir = self.config.get("input_dir", "./examples")
-        self.output_dir = self.config.get("output_dir", "./examples/analytics_output")
+        
+        # Initialize Docker shared manager
+        self.shared_manager = get_shared_manager()
+        self.shared_manager.setup_directories()
+        
+        # Get agent-specific subdirectory names from config
+        self.input_subdir = self.config.get("input_subdir", "analytics")
+        self.output_subdir = self.config.get("output_subdir", "analytics")
+        self.temp_subdir = self.config.get("temp_subdir", "analytics")
+        self.handoff_subdir = self.config.get("handoff_subdir", "analytics")
+        
+        # Set up proper directories using DockerSharedManager
+        self.input_dir = self.shared_manager.get_host_path(self.input_subdir, "input")
+        self.output_dir = self.shared_manager.get_host_path(self.output_subdir, "output")
+        self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
+        self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
+        
+        # Legacy support - also check old directories if they exist
+        self.legacy_input_dir = Path(self.config.get("input_dir", "./examples"))
+        self.legacy_output_dir = Path(self.config.get("output_dir", "./examples/analytics_output"))
+        
+        # Ensure all directories exist
+        self.input_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.handoff_dir.mkdir(parents=True, exist_ok=True)
+        self.legacy_input_dir.mkdir(parents=True, exist_ok=True)
+        self.legacy_output_dir.mkdir(parents=True, exist_ok=True)
+        
         self.current_dataset = None
         self.current_schema = None
         
         # Logging
         self.logger = logging.getLogger(f"AnalyticsAgent-{agent_id[:8]}")
         self.logger.info(f"Analytics Agent initialized with input_dir: {self.input_dir}")
+
+    def resolve_input_file(self, filename: str) -> Optional[Path]:
+        """
+        Resolve input file path by checking multiple locations in order of priority
+        
+        Args:
+            filename: File name or path to resolve
+            
+        Returns:
+            Path object if file exists, None otherwise
+        """
+        # If it's already an absolute path and exists, return it
+        if Path(filename).is_absolute() and Path(filename).exists():
+            return Path(filename)
+            
+        # Use shared manager's file resolution with legacy directories
+        legacy_dirs = [self.legacy_input_dir, self.legacy_output_dir]
+        return self.shared_manager.resolve_input_file(filename, self.input_subdir, legacy_dirs)
 
     def _load_analytics_config(self) -> dict:
         """Load analytics configuration from agent_config.yaml"""
@@ -331,15 +377,10 @@ Always provide clear, actionable insights and explain your analysis process. Use
             if match:
                 file_path = match.group(1)
                 
-                # If it's not an absolute path, try to resolve it relative to input_dir
-                if not os.path.isabs(file_path):
-                    resolved_path = os.path.join(self.input_dir, file_path)
-                    if os.path.exists(resolved_path):
-                        return resolved_path
-                    
-                    # Also try the original path in case it's relative to current dir
-                    if os.path.exists(file_path):
-                        return file_path
+                # Use the resolve_input_file method for consistent file resolution
+                resolved_path = self.resolve_input_file(file_path)
+                if resolved_path:
+                    return str(resolved_path)
                 else:
                     # Absolute path - check if it exists
                     if os.path.exists(file_path):
@@ -359,13 +400,22 @@ Always provide clear, actionable insights and explain your analysis process. Use
         if not file_path:
             # List available files in input directory to help user
             try:
-                available_files = [f for f in os.listdir(self.input_dir) 
-                                 if f.endswith(('.csv', '.xlsx', '.xls'))]
+                # List available files from both shared and legacy directories
+                available_files = []
+                search_dirs = [self.input_dir, self.legacy_input_dir]
+                
+                for search_dir in search_dirs:
+                    if search_dir.exists():
+                        for f in search_dir.iterdir():
+                            if f.is_file() and f.suffix.lower() in ['.csv', '.xlsx', '.xls']:
+                                available_files.append(f.name)
+                
+                available_files = list(set(available_files))  # Remove duplicates
                 if available_files:
                     files_list = '\n'.join([f"  - {f}" for f in available_files])
-                    return f"❌ No file path found. Available files in `{self.input_dir}`:\n{files_list}\n\nPlease specify: `load data from filename.csv`"
+                    return f"❌ No file path found. Available files in input directories:\n{files_list}\n\nPlease specify: `load data from filename.csv`"
                 else:
-                    return f"❌ No file path found and no data files in `{self.input_dir}`. Please specify a CSV or XLS file path."
+                    return f"❌ No file path found and no data files in input directories. Please specify a CSV or XLS file path."
             except Exception:
                 return "❌ No file path found. Please specify a CSV or XLS file path."
 
