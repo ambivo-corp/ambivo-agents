@@ -110,7 +110,17 @@ class MediaDockerExecutor:
             self.handoff_dir / filename,
             self.handoff_dir / Path(filename).name,
             
-            # 5. Examples directory (for backward compatibility)
+            # 5. Cross-agent handoff directories (for workflow integration)
+            self.shared_manager.get_host_path('youtube', 'handoff') / filename,
+            self.shared_manager.get_host_path('youtube', 'handoff') / Path(filename).name,
+            self.shared_manager.get_host_path('youtube', 'output') / filename,
+            self.shared_manager.get_host_path('youtube', 'output') / Path(filename).name,
+            self.shared_manager.get_host_path('analytics', 'handoff') / filename,
+            self.shared_manager.get_host_path('analytics', 'handoff') / Path(filename).name,
+            self.shared_manager.get_host_path('code', 'handoff') / filename,
+            self.shared_manager.get_host_path('code', 'handoff') / Path(filename).name,
+            
+            # 6. Examples directory (for backward compatibility)
             Path("examples/media_input") / filename,
             Path("examples/media_input") / Path(filename).name,
         ]

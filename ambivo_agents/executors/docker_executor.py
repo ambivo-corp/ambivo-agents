@@ -177,52 +177,53 @@ class DockerCodeExecutor:
     
     def _execute_code_legacy(self, code: str, language: str, files: Dict[str, str] = None) -> Dict[str, Any]:
         """Execute code using legacy temporary directory approach"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
 
-            if language == "python":
-                code_file = temp_path / "code.py"
-                code_file.write_text(code)
-                cmd = ["python", "/workspace/code.py"]
-            elif language == "bash":
-                code_file = temp_path / "script.sh"
-                code_file.write_text(code)
-                cmd = ["bash", "/workspace/script.sh"]
-            else:
-                raise ValueError(f"Unsupported language: {language}")
+                if language == "python":
+                    code_file = temp_path / "code.py"
+                    code_file.write_text(code)
+                    cmd = ["python", "/workspace/code.py"]
+                elif language == "bash":
+                    code_file = temp_path / "script.sh"
+                    code_file.write_text(code)
+                    cmd = ["bash", "/workspace/script.sh"]
+                else:
+                    raise ValueError(f"Unsupported language: {language}")
 
-            if files:
-                for filename, content in files.items():
-                    file_path = temp_path / filename
-                    file_path.write_text(content)
+                if files:
+                    for filename, content in files.items():
+                        file_path = temp_path / filename
+                        file_path.write_text(content)
 
-            container_config = {
-                "image": self.default_image,
-                "command": cmd,
-                "volumes": {str(temp_path): {"bind": "/workspace", "mode": "rw"}},
-                "working_dir": "/workspace",
-                "mem_limit": self.memory_limit,
-                "network_disabled": True,
-                "remove": True,
-                "stdout": True,
-                "stderr": True,
-            }
+                container_config = {
+                    "image": self.default_image,
+                    "command": cmd,
+                    "volumes": {str(temp_path): {"bind": "/workspace", "mode": "rw"}},
+                    "working_dir": "/workspace",
+                    "mem_limit": self.memory_limit,
+                    "network_disabled": True,
+                    "remove": True,
+                    "stdout": True,
+                    "stderr": True,
+                }
 
-            start_time = time.time()
-            container = self.docker_client.containers.run(**container_config)
-            execution_time = time.time() - start_time
+                start_time = time.time()
+                container = self.docker_client.containers.run(**container_config)
+                execution_time = time.time() - start_time
 
-            output = (
-                container.decode("utf-8") if isinstance(container, bytes) else str(container)
-            )
+                output = (
+                    container.decode("utf-8") if isinstance(container, bytes) else str(container)
+                )
 
-            return {
-                "success": True,
-                "output": output,
-                "execution_time": execution_time,
-                "language": language,
-                "shared_manager": False,
-            }
+                return {
+                    "success": True,
+                    "output": output,
+                    "execution_time": execution_time,
+                    "language": language,
+                    "shared_manager": False,
+                }
 
         except docker.errors.ContainerError as e:
             return {

@@ -321,6 +321,18 @@ Always provide clear, actionable insights and explain your analysis process. Use
         """Detect the type of analytics request"""
         message_lower = message.lower().strip()
         
+        # Data loading requests (check first to avoid conflicts with other patterns)
+        if any(pattern in message_lower for pattern in [
+            "load", "import", "read", "ingest", "upload", "analyze file", "process file"
+        ]):
+            # Extract file path
+            file_path = self._extract_file_path(message)
+            return {
+                "type": "data_loading",
+                "file_path": file_path,
+                "confidence": 0.9 if file_path else 0.7
+            }
+        
         # Schema exploration requests
         if any(pattern in message_lower for pattern in [
             "schema", "structure", "columns", "show schema", "data types", "describe"
@@ -339,18 +351,6 @@ Always provide clear, actionable insights and explain your analysis process. Use
                 "type": "natural_language_query", 
                 "query": message,
                 "confidence": 0.8
-            }
-        
-        # Data loading requests
-        if any(pattern in message_lower for pattern in [
-            "load", "import", "read", "ingest", "upload", "analyze file", "process file"
-        ]):
-            # Extract file path
-            file_path = self._extract_file_path(message)
-            return {
-                "type": "data_loading",
-                "file_path": file_path,
-                "confidence": 0.9 if file_path else 0.7
             }
         
         # Default to data loading for now
