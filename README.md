@@ -1525,6 +1525,85 @@ docker:
     # ... other agents
 ```
 
+#### Third-Party Developer Project Structure
+
+When developers install `ambivo-agents` via `pip install ambivo-agents`, the Docker shared directory is created relative to their project root. Here's how the directory structure would look:
+
+```
+my-ai-project/                          # Third-party developer's project
+├── main.py                             # Their application code
+├── requirements.txt                    # Including ambivo-agents
+├── agent_config.yaml                   # Their configuration file
+├── data/                               # Their project data
+│   ├── input_files.csv
+│   └── documents.pdf
+├── docker_shared/                      # Auto-created by ambivo-agents
+│   ├── input/                          # Container read-only mounts
+│   │   ├── analytics/                  # For data analysis tasks
+│   │   │   └── uploaded_data.csv
+│   │   ├── media/                      # For media processing
+│   │   │   └── video_to_process.mp4
+│   │   └── code/                       # For code execution
+│   │       └── user_script.py
+│   ├── output/                         # Container write-enabled results
+│   │   ├── analytics/                  # Analysis results
+│   │   │   ├── report.json
+│   │   │   └── charts.png
+│   │   ├── media/                      # Processed media
+│   │   │   ├── audio_extracted.mp3
+│   │   │   └── compressed_video.mp4
+│   │   └── code/                       # Code execution results
+│   │       └── execution_results.txt
+│   ├── temp/                           # Temporary files during processing
+│   │   ├── analytics/
+│   │   ├── media/
+│   │   └── code/
+│   ├── handoff/                        # Cross-agent file sharing
+│   │   ├── analytics/                  # Database → Analytics
+│   │   ├── database/                   # Database exports
+│   │   ├── media/                      # Media processing handoffs
+│   │   └── scraper/                    # Web scraper results
+│   └── work/                           # Container workspace
+└── venv/                               # Their virtual environment
+    └── lib/python3.x/site-packages/
+        └── ambivo_agents/              # Installed package
+```
+
+**Environment Variable Configuration:**
+
+Developers can customize the shared directory location:
+
+```bash
+# In their .env or environment
+export AMBIVO_AGENTS_DOCKER_SHARED_BASE_DIR="/custom/path/shared"
+```
+
+**Example Usage in Developer's Code:**
+
+```python
+# my-ai-project/main.py
+from ambivo_agents.agents.analytics import AnalyticsAgent
+from ambivo_agents.agents.moderator import ModeratorAgent
+
+# Create agents - they automatically use configured shared directory
+moderator = ModeratorAgent.create_simple(user_id="developer123")
+
+# Process data - files are managed in docker_shared/
+response = await moderator.chat("analyze the sales data in my CSV file")
+
+# The docker_shared/ directory is automatically created and managed
+# Input files are accessible at docker_shared/input/analytics/
+# Results appear in docker_shared/output/analytics/
+```
+
+**Benefits for Third-Party Developers:**
+
+- **Isolated**: Each project gets its own `docker_shared/` directory
+- **Portable**: Directory structure is relative to project root
+- **Configurable**: Can be customized via environment variables
+- **Auto-managed**: Created and organized automatically
+- **Secure**: Container access is properly restricted
+
 #### Security & Permissions
 
 - **Input Security**: All input directories mounted read-only (`ro`)

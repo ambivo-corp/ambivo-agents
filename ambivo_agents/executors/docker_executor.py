@@ -41,8 +41,9 @@ class DockerCodeExecutor:
             self.docker_images[0] if self.docker_images else "sgosain/amb-ubuntu-python-public-pod"
         )
         
-        # Initialize Docker shared manager
-        self.shared_manager = get_shared_manager()
+        # Initialize Docker shared manager with configured base directory
+        shared_base_dir = config.get("shared_base_dir", "./docker_shared")
+        self.shared_manager = get_shared_manager(shared_base_dir)
         self.shared_manager.setup_directories()
         
         # Get agent-specific subdirectory names from config

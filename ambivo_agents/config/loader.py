@@ -137,6 +137,7 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}DOCKER_MEMORY_LIMIT": ("docker", "memory_limit"),
     f"{ENV_PREFIX}DOCKER_TIMEOUT": ("docker", "timeout"),
     f"{ENV_PREFIX}DOCKER_WORK_DIR": ("docker", "work_dir"),
+    f"{ENV_PREFIX}DOCKER_SHARED_BASE_DIR": ("docker", "shared_base_dir"),
     
     # Service Configuration (All used)
     f"{ENV_PREFIX}SERVICE_LOG_LEVEL": ("service", "log_level"),
