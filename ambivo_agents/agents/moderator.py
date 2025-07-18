@@ -581,6 +581,9 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 "patterns": [
                     r"(?:search|query|ingest|add)\s+(?:in\s+)?(?:kb|knowledge|documents?)",
                     r"find\s+(?:in\s+)?(?:my\s+)?(?:files|documents?)",
+                    r"(?:ingest|import|load)\s+.*\.(?:csv|json|pdf|txt)\s+(?:into|to)\s+(?:knowledge\s*base|kb)",
+                    r"(?:ingest|add)\s+.*\s+(?:into|to)\s+(?:the\s+)?knowledge\s*base",
+                    r"(?:ingest|add)\s+.*\s+into\s+.*knowledge",
                 ],
                 "indicators": [
                     "kb_name",
@@ -751,13 +754,12 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     r"describe\s+table",
                     r"count\s+rows?",
                     r"database\s+(?:info|operations|management)",
-                    # File ingestion patterns
-                    r"(?:ingest|import|load)\s+.*\.(?:json|csv)\s*(?:into|to)?\s*(?:mongodb|database|collection)?",
+                    # File ingestion patterns - only for explicit database mentions
+                    r"(?:ingest|import|load)\s+.*\.(?:json|csv)\s+(?:into|to)\s+(?:mongodb|database|collection)",
                     r"(?:read|load|import)\s+(?:file|data)\s+(?:to|into)\s+(?:mongodb|database|collection)",
                     r"(?:insert|add)\s+(?:file|json|csv)\s+(?:to|into)\s+(?:mongodb|database)",
                     r"(?:file|csv|json)\s+(?:to|into)\s+mongodb",
-                    r"ingest\s+.*\.(?:json|csv)",
-                    r"load\s+.*\.(?:json|csv)\s+(?:to|into)",
+                    r"(?:ingest|load)\s+.*\.(?:json|csv)\s+(?:into|to)\s+database",
                     # Academic query patterns that should go to database first
                     r"(?:faculty|researcher|professor)\s+(?:data|members|distribution|profiles)",
                     r"(?:publication|research)\s+(?:data|venues|trends|analysis)",
@@ -924,11 +926,11 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
         ROUTING GUIDELINES:
         - Route to api_agent for: HTTP method calls (GET/POST/PUT/DELETE), API endpoints, REST API requests, webhook calls, authentication requests, API integration tasks
-        - Route to database_agent for: database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, table schemas, database operations, academic data queries (faculty, publications, researchers, universities) even when analysis is requested, file ingestion to MongoDB (ingest/import/load JSON/CSV files)
+        - Route to database_agent for: database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, table schemas, database operations, academic data queries (faculty, publications, researchers, universities) even when analysis is requested, file ingestion specifically to database/MongoDB (only when "database" or "mongodb" is explicitly mentioned)
         - Route to web_search for: "search", "find information", "look up", research queries
         - Route to youtube_download for: YouTube URLs, video/audio downloads
         - Route to media_editor for: video/audio processing, conversion, editing
-        - Route to knowledge_base for: document storage, semantic search, Q&A
+        - Route to knowledge_base for: document storage, semantic search, Q&A, file ingestion to knowledge base (when "knowledge base", "knowledgebase", or "kb" is mentioned)
         - Route to web_scraper for: data extraction, crawling websites
         - Route to analytics for: CSV/Excel files, data analysis, SQL queries, charts, DuckDB, statistics
         - Route to code_executor for: code execution, programming tasks
@@ -1103,6 +1105,11 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
             agent_scores[agent_type] = score
 
+        # Check for ambiguous ingestion commands that need clarification
+        clarification_needed = self._check_ingestion_ambiguity(message, agent_scores)
+        if clarification_needed:
+            return clarification_needed
+
         primary_agent = (
             max(agent_scores.items(), key=lambda x: x[1])[0] if agent_scores else "assistant"
         )
@@ -1119,6 +1126,79 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             "agent_scores": agent_scores,
             "reasoning": f"Single agent routing to {primary_agent}",
         }
+
+    def _check_ingestion_ambiguity(self, message: str, agent_scores: dict) -> Optional[dict]:
+        """Check if ingestion command is ambiguous and needs clarification"""
+        message_lower = message.lower()
+        
+        # Check if this is an ingestion command
+        is_ingestion = any(keyword in message_lower for keyword in ["ingest", "import", "load into", "add to"])
+        if not is_ingestion:
+            return None
+        
+        # Get scores for relevant agents
+        db_score = agent_scores.get("database_agent", 0)
+        kb_score = agent_scores.get("knowledge_base", 0)
+        
+        # Check for ambiguous cases where scores are close or both are viable
+        if db_score > 0 and kb_score > 0:
+            score_diff = abs(db_score - kb_score)
+            
+            # If scores are very close (within 3 points), ask for clarification
+            if score_diff <= 3:
+                return {
+                    "primary_agent": "assistant",
+                    "confidence": 0.9,
+                    "requires_multiple_agents": False,
+                    "workflow_detected": False,
+                    "is_follow_up": False,
+                    "agent_scores": agent_scores,
+                    "reasoning": "Ingestion destination ambiguous - requesting clarification",
+                    "clarification_request": {
+                        "type": "ingestion_destination",
+                        "message": self._generate_ingestion_clarification(message, db_score, kb_score)
+                    }
+                }
+        
+        # Check for ambiguous ingestion without clear destination
+        ambiguous_patterns = [
+            r"ingest\s+.*\.(?:csv|json|txt)\s*$",  # Just "ingest file.csv" with no destination
+            r"(?:load|import)\s+.*\.(?:csv|json|txt)\s*$",  # "load file.csv" with no destination
+        ]
+        
+        if any(re.search(pattern, message_lower) for pattern in ambiguous_patterns):
+            # No clear destination specified
+            return {
+                "primary_agent": "assistant", 
+                "confidence": 0.9,
+                "requires_multiple_agents": False,
+                "workflow_detected": False,
+                "is_follow_up": False,
+                "agent_scores": agent_scores,
+                "reasoning": "Ingestion destination not specified - requesting clarification",
+                "clarification_request": {
+                    "type": "ingestion_destination",
+                    "message": self._generate_ingestion_clarification(message, db_score, kb_score)
+                }
+            }
+        
+        return None
+    
+    def _generate_ingestion_clarification(self, original_message: str, db_score: int, kb_score: int) -> str:
+        """Generate clarification message for ingestion commands"""
+        return f"""I can help you ingest data, but I need clarification on the destination:
+
+**Your request**: "{original_message}"
+
+**Available options**:
+1. **Database Ingestion** (MongoDB/MySQL/PostgreSQL) - For structured data storage and SQL queries
+2. **Knowledge Base Ingestion** (Vector Database) - For document search and semantic retrieval
+
+**Please specify**:
+- "ingest [file] into **database**" (for MongoDB/SQL database)
+- "ingest [file] into **knowledge base** [name]" (for semantic search)
+
+Which type of ingestion would you like?"""
 
     def _is_obvious_code_request(self, user_message: str) -> bool:
         """Detect obvious code execution requests"""

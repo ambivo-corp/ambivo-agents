@@ -49,6 +49,7 @@ except ImportError:
 
 from ..config.loader import get_config_section, load_config
 from ..core.docker_shared import DockerSharedManager, get_shared_manager
+from ..core.file_resolution import resolve_agent_file_path
 from ..core.base import (
     AgentMessage,
     AgentRole,
@@ -185,7 +186,8 @@ Always prioritize data security and provide clear, formatted results."""
                 if db_config:
                     self.config.update(db_config)
             except Exception as e:
-                self.logger.warning(f"Could not load database agent config: {e}")
+                # Use a temporary logger since self.logger isn't available yet
+                logging.getLogger(f"DatabaseAgent-{agent_id[:8]}").warning(f"Could not load database agent config: {e}")
 
         # Database settings
         self.strict_mode = self.config.get("strict_mode", True)
@@ -196,8 +198,14 @@ Always prioritize data security and provide clear, formatted results."""
         self._connections = {}
         self._current_db_config = None
         
-        # Initialize Docker shared manager
-        self.shared_manager = get_shared_manager()
+        # Initialize Docker shared manager with configured base directory
+        try:
+            full_config = load_config()
+            docker_config = get_config_section("docker", full_config)
+        except Exception:
+            docker_config = {}
+        shared_base_dir = docker_config.get("shared_base_dir", "./docker_shared")
+        self.shared_manager = get_shared_manager(shared_base_dir)
         self.shared_manager.setup_directories()
         
         # Get agent-specific subdirectory names from config
@@ -206,17 +214,10 @@ Always prioritize data security and provide clear, formatted results."""
         # Set up proper directories using DockerSharedManager
         self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
         
-        # Legacy support - also support old export_dir
-        export_dir = self.config.get("export_dir", "./database_exports")
-        if not os.path.isabs(export_dir):
-            # Make relative paths absolute based on current working directory
-            export_dir = os.path.abspath(export_dir)
-        self.legacy_export_dir = Path(export_dir)
         self.enable_analytics_handoff = self.config.get("enable_analytics_handoff", True)
         
         # Ensure directories exist
         self.handoff_dir.mkdir(parents=True, exist_ok=True)
-        self.legacy_export_dir.mkdir(parents=True, exist_ok=True)
         
         # Setup logging
         self.logger = logging.getLogger(f"DatabaseAgent-{agent_id[:8]}")
@@ -298,12 +299,11 @@ Always prioritize data security and provide clear, formatted results."""
             else:
                 return error_msg
 
-    async def process_message_stream(self, message: str, **kwargs) -> AsyncIterator[StreamChunk]:
+    async def process_message_stream(self, message: str, execution_context: Optional[ExecutionContext] = None, **kwargs) -> AsyncIterator[StreamChunk]:
         """Stream database processing with real-time updates"""
         try:
             yield StreamChunk(
-                content="🔍 Analyzing database request...",
-                chunk_type="status",
+                text="🔍 Analyzing database request...",
                 sub_type=StreamSubType.STATUS,
                 metadata={"agent": "database", "step": "analysis"}
             )
@@ -311,13 +311,18 @@ Always prioritize data security and provide clear, formatted results."""
             # Process the message
             result = await self.process_message(message, **kwargs)
             
+            # Extract content from AgentMessage if needed
+            if hasattr(result, 'content'):
+                result_text = result.content
+            else:
+                result_text = str(result)
+            
             # Stream the response
-            lines = result.split('\n')
+            lines = result_text.split('\n')
             for i, line in enumerate(lines):
                 if line.strip():
                     yield StreamChunk(
-                        content=line + '\n',
-                        chunk_type="content",
+                        text=line + '\n',
                         sub_type=StreamSubType.CONTENT,
                         metadata={
                             "agent": "database",
@@ -329,8 +334,7 @@ Always prioritize data security and provide clear, formatted results."""
                     
         except Exception as e:
             yield StreamChunk(
-                content=f"❌ Error: {str(e)}",
-                chunk_type="error",
+                text=f"❌ Error: {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"agent": "database", "error": str(e)}
             )
@@ -1283,8 +1287,6 @@ Always prioritize data security and provide clear, formatted results."""
         # Export to handoff directory (Docker shared structure)
         handoff_path = self.handoff_dir / filename
         
-        # Also export to legacy directory for backward compatibility
-        legacy_path = self.legacy_export_dir / filename
         
         try:
             # Write to handoff directory
@@ -1295,11 +1297,8 @@ Always prioritize data security and provide clear, formatted results."""
                     writer.writeheader()
                     writer.writerows(result.data)
             
-            # Also copy to legacy directory for backward compatibility
-            import shutil
-            shutil.copy2(handoff_path, legacy_path)
             
-            self.logger.info(f"Exported {result.row_count} rows to {handoff_path} (and {legacy_path})")
+            self.logger.info(f"Exported {result.row_count} rows to {handoff_path}")
             return str(handoff_path)  # Return the shared path as primary
             
         except Exception as e:
@@ -1428,26 +1427,14 @@ Use: `load data from {rel_path}`
             if not client:
                 return {"success": False, "error": "MongoDB client not available"}
             
-            # Resolve file path
-            if not os.path.isabs(file_path):
-                # Try multiple resolution strategies
-                possible_paths = [
-                    file_path,  # Relative to current directory
-                    os.path.join(os.getcwd(), file_path),  # Absolute from cwd
-                    os.path.join(self.handoff_dir, file_path),  # In handoff directory
-                    os.path.join(self.legacy_export_dir, file_path),  # In legacy export directory
-                    os.path.join(os.path.dirname(str(self.handoff_dir)), file_path),  # Parent of handoff dir
-                ]
-                
-                for path in possible_paths:
-                    if os.path.exists(path):
-                        file_path = path
-                        break
-                else:
-                    return {
-                        "success": False,
-                        "error": f"File not found: {file_path}. Tried paths: {possible_paths}"
-                    }
+            # Resolve file path using universal file resolution
+            resolved_path = resolve_agent_file_path(file_path, agent_type="database")
+            if not resolved_path:
+                return {
+                    "success": False,
+                    "error": f"File not found: {file_path}"
+                }
+            file_path = str(resolved_path)
             
             # Check file exists
             if not os.path.exists(file_path):

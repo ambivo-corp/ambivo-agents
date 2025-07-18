@@ -40,8 +40,14 @@ class MediaDockerExecutor:
         self.timeout = config.get("timeout", 300)  # 5 minutes for media processing
         self.memory_limit = config.get("memory_limit", "2g")
 
-        # Initialize Docker shared manager
-        self.shared_manager = get_shared_manager()
+        # Initialize Docker shared manager with configured base directory
+        try:
+            full_config = load_config()
+            docker_config = get_config_section("docker", full_config)
+        except Exception:
+            docker_config = {}
+        shared_base_dir = docker_config.get("shared_base_dir", "./docker_shared")
+        self.shared_manager = get_shared_manager(shared_base_dir)
         self.shared_manager.setup_directories()
         
         # Get agent-specific subdirectory names from config
@@ -56,17 +62,12 @@ class MediaDockerExecutor:
         self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
         self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
         
-        # Legacy support - also check old directories if they exist
-        self.legacy_input_dir = Path(config.get("input_dir", "./media_input"))
-        self.legacy_output_dir = Path(config.get("output_dir", "./media_output"))
         
         # Ensure all directories exist
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.handoff_dir.mkdir(parents=True, exist_ok=True)
-        self.legacy_input_dir.mkdir(exist_ok=True)
-        self.legacy_output_dir.mkdir(exist_ok=True)
 
         if not DOCKER_AVAILABLE:
             raise ImportError("Docker package is required for media processing")
@@ -98,11 +99,7 @@ class MediaDockerExecutor:
             self.input_dir / filename,
             self.input_dir / Path(filename).name,
             
-            # 2. Legacy input directory
-            self.legacy_input_dir / filename,
-            self.legacy_input_dir / Path(filename).name,
-            
-            # 3. Relative to current directory
+            # 2. Relative to current directory
             Path(filename),
             Path(filename).resolve(),
             
@@ -120,9 +117,6 @@ class MediaDockerExecutor:
             self.shared_manager.get_host_path('code', 'handoff') / filename,
             self.shared_manager.get_host_path('code', 'handoff') / Path(filename).name,
             
-            # 6. Examples directory (for backward compatibility)
-            Path("examples/media_input") / filename,
-            Path("examples/media_input") / Path(filename).name,
         ]
         
         for location in search_locations:
@@ -172,9 +166,8 @@ class MediaDockerExecutor:
                             # Provide helpful error message with search locations
                             search_dirs = [
                                 str(self.input_dir),
-                                str(self.legacy_input_dir),
-                                "examples/media_input",
-                                str(self.handoff_dir)
+                                str(self.handoff_dir),
+                                "Current directory"
                             ]
                             return {
                                 "success": False,

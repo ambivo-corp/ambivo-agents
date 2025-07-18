@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
 from ..config.loader import get_config_section, load_config
+from ..core.file_resolution import resolve_agent_file_path
 from ..core.base import (
     AgentMessage,
     AgentRole,
@@ -83,8 +84,6 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             self.media_config = {
                 "docker_image": "sgosain/amb-ubuntu-python-public-pod",
                 "timeout": 300,
-                "input_dir": "./examples/media_input",
-                "output_dir": "./examples/media_output",
             }
 
     async def _llm_analyze_media_intent(
@@ -201,18 +200,33 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         }
 
     async def process_message(
-        self, message: AgentMessage, context: ExecutionContext = None
+        self, message: Union[str, AgentMessage], context: ExecutionContext = None
     ) -> AgentMessage:
         """Process message with LLM-based media intent detection - FIXED: Context preserved across provider switches"""
-        self.memory.store_message(message)
+        
+        # Handle both string and AgentMessage inputs
+        if isinstance(message, AgentMessage):
+            user_message = message.content
+            original_message = message
+        else:
+            user_message = str(message)
+            original_message = AgentMessage(
+                id=str(uuid.uuid4()),
+                sender_id=context.user_id if context else self.context.user_id,
+                recipient_id=self.agent_id,
+                content=user_message,
+                message_type=MessageType.USER_INPUT,
+                timestamp=datetime.now()
+            )
+        
+        self.memory.store_message(original_message)
 
         try:
-            user_message = message.content
 
             # Update conversation state
             self.update_conversation_state(user_message)
 
-            llm_context_from_routing = message.metadata.get("llm_context", {})
+            llm_context_from_routing = original_message.metadata.get("llm_context", {})
             conversation_history_from_routing = llm_context_from_routing.get(
                 "conversation_history", []
             )
@@ -229,8 +243,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             # Build LLM context with conversation history
             llm_context = {
                 "conversation_history": conversation_history,
-                "conversation_id": message.conversation_id,
-                "user_id": message.sender_id,
+                "conversation_id": original_message.conversation_id,
+                "user_id": original_message.sender_id,
                 "agent_type": "media_editor",
             }
 
@@ -246,9 +260,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             response = self.create_response(
                 content=response_content,
-                recipient_id=message.sender_id,
-                session_id=message.session_id,
-                conversation_id=message.conversation_id,
+                recipient_id=original_message.sender_id,
+                session_id=original_message.session_id,
+                conversation_id=original_message.conversation_id,
             )
 
             self.memory.store_message(response)
@@ -257,10 +271,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except Exception as e:
             error_response = self.create_response(
                 content=f"Media Editor Agent error: {str(e)}",
-                recipient_id=message.sender_id,
+                recipient_id=original_message.sender_id,
                 message_type=MessageType.ERROR,
-                session_id=message.session_id,
-                conversation_id=message.conversation_id,
+                session_id=original_message.session_id,
+                conversation_id=original_message.conversation_id,
             )
             return error_response
 
@@ -1178,7 +1192,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
     def _resolve_media_file(self, file_path: str) -> str:
         """
-        Resolve media file path using executor's file resolution logic
+        Resolve media file path using universal file resolution system
         
         Args:
             file_path: File name or path to resolve
@@ -1186,6 +1200,12 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         Returns:
             Resolved path string if found, original path otherwise
         """
+        # Use universal file resolution from BaseAgent
+        resolved_path = self.resolve_file_path(file_path, agent_type="media")
+        if resolved_path:
+            return str(resolved_path)
+            
+        # Fallback to executor's file resolution for compatibility
         if hasattr(self.media_executor, 'resolve_input_file'):
             resolved = self.media_executor.resolve_input_file(file_path)
             if resolved:
@@ -1415,7 +1435,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             # Resolve the input file path
             resolved_input = self._resolve_media_file(input_video)
             if not Path(resolved_input).exists():
-                return {"success": False, "error": f"Input video file not found: {input_video}. Searched in docker_shared/input/media/, media_input/, examples/media_input/, and current directory."}
+                return {"success": False, "error": f"Input video file not found: {input_video}. Searched in docker_shared/input/media/ and current directory."}
 
             # Quality settings - FIXED: Proper bitrate syntax
             quality_settings = {"low": "128k", "medium": "192k", "high": "320k"}
@@ -1812,13 +1832,28 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             return {"success": False, "error": str(e)}
 
     async def process_message_stream(
-        self, message: AgentMessage, context: ExecutionContext = None
+        self, message: Union[str, AgentMessage], context: ExecutionContext = None
     ) -> AsyncIterator[StreamChunk]:
         """Stream processing for MediaEditorAgent - COMPLETE IMPLEMENTATION"""
-        self.memory.store_message(message)
+        
+        # Handle both string and AgentMessage inputs
+        if isinstance(message, AgentMessage):
+            user_message = message.content
+            original_message = message
+        else:
+            user_message = str(message)
+            original_message = AgentMessage(
+                id=str(uuid.uuid4()),
+                sender_id=context.user_id if context else self.context.user_id,
+                recipient_id=self.agent_id,
+                content=user_message,
+                message_type=MessageType.USER_INPUT,
+                timestamp=datetime.now()
+            )
+        
+        self.memory.store_message(original_message)
 
         try:
-            user_message = message.content
             self.update_conversation_state(user_message)
 
             yield StreamChunk(
@@ -1842,9 +1877,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             # Build LLM context for streaming
             llm_context = {
                 "conversation_history": conversation_history,
-                "conversation_id": message.conversation_id,
+                "conversation_id": original_message.conversation_id,
                 "streaming": True,
-                "user_id": message.sender_id,
+                "user_id": original_message.sender_id,
                 "agent_type": "media_editor",
             }
 

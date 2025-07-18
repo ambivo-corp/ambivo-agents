@@ -1521,6 +1521,33 @@ class BaseAgent(ABC):
         """Default implementation - only ProxyAgent should override this"""
         return False
 
+    def resolve_file_path(self, filename: str, agent_type: Optional[str] = None) -> Optional[Path]:
+        """
+        Universal file resolution for all agents using shared_base_dir configuration.
+        
+        Args:
+            filename: Name or relative path of file to find
+            agent_type: Agent type override (analytics, media, code, database, scraper)
+                       If None, will auto-detect from class name
+        
+        Returns:
+            Resolved Path object if file exists, None otherwise
+        """
+        try:
+            # Import here to avoid circular import
+            from .file_resolution import resolve_agent_file_path, get_agent_type_from_config
+            
+            # Auto-detect agent type if not provided
+            if agent_type is None:
+                agent_type = get_agent_type_from_config(self.__class__.__name__)
+            
+            return resolve_agent_file_path(filename, agent_type)
+        except Exception:
+            # Fallback to simple path check
+            if Path(filename).exists():
+                return Path(filename)
+            return None
+
 
 # 🎯 CONTEXT MANAGER FOR AUTO-CONTEXT AGENTS
 

@@ -54,7 +54,7 @@ black>=25.1.0
 isort>=6.0.1
 
 # Document processing
-unstructured
+unstructured[csv]
 langchain-unstructured
 requests~=2.32.4
 setuptools~=80.9.0

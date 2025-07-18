@@ -68,7 +68,6 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
             # Provide sensible defaults if config fails
             self.youtube_config = {
                 "docker_image": "sgosain/amb-ubuntu-python-public-pod",
-                "download_dir": "./youtube_downloads",
                 "timeout": 600,
                 "memory_limit": "1g",
                 "default_audio_only": True,
@@ -731,7 +730,6 @@ Would you like me to download this video?"""
             # Provide sensible defaults if config fails
             self.youtube_config = {
                 "docker_image": "sgosain/amb-ubuntu-python-public-pod",
-                "download_dir": "./youtube_downloads",
                 "timeout": 600,
                 "memory_limit": "1g",
                 "default_audio_only": True,

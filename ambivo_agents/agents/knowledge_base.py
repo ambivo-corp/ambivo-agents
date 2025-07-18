@@ -11,11 +11,12 @@ import time
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Coroutine, Dict, List, Optional
+from typing import Any, AsyncIterator, Coroutine, Dict, List, Optional, Union
 
 import requests
 
 from ..config.loader import get_config_section, load_config
+from ..core.file_resolution import resolve_agent_file_path
 from ..core.base import (
     AgentMessage,
     AgentRole,
@@ -339,13 +340,27 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
     # ambivo_agents/agents/knowledge_base.py - FIXED METHODS for context preservation
 
     async def process_message(
-        self, message: AgentMessage, context: ExecutionContext = None
+        self, message: Union[str, AgentMessage], context: ExecutionContext = None
     ) -> AgentMessage:
         """Process message with LLM-based KB intent detection - FIXED: Context preserved across provider switches"""
-        self.memory.store_message(message)
+        # Handle both string and AgentMessage inputs
+        if isinstance(message, AgentMessage):
+            user_message = message.content
+            original_message = message
+        else:
+            user_message = str(message)
+            original_message = AgentMessage(
+                id=str(uuid.uuid4()),
+                sender_id=context.user_id if context else self.context.user_id,
+                recipient_id=self.agent_id,
+                content=user_message,
+                message_type=MessageType.USER_INPUT,
+                timestamp=datetime.now()
+            )
+        
+        self.memory.store_message(original_message)
 
         try:
-            user_message = message.content
 
             # Update conversation state
             self.update_conversation_state(user_message)
@@ -364,8 +379,8 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             # 🔥 FIX: Build LLM context with conversation history
             llm_context = {
                 "conversation_history": conversation_history,  # 🔥 KEY FIX
-                "conversation_id": message.conversation_id,
-                "user_id": message.sender_id,
+                "conversation_id": original_message.conversation_id,
+                "user_id": original_message.sender_id,
                 "agent_type": "knowledge_base",
             }
 
@@ -387,9 +402,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             response = self.create_response(
                 content=response_content,
                 metadata={"sources_dict": sources_dict},
-                recipient_id=message.sender_id,
-                session_id=message.session_id,
-                conversation_id=message.conversation_id,
+                recipient_id=original_message.sender_id,
+                session_id=original_message.session_id,
+                conversation_id=original_message.conversation_id,
             )
 
             self.memory.store_message(response)
@@ -398,10 +413,10 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except Exception as e:
             error_response = self.create_response(
                 content=f"Knowledge Base Agent error: {str(e)}",
-                recipient_id=message.sender_id,
+                recipient_id=original_message.sender_id,
                 message_type=MessageType.ERROR,
-                session_id=message.session_id,
-                conversation_id=message.conversation_id,
+                session_id=original_message.session_id,
+                conversation_id=original_message.conversation_id,
             )
             return error_response
 
@@ -560,13 +575,27 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         return response
 
     async def process_message_stream(
-        self, message: AgentMessage, context: ExecutionContext = None
+        self, message: Union[str, AgentMessage], context: ExecutionContext = None
     ) -> AsyncIterator[StreamChunk]:
         """Stream processing for Knowledge Base operations - FIXED: Context preserved across provider switches"""
-        self.memory.store_message(message)
+        # Handle both string and AgentMessage inputs
+        if isinstance(message, AgentMessage):
+            user_message = message.content
+            original_message = message
+        else:
+            user_message = str(message)
+            original_message = AgentMessage(
+                id=str(uuid.uuid4()),
+                sender_id=context.user_id if context else self.context.user_id,
+                recipient_id=self.agent_id,
+                content=user_message,
+                message_type=MessageType.USER_INPUT,
+                timestamp=datetime.now()
+            )
+        
+        self.memory.store_message(original_message)
 
         try:
-            user_message = message.content
             self.update_conversation_state(user_message)
 
             yield StreamChunk(
@@ -578,7 +607,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             # 🔥 FIX: Get conversation context for streaming
             conversation_context = self._get_kb_conversation_context_summary()
 
-            llm_context_from_routing = message.metadata.get("llm_context", {})
+            llm_context_from_routing = original_message.metadata.get("llm_context", {})
             conversation_history_from_routing = llm_context_from_routing.get(
                 "conversation_history", []
             )
@@ -599,7 +628,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             # 🔥 FIX: Build LLM context for streaming
             llm_context = {
                 "conversation_history": conversation_history,  # 🔥 KEY FIX
-                "conversation_id": message.conversation_id,
+                "conversation_id": original_message.conversation_id,
                 "streaming": True,
                 "agent_type": "knowledge_base",  # media_editor, web_scraper, etc.
                 "routed_from_moderator": bool(llm_context_from_routing),
@@ -1297,13 +1326,22 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             )
         )
 
+    def _resolve_file_path(self, filename: str) -> Optional[Path]:
+        """Resolve file path using universal file resolution"""
+        return resolve_agent_file_path(filename, agent_type="code")
+
     async def _ingest_document(
         self, kb_name: str, doc_path: str, custom_meta: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """Ingest a document into the knowledge base"""
         try:
-            if not Path(doc_path).exists():
+            # Try to resolve the file path using docker_shared structure
+            resolved_path = self._resolve_file_path(doc_path)
+            if not resolved_path or not resolved_path.exists():
                 return {"success": False, "error": f"File not found: {doc_path}"}
+            
+            # Use the resolved path
+            doc_path = str(resolved_path)
 
             # Add metadata
             if not custom_meta:

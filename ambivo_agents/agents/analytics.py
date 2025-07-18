@@ -72,8 +72,11 @@ class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
         # Analytics agent specific settings
         self.docker_image = self.config.get("docker_image", "sgosain/amb-ubuntu-python-public-pod")
         
-        # Initialize Docker shared manager
-        self.shared_manager = get_shared_manager()
+        # Initialize Docker shared manager with configured base directory and legacy fallbacks
+        docker_config = get_config_section("docker") if auto_configure else {}
+        shared_base_dir = docker_config.get("shared_base_dir", "./docker_shared")
+        legacy_fallback_dirs = docker_config.get("legacy_fallback_dirs", ["examples"])
+        self.shared_manager = get_shared_manager(shared_base_dir, legacy_fallback_dirs)
         self.shared_manager.setup_directories()
         
         # Get agent-specific subdirectory names from config
@@ -88,17 +91,11 @@ class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
         self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
         self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
         
-        # Legacy support - also check old directories if they exist
-        self.legacy_input_dir = Path(self.config.get("input_dir", "./examples"))
-        self.legacy_output_dir = Path(self.config.get("output_dir", "./examples/analytics_output"))
-        
-        # Ensure all directories exist
+        # Ensure Docker shared directories exist
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.handoff_dir.mkdir(parents=True, exist_ok=True)
-        self.legacy_input_dir.mkdir(parents=True, exist_ok=True)
-        self.legacy_output_dir.mkdir(parents=True, exist_ok=True)
         
         self.current_dataset = None
         self.current_schema = None
@@ -117,13 +114,13 @@ class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
         Returns:
             Path object if file exists, None otherwise
         """
-        # If it's already an absolute path and exists, return it
-        if Path(filename).is_absolute() and Path(filename).exists():
-            return Path(filename)
+        # Use universal file resolution from BaseAgent
+        resolved_path = self.resolve_file_path(filename, agent_type="analytics")
+        if resolved_path:
+            return resolved_path
             
-        # Use shared manager's file resolution with legacy directories
-        legacy_dirs = [self.legacy_input_dir, self.legacy_output_dir]
-        return self.shared_manager.resolve_input_file(filename, self.input_subdir, legacy_dirs)
+        # Fallback to shared manager's file resolution for compatibility
+        return self.shared_manager.resolve_input_file(filename, self.input_subdir)
 
     def _load_analytics_config(self) -> dict:
         """Load analytics configuration from agent_config.yaml"""
@@ -400,15 +397,13 @@ Always provide clear, actionable insights and explain your analysis process. Use
         if not file_path:
             # List available files in input directory to help user
             try:
-                # List available files from both shared and legacy directories
+                # List available files from shared input directory
                 available_files = []
-                search_dirs = [self.input_dir, self.legacy_input_dir]
                 
-                for search_dir in search_dirs:
-                    if search_dir.exists():
-                        for f in search_dir.iterdir():
-                            if f.is_file() and f.suffix.lower() in ['.csv', '.xlsx', '.xls']:
-                                available_files.append(f.name)
+                if self.input_dir.exists():
+                    for f in self.input_dir.iterdir():
+                        if f.is_file() and f.suffix.lower() in ['.csv', '.xlsx', '.xls']:
+                            available_files.append(f.name)
                 
                 available_files = list(set(available_files))  # Remove duplicates
                 if available_files:
@@ -1225,7 +1220,7 @@ import pandas as pd
 import json
 
 # Load data
-with open('/workspace/data.json', 'r') as f:
+with open('data.json', 'r') as f:
     data_info = json.load(f)
     
 df = pd.DataFrame(data_info['data'])
@@ -1258,7 +1253,7 @@ import pandas as pd
 import json
 
 # Load data
-with open('/workspace/data.json', 'r') as f:
+with open('data.json', 'r') as f:
     data_info = json.load(f)
     
 df = pd.DataFrame(data_info['data'])
@@ -1296,7 +1291,7 @@ import pandas as pd
 import json
 
 # Load data
-with open('/workspace/data.json', 'r') as f:
+with open('data.json', 'r') as f:
     data_info = json.load(f)
     
 df = pd.DataFrame(data_info['data'])
@@ -1334,7 +1329,7 @@ import pandas as pd
 import json
 
 # Load data
-with open('/workspace/data.json', 'r') as f:
+with open('data.json', 'r') as f:
     data_info = json.load(f)
     
 df = pd.DataFrame(data_info['data'])
@@ -1525,6 +1520,87 @@ try:
 except Exception as e:
     print(f"Error: {{str(e)}}")
 '''
+
+    async def _handle_data_loading_stream(self, request_info: dict, message: str) -> AsyncIterator[StreamChunk]:
+        """Handle data loading requests with streaming"""
+        yield StreamChunk(
+            text="📊 **Data Loading**\n\n",
+            sub_type=StreamSubType.STATUS,
+            metadata={"phase": "data_loading"}
+        )
+        
+        # Use the existing _handle_data_loading method
+        result = await self._handle_data_loading(request_info, message)
+        
+        yield StreamChunk(
+            text=result,
+            sub_type=StreamSubType.CONTENT,
+            metadata={"completed": True}
+        )
+
+    async def _handle_schema_exploration_stream(self, message: str) -> AsyncIterator[StreamChunk]:
+        """Handle schema exploration with streaming"""
+        yield StreamChunk(
+            text="🔍 **Schema Analysis**\n\n",
+            sub_type=StreamSubType.STATUS,
+            metadata={"phase": "schema_analysis"}
+        )
+        
+        result = await self._handle_schema_exploration(message)
+        
+        yield StreamChunk(
+            text=result,
+            sub_type=StreamSubType.CONTENT,
+            metadata={"completed": True}
+        )
+
+    async def _handle_sql_query_stream(self, query: str) -> AsyncIterator[StreamChunk]:
+        """Handle SQL queries with streaming"""
+        yield StreamChunk(
+            text=f"💾 **Executing Query**: `{query}`\n\n",
+            sub_type=StreamSubType.STATUS,
+            metadata={"phase": "sql_execution"}
+        )
+        
+        result = await self._handle_sql_query(query)
+        
+        yield StreamChunk(
+            text=result,
+            sub_type=StreamSubType.CONTENT,
+            metadata={"completed": True}
+        )
+
+    async def _handle_visualization_stream(self, message: str, chart_type: str) -> AsyncIterator[StreamChunk]:
+        """Handle visualization requests with streaming"""
+        yield StreamChunk(
+            text=f"📈 **Creating {chart_type}**\n\n",
+            sub_type=StreamSubType.STATUS,
+            metadata={"phase": "visualization", "chart_type": chart_type}
+        )
+        
+        result = await self._handle_visualization(message, chart_type)
+        
+        yield StreamChunk(
+            text=result,
+            sub_type=StreamSubType.CONTENT,
+            metadata={"completed": True}
+        )
+
+    async def _handle_natural_language_query_stream(self, query: str) -> AsyncIterator[StreamChunk]:
+        """Handle natural language queries with streaming"""
+        yield StreamChunk(
+            text=f"🧠 **Processing Query**: {query}\n\n",
+            sub_type=StreamSubType.STATUS,
+            metadata={"phase": "nlq_processing"}
+        )
+        
+        result = await self._handle_natural_language_query(query)
+        
+        yield StreamChunk(
+            text=result,
+            sub_type=StreamSubType.CONTENT,
+            metadata={"completed": True}
+        )
 
     async def cleanup_session(self):
         """Clean up Analytics Agent resources"""

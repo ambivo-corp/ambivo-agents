@@ -138,6 +138,14 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}DOCKER_TIMEOUT": ("docker", "timeout"),
     f"{ENV_PREFIX}DOCKER_WORK_DIR": ("docker", "work_dir"),
     f"{ENV_PREFIX}DOCKER_SHARED_BASE_DIR": ("docker", "shared_base_dir"),
+    f"{ENV_PREFIX}DOCKER_LEGACY_FALLBACK_DIRS": ("docker", "legacy_fallback_dirs"),
+    
+    # Agent Subdirs Configuration (For consistent file resolution)
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_ANALYTICS": ("docker", "agent_subdirs", "analytics"),
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_MEDIA": ("docker", "agent_subdirs", "media"),
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_CODE": ("docker", "agent_subdirs", "code"),
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_DATABASE": ("docker", "agent_subdirs", "database"),
+    f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_SCRAPER": ("docker", "agent_subdirs", "scraper"),
     
     # Service Configuration (All used)
     f"{ENV_PREFIX}SERVICE_LOG_LEVEL": ("service", "log_level"),
@@ -624,6 +632,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         
         # Consolidated Docker structure defaults
         docker.setdefault("shared_base_dir", "./docker_shared")
+        docker.setdefault("legacy_fallback_dirs", ["docker_shared/input", "docker_shared"])  # Use docker_shared structure consistently
         docker.setdefault("network_disabled", True)
         docker.setdefault("auto_remove", True)
         
@@ -729,16 +738,23 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         code_exec.setdefault("allow_network", False)
 
     # Set Database Agent defaults (consolidated structure)
-    if "database_agent" in config:
-        db_agent = config["database_agent"]
-        db_agent.setdefault("local_export_dir", "./database_exports")
-        db_agent.setdefault("handoff_subdir", "database")
-        db_agent.setdefault("auto_copy_to_shared", True)
-        db_agent.setdefault("strict_mode", True)
-        db_agent.setdefault("max_result_rows", 1000)
-        db_agent.setdefault("query_timeout", 30)
-        db_agent.setdefault("enable_analytics_handoff", True)
-        db_agent.setdefault("supported_types", ["mongodb", "mysql", "postgresql"])
+    if "database_agent" not in config:
+        config["database_agent"] = {}
+    db_agent = config["database_agent"]
+    
+    # Use configured docker shared base directory for exports
+    docker_config = config.get("docker", {})
+    shared_base_dir = docker_config.get("shared_base_dir", "./docker_shared")
+    default_export_dir = f"{shared_base_dir}/output/database"
+    
+    db_agent.setdefault("local_export_dir", default_export_dir)
+    db_agent.setdefault("handoff_subdir", "database")
+    db_agent.setdefault("auto_copy_to_shared", True)
+    db_agent.setdefault("strict_mode", True)
+    db_agent.setdefault("max_result_rows", 1000)
+    db_agent.setdefault("query_timeout", 30)
+    db_agent.setdefault("enable_analytics_handoff", True)
+    db_agent.setdefault("supported_types", ["mongodb", "mysql", "postgresql"])
 
     # Set Workflow defaults
     if "workflows" in config:

@@ -18,9 +18,12 @@ class DockerSharedManager:
     Used by all agents to ensure consistent file sharing
     """
     
-    def __init__(self, base_dir: str = "./docker_shared"):
+    def __init__(self, base_dir: str = "./docker_shared", legacy_fallback_dirs: Optional[List[str]] = None):
         self.base_dir = Path(base_dir).resolve()
         self.container_base = "/docker_shared"
+        
+        # Configurable legacy fallback directories (instead of hardcoded "examples")
+        self.legacy_fallback_dirs = [Path(d) for d in (legacy_fallback_dirs or [])]
         
         # Define standard subdirectories
         self.subdirs = {
@@ -215,11 +218,14 @@ class DockerSharedManager:
             # 3. Relative to current directory
             Path(filename),
             Path(filename).resolve(),
-            
-            # 4. Examples directory (for backward compatibility)
-            Path("examples") / filename,
-            Path("examples") / Path(filename).name,
         ]
+        
+        # 4. Legacy fallback directories (configurable)
+        for legacy_dir in self.legacy_fallback_dirs:
+            search_locations.extend([
+                legacy_dir / filename,
+                legacy_dir / Path(filename).name,
+            ])
         
         # 5. Add legacy directories if provided
         if legacy_dirs:
@@ -268,11 +274,13 @@ class DockerSharedManager:
 _shared_manager = None
 
 
-def get_shared_manager(base_dir: str = "./docker_shared") -> DockerSharedManager:
+def get_shared_manager(base_dir: str = "./docker_shared", legacy_fallback_dirs: Optional[List[str]] = None) -> DockerSharedManager:
     """Get the global Docker shared manager instance"""
     global _shared_manager
     if _shared_manager is None or str(_shared_manager.base_dir) != os.path.abspath(base_dir):
-        _shared_manager = DockerSharedManager(base_dir)
+        # Include examples directory as default fallback for backward compatibility
+        default_fallbacks = ["examples"] if legacy_fallback_dirs is None else legacy_fallback_dirs
+        _shared_manager = DockerSharedManager(base_dir, default_fallbacks)
         _shared_manager.setup_directories()
     return _shared_manager
 

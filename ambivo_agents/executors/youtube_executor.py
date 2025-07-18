@@ -40,8 +40,14 @@ class YouTubeDockerExecutor:
         self.timeout = config.get("timeout", 600)  # 10 minutes for downloads
         self.memory_limit = config.get("memory_limit", "1g")
 
-        # Initialize Docker shared manager
-        self.shared_manager = get_shared_manager()
+        # Initialize Docker shared manager with configured base directory
+        try:
+            full_config = load_config()
+            docker_config = get_config_section("docker", full_config)
+        except Exception:
+            docker_config = {}
+        shared_base_dir = docker_config.get("shared_base_dir", "./docker_shared")
+        self.shared_manager = get_shared_manager(shared_base_dir)
         self.shared_manager.setup_directories()
         
         # Get agent-specific subdirectory names from config
@@ -56,8 +62,6 @@ class YouTubeDockerExecutor:
         self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
         self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
         
-        # Legacy support - also check old directories if they exist
-        self.legacy_download_dir = Path(config.get("download_dir", "./youtube_downloads"))
         self.default_audio_only = config.get("default_audio_only", True)
 
         # Ensure all directories exist
@@ -65,7 +69,6 @@ class YouTubeDockerExecutor:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.handoff_dir.mkdir(parents=True, exist_ok=True)
-        self.legacy_download_dir.mkdir(exist_ok=True)
 
         if not DOCKER_AVAILABLE:
             raise ImportError("Docker package is required for YouTube downloads")
@@ -165,10 +168,6 @@ ls -la /workspace/output/
                         output_info["final_path"] = str(shared_output)
                         output_info["shared_path"] = str(shared_output)
                         
-                        # Also copy to legacy directory for backward compatibility
-                        legacy_output = self.legacy_download_dir / downloaded_file.name
-                        shutil.copy2(str(shared_output), str(legacy_output))
-                        output_info["legacy_path"] = str(legacy_output)
 
                         # Try to parse JSON result from the script output
                         try:
