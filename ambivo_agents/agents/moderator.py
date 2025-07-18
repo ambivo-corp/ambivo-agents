@@ -1106,7 +1106,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             agent_scores[agent_type] = score
 
         # Check for ambiguous ingestion commands that need clarification
-        clarification_needed = self._check_ingestion_ambiguity(message, agent_scores)
+        clarification_needed = self._check_ingestion_ambiguity(user_message, agent_scores)
         if clarification_needed:
             return clarification_needed
 

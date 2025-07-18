@@ -90,13 +90,28 @@ class QdrantServiceAdapter:
             kb_config = get_config_section("knowledge_base", config)
 
             if not documents and doc_path:
-                # Load document from file
-                from langchain_unstructured import UnstructuredLoader
-                from llama_index.core.readers import Document as LIDoc
+                # Use enhanced file processor service
+                from ..services.file_processor import FileProcessorService
+                
+                file_processor = FileProcessorService()
+                
+                # Check if file is supported by enhanced processor
+                if file_processor.is_supported_file(doc_path):
+                    print(f"Using enhanced file processor for {doc_path}")
+                    documents = file_processor.process_file(doc_path, custom_meta)
+                else:
+                    # Fallback to UnstructuredLoader for unsupported files
+                    print(f"Using UnstructuredLoader fallback for {doc_path}")
+                    try:
+                        from langchain_unstructured import UnstructuredLoader
+                        from llama_index.core.readers import Document as LIDoc
 
-                loader = UnstructuredLoader(doc_path)
-                lang_docs = loader.load()
-                documents = [LIDoc.from_langchain_format(doc) for doc in lang_docs]
+                        loader = UnstructuredLoader(doc_path)
+                        lang_docs = loader.load()
+                        documents = [LIDoc.from_langchain_format(doc) for doc in lang_docs]
+                    except Exception as fallback_ex:
+                        print(f"UnstructuredLoader also failed: {fallback_ex}")
+                        return 2
 
             if not documents:
                 return 2  # Error
