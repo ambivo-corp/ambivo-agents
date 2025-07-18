@@ -28,7 +28,7 @@ async def test_direct_database_agent():
         # Query the ingested data
         print("\n4. Querying ingested data...")
         response = await agent.chat("db.sample_sales.find().limit(5)")
-        print(f"Response: {response[:300]}...")
+        print(f"Response: {response[:3000]}...")
 
         response = await agent.chat("db.sample_sales.count()")
         print(f"Response: {response}")

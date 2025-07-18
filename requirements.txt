@@ -61,3 +61,7 @@ setuptools~=80.9.0
 urllib3~=2.5.0
 beautifulsoup4~=4.13.4
 click~=8.2.1
+
+python-docx
+python-pptx
+pytesseract
