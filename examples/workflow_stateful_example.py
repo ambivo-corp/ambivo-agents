@@ -29,35 +29,18 @@ from dataclasses import dataclass, field, asdict
 import aioconsole
 
 from ambivo_agents import DatabaseAgent, AssistantAgent
-from ambivo_agents.core.interactive_workflow import (
-    InteractiveWorkflowBuilder,
-    InteractiveWorkflowExecutor,
-    EnhancedWorkflowState,
-    UserInteraction,
-    InteractionType,
-    NodeExecutionState
-)
 from ambivo_agents.core.workflow_orchestrator import (
     ConversationOrchestrator,
-    WorkflowFactory,
     ConversationStep,
     ConversationFlow,
     ConversationPattern
 )
-from ambivo_agents.core.base import BaseAgent, AgentMessage, AgentRole
 
 
-# Note: We now use the ConversationOrchestrator for preference management
-
-
-# Note: We now use simple AssistantAgent with the orchestrator handling the complexity
-
-
-# Note: We now use the enhanced workflow orchestrator instead of custom state management
 
 
 class ProductionRealtorSystem:
-    """Production-ready realtor system using enhanced workflow orchestration"""
+    """realtor system using enhanced workflow orchestration"""
     
     def __init__(self):
         # Initialize agents
@@ -89,13 +72,7 @@ class ProductionRealtorSystem:
         self.state_file = "production_realtor_state.json"
     
     def _create_enhanced_realtor_workflow(self) -> ConversationFlow:
-        """Create the enhanced realtor workflow using the new orchestration system"""
-        
-        # Use the factory to create a base realtor workflow
-        base_workflow = WorkflowFactory.create_realtor_renter_workflow(
-            self.realtor_agent,
-            self.database_agent
-        )
+        """Create the enhanced realtor workflow using the orchestration system"""
         
         # Enhance with additional interactive steps
         enhanced_steps = [
@@ -232,7 +209,7 @@ class ProductionRealtorSystem:
         enhanced_workflow = ConversationFlow(
             flow_id="enhanced_realtor_workflow",
             name="Enhanced Realtor Property Search",
-            description="Production-ready realtor workflow with comprehensive preference gathering and database integration",
+            description="Rerealtor workflow with comprehensive preference gathering and database integration",
             pattern=ConversationPattern.STEP_BY_STEP_PROCESS,
             steps=enhanced_steps,
             start_step="welcome_and_intro",
@@ -249,7 +226,7 @@ class ProductionRealtorSystem:
     
     async def initialize_database(self):
         """Set up the property database"""
-        print("🔧 Initializing production property database...")
+        print("Initializing property database...")
         
         # Connect to MongoDB with enhanced error handling
         try:
@@ -413,8 +390,8 @@ class ProductionRealtorSystem:
         print("🧹 System cleanup completed")
 
 
-async def demonstrate_production_features():
-    """Demonstrate production-ready workflow features"""
+async def demonstrate_features():
+    """Demonstrate  workflow features"""
     system = ProductionRealtorSystem()
     
     print("🚀 Production-Ready Realtor Workflow System")
@@ -456,7 +433,7 @@ async def main():
     demo_mode = "--demo" in sys.argv
     
     if demo_mode:
-        await demonstrate_production_features()
+        await demonstrate_features()
     else:
         system = ProductionRealtorSystem()
         
@@ -492,7 +469,7 @@ if __name__ == "__main__":
         subprocess.check_call([sys.executable, "-m", "pip", "install", "aioconsole"])
         import aioconsole
     
-    print("🏠 Production-Ready Interactive Realtor Database Workflow")
+    print("🏠 Interactive Realtor Database Workflow")
     print("💾 Uses enhanced workflow system with comprehensive state management") 
     print("🔄 Run with --resume to continue previous conversations")
     print("🎭 Run with --demo to see advanced features demonstration")

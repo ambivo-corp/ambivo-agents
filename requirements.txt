@@ -43,6 +43,9 @@ qdrant-client
 numexpr
 tabulate>=0.9.0
 
+# Workflow persistence dependencies
+aiosqlite>=0.19.0
+
 # File operations dependencies (optional but recommended)
 aiohttp>=3.8.0
 aiofiles>=22.1.0
@@ -62,6 +65,14 @@ urllib3~=2.5.0
 beautifulsoup4~=4.13.4
 click~=8.2.1
 
-python-docx
-python-pptx
-pytesseract
+python-docx~=1.2.0
+python-pptx~=1.0.2
+pytesseract~=0.3.13
+pandas~=2.3.1
+aioconsole~=0.8.1
+httpx~=0.28.1
+pymongo~=4.13.2
+mysql-connector-python~=9.3.0
+psycopg2-binary~=2.9.10
+pypdf~=5.6.1
+pillow~=11.2.1

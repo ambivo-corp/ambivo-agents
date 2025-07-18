@@ -163,6 +163,26 @@ ENV_VARIABLE_MAPPING = {
     
     # File Access Security Configuration (New feature - used)
     f"{ENV_PREFIX}FILE_ACCESS_RESTRICTED_DIRS": ("security", "file_access", "restricted_directories"),
+    
+    # Workflow Persistence Configuration (New feature)
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_BACKEND": ("workflow_persistence", "backend"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_DATABASE_PATH": ("workflow_persistence", "sqlite", "database_path"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_ENABLE_WAL": ("workflow_persistence", "sqlite", "enable_wal"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_TIMEOUT": ("workflow_persistence", "sqlite", "timeout"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_AUTO_VACUUM": ("workflow_persistence", "sqlite", "auto_vacuum"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_JOURNAL_MODE": ("workflow_persistence", "sqlite", "journal_mode"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_AUTO_CHECKPOINT": ("workflow_persistence", "general", "auto_checkpoint"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_CHECKPOINT_INTERVAL": ("workflow_persistence", "general", "checkpoint_interval"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_MAX_CHECKPOINTS_PER_SESSION": ("workflow_persistence", "general", "max_checkpoints_per_session"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_ENABLE_COMPRESSION": ("workflow_persistence", "general", "enable_compression"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_ENABLE_ENCRYPTION": ("workflow_persistence", "general", "enable_encryption"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_HOST": ("workflow_persistence", "redis", "host"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_PORT": ("workflow_persistence", "redis", "port"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_DB": ("workflow_persistence", "redis", "db"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_SESSION_TTL": ("workflow_persistence", "redis", "session_ttl"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_STORAGE_DIRECTORY": ("workflow_persistence", "file", "storage_directory"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_COMPRESSION": ("workflow_persistence", "file", "compression"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_ENCRYPTION": ("workflow_persistence", "file", "encryption"),
 }
 
 # Required environment variables for minimal configuration
@@ -792,6 +812,72 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         dir_mgmt.setdefault("log_file_operations", True)
         dir_mgmt.setdefault("track_disk_usage", True)
         dir_mgmt.setdefault("max_shared_size_gb", 10)
+
+    # Set workflow persistence defaults
+    if "workflow_persistence" not in config:
+        config["workflow_persistence"] = {}
+    
+    workflow_persistence = config["workflow_persistence"]
+    workflow_persistence.setdefault("backend", "sqlite")
+    
+    # SQLite defaults
+    if "sqlite" not in workflow_persistence:
+        workflow_persistence["sqlite"] = {}
+    sqlite_config = workflow_persistence["sqlite"]
+    sqlite_config.setdefault("database_path", "./data/workflow_state.db")
+    sqlite_config.setdefault("enable_wal", True)
+    sqlite_config.setdefault("timeout", 30.0)
+    sqlite_config.setdefault("auto_vacuum", True)
+    sqlite_config.setdefault("journal_mode", "WAL")
+    
+    # Tables defaults
+    if "tables" not in sqlite_config:
+        sqlite_config["tables"] = {}
+    tables = sqlite_config["tables"]
+    tables.setdefault("conversations", "workflow_conversations")
+    tables.setdefault("steps", "workflow_steps")
+    tables.setdefault("checkpoints", "workflow_checkpoints")
+    tables.setdefault("sessions", "workflow_sessions")
+    
+    # Retention defaults
+    if "retention" not in sqlite_config:
+        sqlite_config["retention"] = {}
+    retention = sqlite_config["retention"]
+    retention.setdefault("conversation_ttl", 2592000)  # 30 days
+    retention.setdefault("checkpoint_ttl", 604800)     # 7 days
+    retention.setdefault("session_ttl", 86400)         # 24 hours
+    retention.setdefault("cleanup_interval", 3600)     # 1 hour
+    
+    # Redis defaults
+    if "redis" not in workflow_persistence:
+        workflow_persistence["redis"] = {}
+    redis_config = workflow_persistence["redis"]
+    redis_config.setdefault("host", "localhost")
+    redis_config.setdefault("port", 6379)
+    redis_config.setdefault("db", 2)
+    redis_config.setdefault("password", None)
+    redis_config.setdefault("ssl", False)
+    redis_config.setdefault("session_ttl", 3600)
+    
+    # File storage defaults
+    if "file" not in workflow_persistence:
+        workflow_persistence["file"] = {}
+    file_config = workflow_persistence["file"]
+    file_config.setdefault("storage_directory", "./data/workflow_states")
+    file_config.setdefault("compression", True)
+    file_config.setdefault("encryption", False)
+    file_config.setdefault("max_file_size", 10485760)  # 10MB
+    
+    # General persistence defaults
+    if "general" not in workflow_persistence:
+        workflow_persistence["general"] = {}
+    general_config = workflow_persistence["general"]
+    general_config.setdefault("auto_checkpoint", True)
+    general_config.setdefault("checkpoint_interval", 30)
+    general_config.setdefault("max_checkpoints_per_session", 100)
+    general_config.setdefault("enable_compression", True)
+    general_config.setdefault("enable_encryption", False)
+    general_config.setdefault("encryption_key", None)
 
 
 def _merge_configs(yaml_config: Dict[str, Any], env_config: Dict[str, Any]) -> Dict[str, Any]:
