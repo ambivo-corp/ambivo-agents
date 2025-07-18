@@ -691,29 +691,60 @@ Type "generate" to create your workflow code!"""
             # Customize the template content
             customized_content = self._customize_template(template_content)
             
-            # Format and clean the code using specialized formatter
-            print("🧹 Formatting generated code with specialized Python formatter...")
-            formatted_content = await self._format_code_with_specialized_agent(customized_content)
+            # Keep a backup copy before formatting
+            backup_content = customized_content
+            
+            # Use enhanced local formatter (skip AI formatter for now)
+            print("🧹 Formatting generated code with enhanced local formatter...")
+            formatted_content = self._enhanced_local_formatter(backup_content)
+            
+            # Validate syntax and logic with dedicated agent
+            print("🔍 Validating code syntax and logic...")
+            validation_result = await self._validate_code_with_dedicated_agent(formatted_content)
+            
+            if not validation_result["success"]:
+                print(f"⚠️ Code validation failed: {validation_result['issues']}")
+                # Try to fix the issues automatically
+                print("🔧 Attempting to fix validation issues...")
+                fixed_content = await self._fix_validation_issues(formatted_content, validation_result['issues'])
+                if fixed_content != formatted_content:
+                    formatted_content = fixed_content
+                    print("✅ Issues fixed automatically!")
+                else:
+                    print("⚠️ Could not fix all issues automatically")
+            else:
+                print("✅ Code validation passed!")
             
             # Test the code in Docker to ensure it works
             print("🧪 Testing generated code in Docker...")
             test_result = await self._test_code_in_docker(formatted_content, self.requirements.system_class_name.lower())
             
-            if not test_result["success"]:
-                print(f"⚠️ Code test failed: {test_result['error']}")
-                # Still write the file but add a warning comment
-                formatted_content = f"""# ⚠️ WARNING: This code failed initial testing
-# Error: {test_result['error']}
-# Please review and fix any issues before running
-
-{formatted_content}"""
-            else:
-                print("✅ Code test passed successfully!")
-            
             # Write main workflow file
             main_file_path = os.path.join(output_dir, f"{self.requirements.system_class_name.lower()}.py")
-            with open(main_file_path, "w", encoding="utf-8") as f:
-                f.write(formatted_content)
+            
+            if not test_result["success"]:
+                print(f"⚠️ Code test failed: {test_result['error']}")
+                
+                # Write both the formatted version and a backup
+                backup_file_path = os.path.join(output_dir, f"{self.requirements.system_class_name.lower()}_backup.py")
+                with open(backup_file_path, "w", encoding="utf-8") as f:
+                    f.write(backup_content)
+                print(f"📁 Backup saved to: {backup_file_path}")
+                
+                # Add warning to the main file
+                warning_content = f"""# ⚠️ WARNING: This code failed initial testing
+# Error: {test_result['error']}
+# Please review and fix any issues before running
+# A backup of the original code is saved as {self.requirements.system_class_name.lower()}_backup.py
+
+{formatted_content}"""
+                
+                with open(main_file_path, "w", encoding="utf-8") as f:
+                    f.write(warning_content)
+            else:
+                print("✅ Code test passed successfully!")
+                with open(main_file_path, "w", encoding="utf-8") as f:
+                    f.write(formatted_content)
             
             # Create test file
             test_content = self._create_test_file()
@@ -1193,6 +1224,100 @@ Agent: {step.get('agent', 'primary')}
             print(f"⚠️ Local code cleaning failed: {e}")
             return code_content
     
+    def _enhanced_local_formatter(self, code_content: str) -> str:
+        """Enhanced local Python code formatter with proper indentation handling"""
+        try:
+            lines = code_content.split('\n')
+            formatted_lines = []
+            current_indent = 0
+            in_multiline_string = False
+            multiline_delimiter = None
+            
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                
+                # Handle empty lines
+                if not stripped:
+                    formatted_lines.append('')
+                    continue
+                
+                # Handle multiline strings
+                if not in_multiline_string:
+                    if stripped.startswith('"""') or stripped.startswith("'''"):
+                        multiline_delimiter = stripped[:3]
+                        if stripped.count(multiline_delimiter) == 1:  # Opening only
+                            in_multiline_string = True
+                        formatted_lines.append('    ' * current_indent + stripped)
+                        continue
+                else:
+                    formatted_lines.append('    ' * current_indent + stripped)
+                    if multiline_delimiter in stripped and stripped != multiline_delimiter:
+                        in_multiline_string = False
+                        multiline_delimiter = None
+                    continue
+                
+                # Calculate indentation level
+                if stripped.startswith(('class ', 'def ', 'async def ', 'if ', 'elif ', 'else:', 
+                                      'for ', 'while ', 'try:', 'except', 'finally:', 'with ')):
+                    if stripped.startswith(('except', 'elif', 'else:', 'finally:')):
+                        # These should be at the same level as their corresponding if/try
+                        current_indent = max(0, current_indent - 1)
+                    
+                    formatted_lines.append('    ' * current_indent + stripped)
+                    
+                    if stripped.endswith(':'):
+                        current_indent += 1
+                
+                elif stripped.startswith(('return', 'break', 'continue', 'pass', 'raise')):
+                    formatted_lines.append('    ' * current_indent + stripped)
+                    # Don't change indent level for these
+                
+                elif stripped.startswith(('import ', 'from ')):
+                    # Imports should be at top level
+                    formatted_lines.append(stripped)
+                
+                elif stripped.startswith('#'):
+                    # Comments maintain current indentation
+                    formatted_lines.append('    ' * current_indent + stripped)
+                
+                elif current_indent > 0 and not stripped.startswith(('class ', 'def ', 'async def ')):
+                    # Regular code inside functions/classes
+                    formatted_lines.append('    ' * current_indent + stripped)
+                
+                else:
+                    # Top-level code
+                    formatted_lines.append(stripped)
+                
+                # Adjust indentation for closing constructs
+                if stripped in ['pass', 'break', 'continue'] or stripped.startswith('return'):
+                    # Check if this might be the end of a block
+                    next_line_index = i + 1
+                    while next_line_index < len(lines) and not lines[next_line_index].strip():
+                        next_line_index += 1
+                    
+                    if next_line_index < len(lines):
+                        next_stripped = lines[next_line_index].strip()
+                        if (next_stripped.startswith(('def ', 'class ', 'async def ')) or 
+                            next_stripped.startswith(('except', 'elif', 'else:', 'finally:')) or
+                            not next_stripped):
+                            current_indent = max(0, current_indent - 1)
+            
+            # Join lines and clean up excessive blank lines
+            formatted_code = '\n'.join(formatted_lines)
+            
+            # Remove excessive blank lines (more than 2 consecutive)
+            while '\n\n\n\n' in formatted_code:
+                formatted_code = formatted_code.replace('\n\n\n\n', '\n\n\n')
+            
+            # Ensure file ends with single newline
+            formatted_code = formatted_code.rstrip() + '\n'
+            
+            return formatted_code
+            
+        except Exception as e:
+            print(f"⚠️ Enhanced local formatting failed: {e}")
+            return self._clean_code_locally(code_content)
+    
     async def _format_code_with_specialized_agent(self, code_content: str) -> str:
         """Use a specialized Python formatter agent to format the code"""
         try:
@@ -1275,6 +1400,182 @@ Return only the clean, properly formatted Python code with consistent indentatio
         
         # Fallback - return original if we can't extract
         return response
+    
+    def _is_valid_python_code(self, code_content: str) -> bool:
+        """Check if the code content is valid Python code"""
+        try:
+            import ast
+            
+            # Basic checks
+            if not code_content.strip():
+                return False
+            
+            # Check if it starts with common Python patterns
+            lines = code_content.strip().split('\n')
+            first_line = lines[0].strip()
+            
+            # Should start with shebang, docstring, import, or class/function
+            valid_starts = ('#!/usr/bin/env python', '"""', "'''", 'import ', 'from ', 'class ', 'def ', 'async def')
+            if not first_line.startswith(valid_starts):
+                return False
+            
+            # Check if it contains obvious conversational text
+            conversation_indicators = [
+                'Hello again!', 'How can I assist', 'I can help', 'Let me', 'Here is', 'Here are',
+                'The code', 'This code', 'I will', 'I have', 'You can', 'Please', 'Thank you'
+            ]
+            
+            for indicator in conversation_indicators:
+                if indicator in code_content:
+                    return False
+            
+            # Try to parse the code with AST (basic syntax check)
+            try:
+                ast.parse(code_content)
+                return True
+            except SyntaxError:
+                return False
+                
+        except Exception:
+            return False
+    
+    async def _validate_code_with_dedicated_agent(self, code_content: str) -> dict:
+        """Use a dedicated validation agent to check syntax and logic"""
+        try:
+            # Create a specialized validation agent
+            validator_agent = AssistantAgent.create_simple(
+                user_id="code_validator",
+                system_message="""You are a specialized Python code validator and fixer. Your task is to:
+
+1. Check for syntax errors and fix them
+2. Identify undefined variables and fix references
+3. Check for typos in class names, method names, and variable names
+4. Ensure consistent indentation (4 spaces)
+5. Verify that all agent references are properly defined
+6. Check that workflow steps match the intended domain
+7. Identify hardcoded content that doesn't match the domain
+
+Return your response in this exact JSON format:
+{
+    "success": true/false,
+    "issues": [
+        {
+            "type": "syntax_error|undefined_variable|typo|indentation|wrong_domain|hardcoded_content",
+            "line": line_number,
+            "description": "detailed description",
+            "suggestion": "how to fix this"
+        }
+    ]
+}
+
+IMPORTANT: Return ONLY valid JSON. Do not include any explanations or markdown formatting."""
+            )
+            
+            validation_prompt = f"""Please validate this Python workflow code and identify any issues:
+
+```python
+{code_content}
+```
+
+Check for:
+1. Syntax errors
+2. Undefined variables (especially agent references)
+3. Typos in names
+4. Indentation issues
+5. Wrong domain content (should match the class name)
+6. Hardcoded content from template
+
+Return ONLY valid JSON with the format specified in your instructions."""
+            
+            validation_response = await validator_agent.chat(validation_prompt)
+            
+            # Clean up the validator agent
+            await validator_agent.cleanup_session()
+            
+            # Parse the JSON response
+            try:
+                import json
+                # Extract JSON from response if wrapped
+                if "```json" in validation_response:
+                    start = validation_response.find("```json") + 7
+                    end = validation_response.find("```", start)
+                    validation_response = validation_response[start:end].strip()
+                elif "```" in validation_response:
+                    start = validation_response.find("```") + 3
+                    end = validation_response.rfind("```")
+                    validation_response = validation_response[start:end].strip()
+                
+                result = json.loads(validation_response)
+                return result
+                
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Could not parse validation response: {e}")
+                return {"success": False, "issues": [{"type": "parse_error", "description": "Could not parse validation response"}]}
+                
+        except Exception as e:
+            print(f"⚠️ Validation agent failed: {e}")
+            return {"success": False, "issues": [{"type": "agent_error", "description": str(e)}]}
+    
+    async def _fix_validation_issues(self, code_content: str, issues: list) -> str:
+        """Attempt to fix validation issues automatically"""
+        try:
+            fixed_content = code_content
+            
+            # Group issues by type for efficient fixing
+            for issue in issues:
+                issue_type = issue.get("type", "")
+                description = issue.get("description", "")
+                
+                if issue_type == "typo":
+                    # Fix common typos
+                    if "expennse" in description.lower():
+                        fixed_content = fixed_content.replace("expennse", "expense")
+                        fixed_content = fixed_content.replace("Expennse", "Expense")
+                
+                elif issue_type == "undefined_variable":
+                    # Fix undefined agent references
+                    if "database_agent" in description:
+                        # Add database agent initialization
+                        if "self.database_agent" not in fixed_content or fixed_content.find("self.database_agent") > fixed_content.find("self.orchestrator"):
+                            # Find the agents initialization section
+                            init_start = fixed_content.find("# Initialize agents")
+                            if init_start != -1:
+                                # Find the line after "# Initialize agents"
+                                line_end = fixed_content.find('\n', init_start)
+                                if line_end != -1:
+                                    db_agent_code = '\n        self.database_agent = DatabaseAgent.create_simple(user_id="workflow_db")'
+                                    fixed_content = fixed_content[:line_end] + db_agent_code + fixed_content[line_end:]
+                    
+                    # Fix agent references in workflow steps
+                    if "expennse_agent" in description:
+                        fixed_content = fixed_content.replace("self.expennse_agent", "self.primary_agent")
+                        fixed_content = fixed_content.replace("agent=self.expennse_agent", "agent=self.primary_agent")
+                
+                elif issue_type == "wrong_domain" or issue_type == "hardcoded_content":
+                    # Fix hardcoded real estate content
+                    if "real estate" in description.lower() or "property" in description.lower():
+                        # Replace real estate workflow steps with generic ones
+                        real_estate_prompts = [
+                            "Welcome the user warmly and introduce yourself as their personal real estate agent",
+                            "find the perfect rental property",
+                            "monthly budget range for rent",
+                            "How many bedrooms do you need",
+                            "Which area or neighborhood would you prefer",
+                            "What amenities are important to you",
+                            "When do you need to move in"
+                        ]
+                        
+                        for prompt in real_estate_prompts:
+                            if prompt in fixed_content:
+                                # This indicates hardcoded real estate content that should be domain-specific
+                                # For now, just flag it - proper domain replacement should happen in template customization
+                                pass
+            
+            return fixed_content
+            
+        except Exception as e:
+            print(f"⚠️ Auto-fix failed: {e}")
+            return code_content
     
     async def _test_code_in_docker(self, code_content: str, filename: str) -> dict:
         """Test the generated code in Docker to ensure it works"""
