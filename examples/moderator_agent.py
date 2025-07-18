@@ -133,7 +133,7 @@ class SimpleModeratorTest:
                 "description": "Knowledge base operation (should route to KnowledgeBaseAgent)"
             },
             {
-                "message": "Extract audio from media_input directory as MP3",
+                "message": "Extract audio from ./media directory as MP3",
                 "description": "Media processing (should route to MediaEditorAgent)"
             },
             {

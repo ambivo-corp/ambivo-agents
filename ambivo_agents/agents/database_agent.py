@@ -742,6 +742,15 @@ Always prioritize data security and provide clear, formatted results."""
         try:
             if db_config.uri:
                 client = pymongo.MongoClient(db_config.uri)
+                # Extract database name from URI if not already set
+                if not db_config.database and '/' in db_config.uri:
+                    # Parse MongoDB URI to extract database name
+                    from urllib.parse import urlparse
+                    parsed = urlparse(db_config.uri)
+                    if parsed.path and len(parsed.path) > 1:
+                        # Remove leading slash
+                        db_config.database = parsed.path[1:].split('?')[0]
+                        self.logger.info(f"Extracted database '{db_config.database}' from MongoDB URI")
             else:
                 client = pymongo.MongoClient(
                     host=db_config.host,
@@ -1561,29 +1570,224 @@ Use: `load data from {rel_path}`
             self.logger.error(f"File ingestion error: {e}")
             return {"success": False, "error": str(e)}
     
+    async def ingest_file_to_sql(self, file_path: str, table_name: Optional[str] = None, database_name: Optional[str] = None) -> Dict[str, Any]:
+        """Ingest a file (JSON or CSV) into SQL table (MySQL/PostgreSQL)"""
+        try:
+            # Validate SQL connection
+            if not self._current_db_config or self._current_db_config.db_type == DatabaseType.MONGODB:
+                return {
+                    "success": False,
+                    "error": f"No {self._current_db_config.db_type.value if self._current_db_config else 'SQL'} connection established."
+                }
+            
+            # Get connection
+            db_type = self._current_db_config.db_type.value
+            connection = self._connections.get(db_type)
+            if not connection:
+                return {"success": False, "error": f"{db_type} connection not available"}
+            
+            # Resolve file path using universal file resolution
+            resolved_path = resolve_agent_file_path(file_path, agent_type="database")
+            if not resolved_path:
+                return {
+                    "success": False,
+                    "error": f"File not found: {file_path}"
+                }
+            file_path = str(resolved_path)
+            
+            # Check file exists
+            if not os.path.exists(file_path):
+                return {"success": False, "error": f"File not found: {file_path}"}
+            
+            # Check for restricted paths
+            if self._is_path_restricted(file_path):
+                return {
+                    "success": False,
+                    "error": f"Access denied: File path '{file_path}' is in a restricted directory"
+                }
+            
+            # Determine file type
+            file_ext = Path(file_path).suffix.lower()
+            file_name = Path(file_path).stem
+            
+            # Use provided table name or derive from filename
+            if not table_name:
+                table_name = file_name.replace('-', '_').replace(' ', '_').lower()
+            
+            # Read and parse file
+            data_rows = []
+            columns = []
+            
+            if file_ext == '.json':
+                # Handle JSON files
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    try:
+                        data = json.loads(content)
+                        if isinstance(data, list) and data:
+                            # Array of objects
+                            columns = list(data[0].keys())
+                            data_rows = data
+                        elif isinstance(data, dict):
+                            # Single object
+                            columns = list(data.keys())
+                            data_rows = [data]
+                        else:
+                            return {"success": False, "error": "JSON must be an object or array of objects"}
+                    except json.JSONDecodeError as e:
+                        return {"success": False, "error": f"Invalid JSON format: {str(e)}"}
+            
+            elif file_ext == '.csv':
+                # Handle CSV files
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    columns = reader.fieldnames
+                    for row in reader:
+                        data_rows.append(row)
+            
+            else:
+                return {"success": False, "error": f"Unsupported file format: {file_ext}. Supported: .json, .csv"}
+            
+            if not data_rows:
+                return {"success": False, "error": "No data found in file"}
+            
+            # Temporarily bypass strict mode for inserts
+            original_strict_mode = self.strict_mode
+            try:
+                self.strict_mode = False  # Allow inserts
+                
+                # Create table if it doesn't exist
+                cursor = connection.cursor()
+                
+                # Determine column types from data
+                column_defs = []
+                for col in columns:
+                    # Sample the first few rows to determine type
+                    col_type = "TEXT"  # Default to TEXT
+                    sample_values = [row.get(col) for row in data_rows[:10] if row.get(col) is not None]
+                    
+                    if sample_values:
+                        # Check if all values are numeric
+                        if all(isinstance(v, (int, float)) or (isinstance(v, str) and v.replace('.', '').replace('-', '').isdigit()) for v in sample_values):
+                            if all(isinstance(v, int) or (isinstance(v, str) and '.' not in v) for v in sample_values):
+                                col_type = "INTEGER"
+                            else:
+                                col_type = "FLOAT" if db_type == "mysql" else "REAL"
+                    
+                    # Escape column names for SQL
+                    escaped_col = f"`{col}`" if db_type == "mysql" else f'"{col}"'
+                    column_defs.append(f"{escaped_col} {col_type}")
+                
+                # Create table
+                create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_defs)})"
+                cursor.execute(create_table_sql)
+                connection.commit()
+                
+                # Insert data
+                start_time = asyncio.get_event_loop().time()
+                inserted_count = 0
+                
+                # Prepare insert statement
+                placeholders = ', '.join(['%s'] * len(columns))
+                escaped_columns = [f"`{col}`" if db_type == "mysql" else f'"{col}"' for col in columns]
+                insert_sql = f"INSERT INTO {table_name} ({', '.join(escaped_columns)}) VALUES ({placeholders})"
+                
+                # Insert rows
+                for row in data_rows:
+                    values = []
+                    for col in columns:
+                        val = row.get(col)
+                        # Convert empty strings to NULL
+                        if val == '':
+                            val = None
+                        # Try to convert numeric strings
+                        elif isinstance(val, str) and val.replace('.', '').replace('-', '').isdigit():
+                            try:
+                                if '.' in val:
+                                    val = float(val)
+                                else:
+                                    val = int(val)
+                            except:
+                                pass  # Keep as string
+                        values.append(val)
+                    
+                    cursor.execute(insert_sql, values)
+                    inserted_count += 1
+                
+                connection.commit()
+                cursor.close()
+                
+                execution_time = (asyncio.get_event_loop().time() - start_time) * 1000
+                
+                # Get row count from table
+                cursor = connection.cursor()
+                cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                total_rows = cursor.fetchone()[0]
+                cursor.close()
+                
+                return {
+                    "success": True,
+                    "database": self._current_db_config.database,
+                    "table": table_name,
+                    "rows_inserted": inserted_count,
+                    "execution_time_ms": execution_time,
+                    "total_rows": total_rows,
+                    "columns": columns,
+                    "file_info": {
+                        "path": file_path,
+                        "format": file_ext,
+                        "size_mb": os.path.getsize(file_path) / (1024 * 1024)
+                    }
+                }
+                
+            finally:
+                self.strict_mode = original_strict_mode  # Restore original setting
+                
+        except Exception as e:
+            self.logger.error(f"SQL file ingestion error: {e}")
+            return {"success": False, "error": str(e)}
+    
     async def _is_file_ingestion_request(self, message: str) -> bool:
         """Check if message is requesting file ingestion to database"""
         message_lower = message.lower()
         
-        # File ingestion indicators
-        ingestion_keywords = [
-            "ingest", "import", "load file", "insert file", "add file",
-            "read .json", "read .csv", "load .json", "load .csv",
-            "import json", "import csv", "ingest json", "ingest csv",
-            "file to mongodb", "csv to mongodb", "json to mongodb",
-            "insert from file", "load from file", "import from file"
+        # Primary ingestion verbs that indicate file operations
+        primary_verbs = ["load", "import", "ingest", "insert", "populate"]
+        
+        # Extended patterns for file ingestion
+        ingestion_patterns = [
+            # Basic verb patterns
+            "load", "import", "ingest", "insert", "populate",
+            # Verb + file patterns
+            "load file", "import file", "ingest file", "insert file", "populate file",
+            "load from", "import from", "ingest from", "insert from", "populate from",
+            # Specific file type patterns
+            "load json", "import json", "ingest json", "insert json", "populate json",
+            "load csv", "import csv", "ingest csv", "insert csv", "populate csv",
+            # Database-specific patterns (works for all DB types)
+            "file to database", "file into database", "file to table", "file into table",
+            "csv to database", "json to database", "csv into table", "json into table",
+            # Action patterns
+            "add file", "read file", "process file", "upload file"
         ]
         
         # Check for file extensions in message
-        has_file_extension = any(ext in message_lower for ext in ['.json', '.csv', '.xlsx', '.xls'])
+        file_extensions = ['.json', '.csv', '.xlsx', '.xls', '.xml', '.txt']
+        has_file_extension = any(ext in message_lower for ext in file_extensions)
         
-        # Check for ingestion keywords
-        has_ingestion_keyword = any(keyword in message_lower for keyword in ingestion_keywords)
+        # Check if any primary verb is present
+        has_primary_verb = any(verb in message_lower.split() for verb in primary_verbs)
         
-        # Check for MongoDB context
-        has_mongodb_context = self._current_db_config and self._current_db_config.db_type == DatabaseType.MONGODB
+        # Check for any ingestion pattern
+        has_ingestion_pattern = any(pattern in message_lower for pattern in ingestion_patterns)
         
-        return (has_file_extension and has_ingestion_keyword) or (has_mongodb_context and has_ingestion_keyword and "file" in message_lower)
+        # Flexible detection: 
+        # 1. If there's a file extension AND any primary verb (e.g., "load data.csv")
+        # 2. If there's any ingestion pattern with context (e.g., "import from file")
+        # 3. If connected to ANY database and using ingestion verbs with "file" keyword
+        return (has_file_extension and has_primary_verb) or \
+               (has_ingestion_pattern and (has_file_extension or "file" in message_lower)) or \
+               (self._current_db_config and has_primary_verb and "file" in message_lower)
     
     async def _handle_file_ingestion_request(self, message_content: str) -> str:
         """Handle file ingestion requests"""
@@ -1600,25 +1804,31 @@ Use: `load data from {rel_path}`
                 if "failed" in connection_response.lower():
                     return connection_response
             
-            # Extract file path and collection name using LLM
+            # Check if we have a database connection
+            if not self._current_db_config:
+                return "❌ No database connection established. Please connect to a database first."
+            
+            # Extract file path and table/collection name using LLM
+            db_type_context = "collection" if self._current_db_config.db_type == DatabaseType.MONGODB else "table"
             ingestion_prompt = f"""
             Extract file ingestion details from this message: "{message_content}"
             
             Look for:
             - File path (can be relative or absolute)
-            - Collection name (optional, if not provided use filename)
+            - Target name ({db_type_context} name - optional, if not provided use filename)
             - Database name (optional, use current if not provided)
             
             Return ONLY a valid JSON object:
             {{
                 "file_path": "path/to/file.json",
-                "collection_name": "collection_name_or_null",
+                "target_name": "target_name_or_null",
                 "database_name": "database_name_or_null"
             }}
             
             Examples:
-            "ingest data.json into users collection" -> {{"file_path": "data.json", "collection_name": "users", "database_name": null}}
-            "load sales.csv" -> {{"file_path": "sales.csv", "collection_name": null, "database_name": null}}
+            "ingest data.json into users {db_type_context}" -> {{"file_path": "data.json", "target_name": "users", "database_name": null}}
+            "load sales.csv" -> {{"file_path": "sales.csv", "target_name": null, "database_name": null}}
+            "import employees.json into hr.employees" -> {{"file_path": "employees.json", "target_name": "employees", "database_name": "hr"}}
             """
             
             llm_response = await self.llm_service.generate_response(
@@ -1637,7 +1847,7 @@ Use: `load data from {rel_path}`
                     if file_match:
                         ingestion_info = {
                             "file_path": file_match.group(1),
-                            "collection_name": None,
+                            "target_name": None,
                             "database_name": None
                         }
                     else:
@@ -1645,15 +1855,25 @@ Use: `load data from {rel_path}`
             except:
                 return "❌ Could not parse ingestion request. Please provide: 'ingest <file_path> [into <collection>]'"
             
-            # Perform ingestion
-            result = await self.ingest_file_to_mongodb(
-                file_path=ingestion_info.get("file_path"),
-                collection_name=ingestion_info.get("collection_name"),
-                database_name=ingestion_info.get("database_name")
-            )
+            # Route to appropriate ingestion method based on database type
+            if self._current_db_config.db_type == DatabaseType.MONGODB:
+                result = await self.ingest_file_to_mongodb(
+                    file_path=ingestion_info.get("file_path"),
+                    collection_name=ingestion_info.get("target_name"),
+                    database_name=ingestion_info.get("database_name")
+                )
+            else:
+                # For SQL databases (MySQL, PostgreSQL)
+                result = await self.ingest_file_to_sql(
+                    file_path=ingestion_info.get("file_path"),
+                    table_name=ingestion_info.get("target_name"),
+                    database_name=ingestion_info.get("database_name")
+                )
             
             if result["success"]:
-                return f"""✅ **File Ingestion Successful**
+                if self._current_db_config.db_type == DatabaseType.MONGODB:
+                    # MongoDB response format
+                    return f"""✅ **File Ingestion Successful**
 
 📁 **File**: `{result['file_info']['path']}` ({result['file_info']['size_mb']:.2f} MB)
 🗄️ **Database**: {result['database']}
@@ -1668,6 +1888,22 @@ You can now query this data using:
 - `db.{result['collection']}.find().limit(10)`
 - `db.{result['collection']}.count()`
 - `db.{result['collection']}.findOne()`"""
+                else:
+                    # SQL response format
+                    return f"""✅ **File Ingestion Successful**
+
+📁 **File**: `{result['file_info']['path']}` ({result['file_info']['size_mb']:.2f} MB)
+🗄️ **Database**: {result['database']}
+📊 **Table**: {result['table']}
+🔢 **Rows Inserted**: {result['rows_inserted']:,}
+⏱️ **Execution Time**: {result['execution_time_ms']:.1f}ms
+📈 **Total Rows in Table**: {result['total_rows']:,}
+📋 **Columns**: {', '.join(result['columns'])}
+
+You can now query this data using:
+- `SELECT * FROM {result['table']} LIMIT 10`
+- `SELECT COUNT(*) FROM {result['table']}`
+- `SELECT * FROM {result['table']} WHERE <condition>`"""
             else:
                 return f"❌ Ingestion failed: {result['error']}"
                 
