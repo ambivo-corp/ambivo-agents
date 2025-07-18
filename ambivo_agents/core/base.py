@@ -262,7 +262,7 @@ class ProviderTracker:
             error_count = config.error_count or 0
             return (priority, error_count)
 
-        available_providers.sort(key=lambda x: (x[1].priority, x[1].error_count))
+        available_providers.sort(key=sort_key)
         return available_providers[0][0]
 
 
