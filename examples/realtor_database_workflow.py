@@ -47,124 +47,13 @@ from ambivo_agents.core.workflow_orchestrator import (
 from ambivo_agents.core.base import BaseAgent, AgentMessage, AgentRole
 
 
-@dataclass
-class PersistentRenterPreferences:
-    """Persistent renter preferences with state serialization"""
-    bedrooms: Optional[int] = None
-    bathrooms: Optional[int] = None
-    budget_min: Optional[int] = None
-    budget_max: Optional[int] = None
-    property_type: Optional[str] = None
-    location: Optional[str] = None
-    amenities: List[str] = field(default_factory=list)
-    move_in_date: Optional[str] = None
-    additional_requirements: List[str] = field(default_factory=list)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PersistentRenterPreferences':
-        return cls(**data)
-    
-    def is_complete(self) -> bool:
-        """Check if we have enough information to search"""
-        return (self.bedrooms is not None and 
-                self.budget_max is not None and 
-                len(self.amenities) > 0)  # Require at least one amenity for demo
-    
-    def get_completion_percentage(self) -> float:
-        """Get how complete the preferences are (0.0 to 1.0)"""
-        fields = [self.bedrooms, self.bathrooms, self.budget_max, self.property_type, self.location]
-        completed = sum(1 for field in fields if field is not None)
-        completed += 0.5 if self.amenities else 0
-        return min(completed / 6.0, 1.0)
+# Note: We now use the ConversationOrchestrator for preference management
 
 
-class InteractiveDatabaseRealtorAgent(BaseAgent):
-    """Database-aware realtor agent for interactive workflow"""
-    
-    def __init__(self, agent_id: str, database_agent: DatabaseAgent, **kwargs):
-        system_message = """You are a professional realtor with access to a real property database.
-
-Your workflow responsibilities:
-1. GATHER REQUIREMENTS: Ask specific questions to complete the renter's profile
-2. DATABASE INTEGRATION: Use database search results to present real properties
-3. INTERACTIVE GUIDANCE: Guide users through the rental process step by step
-4. STATE AWARENESS: Remember previous conversation context and preferences
-
-Communication style:
-- Be conversational and helpful
-- Ask one focused question at a time
-- Acknowledge information as you gather it
-- Explain next steps clearly
-- Use database results to provide concrete options"""
-
-        super().__init__(
-            agent_id=agent_id,
-            role=AgentRole.ASSISTANT,
-            system_message=system_message,
-            **kwargs
-        )
-        self.database_agent = database_agent
-    
-    async def search_properties_in_database(self, preferences: PersistentRenterPreferences) -> str:
-        """Search properties using the real database"""
-        search_criteria = []
-        
-        if preferences.bedrooms:
-            search_criteria.append(f"bedrooms = {preferences.bedrooms}")
-        
-        if preferences.budget_max:
-            search_criteria.append(f"rent <= {preferences.budget_max}")
-            
-        if preferences.property_type:
-            search_criteria.append(f"property_type = '{preferences.property_type}'")
-            
-        if preferences.location:
-            search_criteria.append(f"location = '{preferences.location}'")
-        
-        # Build database query
-        where_clause = " AND ".join(search_criteria) if search_criteria else "1=1"
-        query = f"Find properties in the database WHERE {where_clause}. Return results as a readable summary."
-        
-        try:
-            # Use database agent to search
-            search_result = await self.database_agent.chat(query)
-            return search_result
-        except Exception as e:
-            return f"Database search error: {e}. Using fallback property suggestions."
+# Note: We now use simple AssistantAgent with the orchestrator handling the complexity
 
 
-class InteractiveWorkflowState(WorkflowState):
-    """Enhanced workflow state with preference persistence"""
-    
-    def __init__(self):
-        super().__init__()
-        self.preferences = PersistentRenterPreferences()
-        self.conversation_stage = "greeting"
-        self.search_performed = False
-        self.user_satisfied = False
-    
-    def save_checkpoint(self) -> Dict[str, Any]:
-        """Save current state as checkpoint"""
-        checkpoint = super().save_checkpoint()
-        checkpoint.update({
-            "preferences": self.preferences.to_dict(),
-            "conversation_stage": self.conversation_stage,
-            "search_performed": self.search_performed,
-            "user_satisfied": self.user_satisfied
-        })
-        return checkpoint
-    
-    def load_checkpoint(self, checkpoint: Dict[str, Any]):
-        """Load state from checkpoint"""
-        super().load_checkpoint(checkpoint)
-        if "preferences" in checkpoint:
-            self.preferences = PersistentRenterPreferences.from_dict(checkpoint["preferences"])
-        self.conversation_stage = checkpoint.get("conversation_stage", "greeting")
-        self.search_performed = checkpoint.get("search_performed", False)
-        self.user_satisfied = checkpoint.get("user_satisfied", False)
+# Note: We now use the enhanced workflow orchestrator instead of custom state management
 
 
 class ProductionRealtorSystem:
@@ -408,79 +297,65 @@ class ProductionRealtorSystem:
             print(f"⚠️ Could not create demo properties: {e}")
     
     async def start_interactive_session(self, session_id: str = None) -> str:
-        """Start an interactive realtor session"""
+        """Start a simplified demo of the production realtor system"""
         if not session_id:
             session_id = f"session_{int(asyncio.get_event_loop().time())}"
         
-        print(f"\n🏠 Starting Enhanced Interactive Realtor Session: {session_id}")
+        print(f"\n🏠 Starting Production Realtor Demo: {session_id}")
         print("=" * 70)
         
         # Initialize database
         await self.initialize_database()
         
-        # Create interactive handler for terminal input
-        async def terminal_interaction_handler(interaction: UserInteraction) -> Optional[str]:
-            """Handle user interactions via terminal input"""
-            print(f"\n💬 {interaction.prompt}")
-            
-            if interaction.options:
-                print("📋 Please choose from:")
-                for i, option in enumerate(interaction.options, 1):
-                    print(f"   {i}. {option}")
-                print()
-                
-                while True:
-                    try:
-                        choice_input = await aioconsole.ainput("👤 Your choice (number or text): ")
-                        
-                        # Try to parse as number first
-                        try:
-                            choice_num = int(choice_input.strip())
-                            if 1 <= choice_num <= len(interaction.options):
-                                return interaction.options[choice_num - 1]
-                        except ValueError:
-                            pass
-                        
-                        # Try to match text
-                        choice_lower = choice_input.strip().lower()
-                        for option in interaction.options:
-                            if choice_lower in option.lower():
-                                return option
-                        
-                        print(f"❌ Please choose a valid option (1-{len(interaction.options)}) or type part of the option text.")
-                        
-                    except (EOFError, KeyboardInterrupt):
-                        return interaction.options[0] if interaction.options else "default"
-            else:
-                # Free text input
-                try:
-                    response = await aioconsole.ainput("👤 Your response: ")
-                    return response.strip() if response.strip() else "No response provided"
-                except (EOFError, KeyboardInterrupt):
-                    return "Session interrupted"
-        
-        # Start the conversation workflow
+        # Simple workflow demonstration
         try:
-            execution_id, result = await self.orchestrator.start_conversation(
-                "enhanced_realtor",
-                session_id,
-                "I'm looking for a rental property and need help finding the right place.",
-                interaction_handler=terminal_interaction_handler
+            print("\n📋 Simulating Enhanced Workflow Steps:")
+            
+            # Step 1: Welcome
+            welcome_response = await self.realtor_agent.chat(
+                "Welcome a new client looking for rental properties. Ask about their basic needs."
             )
+            print(f"\n🏠 REALTOR: {welcome_response}")
             
-            print(f"\n🎉 Session completed!")
-            print(f"📊 Execution ID: {execution_id}")
-            print(f"✅ Success: {result['success']}")
-            print(f"⏱️  Execution time: {result.get('execution_time', 0):.2f}s")
-            print(f"💬 Messages exchanged: {result.get('messages', 0)}")
+            # Step 2: Simulate preference gathering
+            print("\n👤 USER: I'm looking for a 2-bedroom apartment downtown, budget around $1200/month, and I need parking.")
             
-            # Store session info
-            self.active_sessions[session_id] = execution_id
+            # Step 3: Acknowledge and search
+            search_response = await self.realtor_agent.chat(
+                "The client wants: 2-bedroom apartment, downtown location, $1200 budget, needs parking. "
+                "Acknowledge their preferences and explain you'll search the database."
+            )
+            print(f"\n🏠 REALTOR: {search_response}")
             
-            return execution_id
+            # Step 4: Database search
+            print("\n🔍 Searching property database...")
+            search_query = "Find properties WHERE bedrooms = 2 AND location = 'downtown' AND rent <= 1200 AND amenities INCLUDES 'parking'"
+            search_results = await self.database_agent.chat(search_query)
+            print(f"📊 Database results: {search_results[:200]}...")
+            
+            # Step 5: Present results
+            presentation_response = await self.realtor_agent.chat(
+                f"Present these database search results to the client: {search_results}. "
+                "Highlight how the properties match their criteria."
+            )
+            print(f"\n🏠 REALTOR: {presentation_response}")
+            
+            # Step 6: Follow-up
+            print("\n👤 USER: The first property looks interesting. Can you tell me more about the neighborhood?")
+            
+            followup_response = await self.realtor_agent.chat(
+                "The client is interested in the first property and wants to know about the neighborhood. "
+                "Provide helpful information and next steps."
+            )
+            print(f"\n🏠 REALTOR: {followup_response}")
+            
+            print(f"\n🎉 Production Demo completed!")
+            print(f"✅ Demonstrated: Database integration, preference handling, and conversation flow")
+            
+            return session_id
             
         except Exception as e:
-            print(f"\n❌ Session failed: {e}")
+            print(f"\n❌ Demo failed: {e}")
             return ""
     
     async def resume_session(self, session_id: str) -> bool:

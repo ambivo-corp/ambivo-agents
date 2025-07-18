@@ -1,0 +1,57 @@
+[
+  {
+    "id": 1,
+    "name": "John Smith",
+    "email": "john.smith@email.com",
+    "age": 28,
+    "department": "Engineering",
+    "salary": 75000,
+    "hire_date": "2022-03-15",
+    "skills": ["Python", "JavaScript", "Docker"],
+    "active": true
+  },
+  {
+    "id": 2,
+    "name": "Sarah Johnson",
+    "email": "sarah.johnson@email.com",
+    "age": 32,
+    "department": "Product",
+    "salary": 85000,
+    "hire_date": "2021-08-20",
+    "skills": ["Product Management", "Analytics", "SQL"],
+    "active": true
+  },
+  {
+    "id": 3,
+    "name": "Mike Chen",
+    "email": "mike.chen@email.com",
+    "age": 26,
+    "department": "Engineering",
+    "salary": 70000,
+    "hire_date": "2023-01-10",
+    "skills": ["React", "Node.js", "MongoDB"],
+    "active": true
+  },
+  {
+    "id": 4,
+    "name": "Lisa Davis",
+    "email": "lisa.davis@email.com",
+    "age": 35,
+    "department": "Marketing",
+    "salary": 68000,
+    "hire_date": "2020-05-18",
+    "skills": ["Digital Marketing", "SEO", "Content Strategy"],
+    "active": false
+  },
+  {
+    "id": 5,
+    "name": "David Wilson",
+    "email": "david.wilson@email.com",
+    "age": 29,
+    "department": "Engineering",
+    "salary": 78000,
+    "hire_date": "2022-11-03",
+    "skills": ["Java", "Spring Boot", "Kubernetes"],
+    "active": true
+  }
+]

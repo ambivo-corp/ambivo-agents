@@ -1,0 +1,80 @@
+[
+  {
+    "id": "prop_001",
+    "address": "123 Oak Street, Downtown",
+    "bedrooms": 2,
+    "bathrooms": 1,
+    "rent": 1200,
+    "square_feet": 850,
+    "property_type": "apartment",
+    "amenities": ["parking", "laundry", "gym"],
+    "location": "downtown",
+    "available_date": "2024-02-01",
+    "description": "Modern 2-bedroom apartment in the heart of downtown with gym access"
+  },
+  {
+    "id": "prop_002", 
+    "address": "456 Pine Avenue, Midtown",
+    "bedrooms": 1,
+    "bathrooms": 1,
+    "rent": 900,
+    "square_feet": 650,
+    "property_type": "apartment",
+    "amenities": ["parking", "pool"],
+    "location": "midtown",
+    "available_date": "2024-01-15",
+    "description": "Cozy 1-bedroom with pool access in quiet midtown neighborhood"
+  },
+  {
+    "id": "prop_003",
+    "address": "789 Maple Drive, Suburbs", 
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "rent": 1800,
+    "square_feet": 1200,
+    "property_type": "house",
+    "amenities": ["garage", "garden", "dishwasher"],
+    "location": "suburbs",
+    "available_date": "2024-02-15",
+    "description": "Spacious 3-bedroom house with garden and garage in family-friendly suburbs"
+  },
+  {
+    "id": "prop_004",
+    "address": "321 Elm Street, Downtown",
+    "bedrooms": 2,
+    "bathrooms": 2,
+    "rent": 1500,
+    "square_feet": 950,
+    "property_type": "condo", 
+    "amenities": ["parking", "gym", "concierge"],
+    "location": "downtown",
+    "available_date": "2024-01-20",
+    "description": "Luxury 2-bedroom condo with concierge service and gym"
+  },
+  {
+    "id": "prop_005",
+    "address": "654 Birch Lane, Uptown",
+    "bedrooms": 1,
+    "bathrooms": 1,
+    "rent": 1100,
+    "square_feet": 700,
+    "property_type": "studio",
+    "amenities": ["laundry", "rooftop"],
+    "location": "uptown", 
+    "available_date": "2024-02-01",
+    "description": "Modern studio with rooftop access in trendy uptown area"
+  },
+  {
+    "id": "prop_006",
+    "address": "987 Cedar Court, Suburbs",
+    "bedrooms": 4,
+    "bathrooms": 3,
+    "rent": 2200,
+    "square_feet": 1600,
+    "property_type": "house",
+    "amenities": ["garage", "garden", "fireplace", "dishwasher"],
+    "location": "suburbs",
+    "available_date": "2024-03-01", 
+    "description": "Large 4-bedroom family house with fireplace and spacious garden"
+  }
+]
