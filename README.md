@@ -223,6 +223,99 @@ await agent.cleanup_session()
 - Security features (domain filtering, SSL verification)
 - Support for all HTTP methods (GET, POST, PUT, DELETE, etc.)
 
+#### API Agent Configuration
+
+**Timeout Settings:**
+
+The API Agent supports configurable timeout settings for different use cases:
+
+```bash
+# Environment variable configuration
+export AMBIVO_AGENTS_API_AGENT_TIMEOUT_SECONDS=46  # Custom timeout in seconds
+
+# Or in agent_config.yaml
+api_agent:
+  timeout_seconds: 46                    # Request timeout
+  max_safe_timeout: 8                    # Requests above this use Docker for safety
+  force_docker_above_timeout: true       # Enable Docker for long-running requests
+```
+
+**Localhost and Domain Access:**
+
+For testing with local services or specific domain restrictions:
+
+```bash
+# Allow localhost access (disabled by default for security)
+export AMBIVO_AGENTS_API_AGENT_ALLOWED_DOMAINS="127.0.0.1,localhost,api.example.com"
+export AMBIVO_AGENTS_API_AGENT_BLOCKED_DOMAINS=""  # Clear default blocks
+
+# Or in agent_config.yaml
+api_agent:
+  allowed_domains:
+    - "127.0.0.1"
+    - "localhost" 
+    - "api.example.com"
+    - "*.trusted-domain.com"     # Wildcards supported
+  blocked_domains: []            # Override default localhost blocks
+  
+  # Default security settings (recommended for production)
+  # allowed_domains: null        # Allows all except blocked
+  # blocked_domains:
+  #   - "localhost"
+  #   - "127.0.0.1"
+  #   - "0.0.0.0"
+  #   - "169.254.169.254"        # AWS metadata service
+```
+
+**Usage Examples:**
+
+```python
+from ambivo_agents import APIAgent
+
+# Test with local transcription service
+async def test_local_api():
+    agent = APIAgent.create_simple(user_id="tester")
+    
+    # Natural language API call
+    response = await agent.chat("""
+    Make a POST request to http://127.0.0.1:8002/kh/transcribe with:
+    - Authorization: Bearer your-jwt-token
+    - Content-Type: application/json  
+    - Body: {"s3_url": "https://your-bucket.s3.amazonaws.com/audio.wav"}
+    """)
+    
+    await agent.cleanup_session()
+
+# Direct API request with custom timeout
+async def direct_api_call():
+    from ambivo_agents.agents.api_agent import APIRequest, HTTPMethod
+    
+    agent = APIAgent.create_simple(user_id="api_user")
+    
+    request = APIRequest(
+        url="http://127.0.0.1:8002/kh/transcribe",
+        method=HTTPMethod.POST,
+        headers={
+            "Authorization": "Bearer your-jwt-token",
+            "Content-Type": "application/json"
+        },
+        json_data={"s3_url": "https://your-bucket.s3.amazonaws.com/audio.wav"},
+        timeout=46  # Custom timeout in seconds
+    )
+    
+    response = await agent.make_api_request(request)
+    print(f"Status: {response.status_code}")
+    print(f"Duration: {response.duration_ms}ms")
+    
+    await agent.cleanup_session()
+```
+
+**Security Notes:**
+- Localhost access is blocked by default for security
+- Always use `allowed_domains` in production to restrict API access
+- Set appropriate timeouts to prevent long-running requests
+- Consider using `max_safe_timeout` for requests that might take longer
+
 ## Workflow System
 
 The workflow system enables multi-agent orchestration with sequential and parallel execution patterns:
@@ -1376,6 +1469,24 @@ The consolidated structure enables seamless workflows between agents:
 ```
 
 #### Agent Handoff Mechanism
+
+**Output vs Handoff Directory Logic:**
+
+The system uses two distinct destination directories based on the agent's role in the workflow:
+
+- **`output/` directories**: For **final deliverables** - when an agent produces end results for user consumption
+  - MediaEditorAgent image/video processing → `docker_shared/output/media/`
+  - AnalyticsAgent charts and reports → `docker_shared/output/analytics/`
+  - CodeExecutorAgent script results → `docker_shared/output/code/`
+  
+- **`handoff/` directories**: For **inter-agent communication** - when one agent needs to pass data to another agent
+  - DatabaseAgent exports for AnalyticsAgent → `docker_shared/handoff/database/`
+  - WebScraperAgent data for KnowledgeBaseAgent → `docker_shared/handoff/scraper/`
+  - MediaEditorAgent processed files for further processing → `docker_shared/handoff/media/`
+
+**Decision Logic:**
+- **Terminal operations** (user-requested, final results) → `output/`
+- **Workflow operations** (agent-to-agent data passing) → `handoff/`
 
 The handoff system uses the `handoff_subdir` parameter to enable seamless file transfers between agents:
 

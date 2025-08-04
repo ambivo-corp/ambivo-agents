@@ -1736,7 +1736,7 @@ except Exception as e:
             "headers": r"(?:header|headers?):\s*({[^}]+}|\S+:\s*\S+)",
             "data": r"(?:data|body|payload):\s*({[^}]+})",
             "params": r"(?:params|query):\s*({[^}]+})",
-            "bearer_token": r"(?:Bearer\s+token|with\s+Bearer\s+token)\s+([^\s]+)",
+            "bearer_token": r"(?:Bearer\s+token|with\s+Bearer\s+token|Authorization:\s*Bearer)\s+([^\s]+)",
         }
 
         # Extract URL and method

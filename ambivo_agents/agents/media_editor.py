@@ -49,10 +49,15 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         default_system = """You are a specialized media processing agent with the following capabilities:
             - Process video and audio files using FFmpeg in secure Docker containers
             - Extract audio from videos, convert formats, resize videos, create thumbnails
+            - Process image files (PNG, JPEG, GIF, BMP, TIFF) with various transformations
+            - Image operations: resize, crop, rotate, grayscale, brightness/contrast, blur, sharpen
+            - Image watermarking: apply image and text watermarks with position and opacity control
+            - Transparency operations: background removal, transparent canvas creation, alpha masking
+            - Batch image processing and format conversion
             - Remember file references from previous conversations naturally
-            - Understand context like "that video" or "the file we just processed"
+            - Understand context like "that video", "this image", or "the file we just processed"
             - Provide clear progress updates and detailed processing results
-            - Handle technical specifications like codecs, quality settings, and dimensions"""
+            - Handle technical specifications like codecs, quality settings, dimensions, and image filters"""
 
         super().__init__(
             agent_id=agent_id,
@@ -95,11 +100,11 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         prompt = f"""
         Analyze this user message in the context of media processing and extract:
-        1. Primary intent (extract_audio, convert_video, resize_video, trim_media, create_thumbnail, get_info, help_request)
-        2. Media file references (file paths, video/audio files)
-        3. Output preferences (format, quality, dimensions, timing)
+        1. Primary intent (extract_audio, convert_video, resize_video, trim_media, create_thumbnail, get_info, help_request, resize_image, crop_image, rotate_image, convert_image, grayscale_image, adjust_image, blur_image, batch_process_images)
+        2. Media file references (file paths, video/audio/image files)
+        3. Output preferences (format, quality, dimensions, timing, rotation, cropping area)
         4. Context references (referring to previous media operations)
-        5. Technical specifications (codecs, bitrates, resolution, etc.)
+        5. Technical specifications (codecs, bitrates, resolution, image filters, etc.)
 
         Conversation Context:
         {conversation_context}
@@ -108,7 +113,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         Respond in JSON format:
         {{
-            "primary_intent": "extract_audio|convert_video|resize_video|trim_media|create_thumbnail|get_info|help_request",
+            "primary_intent": "extract_audio|convert_video|resize_video|trim_media|create_thumbnail|get_info|help_request|resize_image|crop_image|rotate_image|convert_image|grayscale_image|adjust_image|blur_image|batch_process_images|apply_watermark|apply_text_watermark|remove_background|create_transparent_canvas|apply_alpha_mask",
             "media_files": ["file1.mp4", "video2.avi"],
             "output_preferences": {{
                 "format": "mp4|avi|mp3|wav|etc",
@@ -148,10 +153,36 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         # Determine intent
         if any(word in content_lower for word in ["extract audio", "get audio", "audio from"]):
             intent = "extract_audio"
-        elif any(word in content_lower for word in ["convert", "change format", "transform"]):
+        elif any(word in content_lower for word in ["convert", "change format", "transform"]) and any(word in content_lower for word in ["video", "mp4", "avi", "mov"]):
             intent = "convert_video"
-        elif any(word in content_lower for word in ["resize", "scale", "dimensions"]):
+        elif any(word in content_lower for word in ["convert", "change format", "transform"]) and any(word in content_lower for word in ["image", "picture", "photo", "png", "jpg", "jpeg", "gif", "bmp"]):
+            intent = "convert_image"
+        elif any(word in content_lower for word in ["resize", "scale", "dimensions"]) and any(word in content_lower for word in ["video", "mp4", "avi"]):
             intent = "resize_video"
+        elif any(word in content_lower for word in ["resize", "scale", "dimensions"]) and any(word in content_lower for word in ["image", "picture", "photo", "png", "jpg"]):
+            intent = "resize_image"
+        elif any(word in content_lower for word in ["crop", "cropping", "cut out"]):
+            intent = "crop_image"
+        elif any(word in content_lower for word in ["rotate", "rotation", "turn", "flip"]):
+            intent = "rotate_image"
+        elif any(word in content_lower for word in ["grayscale", "grey", "gray", "black and white", "monochrome"]):
+            intent = "grayscale_image"
+        elif any(word in content_lower for word in ["brightness", "contrast", "adjust", "enhance"]):
+            intent = "adjust_image"
+        elif any(word in content_lower for word in ["blur", "sharpen", "smooth", "soften"]):
+            intent = "blur_image"
+        elif any(word in content_lower for word in ["batch", "multiple", "all images", "folder"]):
+            intent = "batch_process_images"
+        elif any(word in content_lower for word in ["watermark", "logo", "overlay"]) and any(word in content_lower for word in ["image", "picture", "photo"]):
+            intent = "apply_watermark"
+        elif any(word in content_lower for word in ["watermark", "logo", "overlay"]) and any(word in content_lower for word in ["text", "title", "caption"]):
+            intent = "apply_text_watermark"
+        elif any(word in content_lower for word in ["transparent", "remove background", "background removal", "chromakey"]):
+            intent = "remove_background"
+        elif any(word in content_lower for word in ["transparent canvas", "blank transparent", "empty transparent"]):
+            intent = "create_transparent_canvas"
+        elif any(word in content_lower for word in ["alpha mask", "transparency mask", "apply mask"]):
+            intent = "apply_alpha_mask"
         elif any(word in content_lower for word in ["trim", "cut", "clip"]):
             intent = "trim_media"
         elif any(word in content_lower for word in ["thumbnail", "screenshot", "frame"]):
@@ -287,11 +318,11 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         prompt = f"""
         Analyze this user message in the context of media processing and extract:
-        1. Primary intent (extract_audio, convert_video, resize_video, trim_media, create_thumbnail, get_info, help_request)
-        2. Media file references (file paths, video/audio files)
-        3. Output preferences (format, quality, dimensions, timing)
+        1. Primary intent (extract_audio, convert_video, resize_video, trim_media, create_thumbnail, get_info, help_request, resize_image, crop_image, rotate_image, convert_image, grayscale_image, adjust_image, blur_image, batch_process_images)
+        2. Media file references (file paths, video/audio/image files)
+        3. Output preferences (format, quality, dimensions, timing, rotation, cropping area)
         4. Context references (referring to previous media operations)
-        5. Technical specifications (codecs, bitrates, resolution, etc.)
+        5. Technical specifications (codecs, bitrates, resolution, image filters, etc.)
 
         Conversation Context:
         {conversation_context}
@@ -300,7 +331,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         Respond in JSON format:
         {{
-            "primary_intent": "extract_audio|convert_video|resize_video|trim_media|create_thumbnail|get_info|help_request",
+            "primary_intent": "extract_audio|convert_video|resize_video|trim_media|create_thumbnail|get_info|help_request|resize_image|crop_image|rotate_image|convert_image|grayscale_image|adjust_image|blur_image|batch_process_images|apply_watermark|apply_text_watermark|remove_background|create_transparent_canvas|apply_alpha_mask",
             "media_files": ["file1.mp4", "video2.avi"],
             "output_preferences": {{
                 "format": "mp4|avi|mp3|wav|etc",
@@ -374,6 +405,34 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             return await self._handle_thumbnail_creation(media_files, output_prefs, user_message)
         elif primary_intent == "get_info":
             return await self._handle_media_info(media_files, user_message)
+        # Image processing intents
+        elif primary_intent == "resize_image":
+            return await self._handle_image_resize(media_files, output_prefs, user_message)
+        elif primary_intent == "crop_image":
+            return await self._handle_image_crop(media_files, output_prefs, user_message)
+        elif primary_intent == "rotate_image":
+            return await self._handle_image_rotate(media_files, output_prefs, user_message)
+        elif primary_intent == "convert_image":
+            return await self._handle_image_convert(media_files, output_prefs, user_message)
+        elif primary_intent == "grayscale_image":
+            return await self._handle_image_grayscale(media_files, output_prefs, user_message)
+        elif primary_intent == "adjust_image":
+            return await self._handle_image_adjust(media_files, output_prefs, user_message)
+        elif primary_intent == "blur_image":
+            return await self._handle_image_blur(media_files, output_prefs, user_message)
+        elif primary_intent == "batch_process_images":
+            return await self._handle_batch_image_processing(media_files, output_prefs, user_message)
+        # Watermarking and transparency intents
+        elif primary_intent == "apply_watermark":
+            return await self._handle_watermark_application(media_files, output_prefs, user_message)
+        elif primary_intent == "apply_text_watermark":
+            return await self._handle_text_watermark_application(media_files, output_prefs, user_message)
+        elif primary_intent == "remove_background":
+            return await self._handle_background_removal(media_files, output_prefs, user_message)
+        elif primary_intent == "create_transparent_canvas":
+            return await self._handle_transparent_canvas_creation(media_files, output_prefs, user_message)
+        elif primary_intent == "apply_alpha_mask":
+            return await self._handle_alpha_mask_application(media_files, output_prefs, user_message)
         else:
             return await self._handle_media_help_request_with_context(user_message, llm_context)
 
@@ -413,9 +472,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             "- Convert audio formats (MP3, WAV, AAC, FLAC)\n"
             "- Extract from videos\n"
             "- Adjust quality settings\n\n"
+            "🖼️ **Image Processing**\n"
+            "- Resize and scale images\n"
+            "- Crop images to specific areas\n"
+            "- Rotate and flip images\n"
+            "- Convert formats (PNG, JPEG, GIF, BMP)\n"
+            "- Apply grayscale/black & white effects\n"
+            "- Adjust brightness, contrast, and saturation\n"
+            "- Apply blur, sharpen, and other filters\n"
+            "- Batch process multiple images\n\n"
             "🧠 **Smart Context Features**\n"
             "- Remembers files from previous messages\n"
-            "- Understands 'that video' and 'this file'\n"
+            "- Understands 'that video', 'this image', and 'that file'\n"
             "- Maintains working context\n\n"
         )
 
@@ -433,6 +501,11 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         response += "• 'Convert that video to MP4'\n"
         response += "• 'Resize it to 720p'\n"
         response += "• 'Create a thumbnail at 2 minutes'\n"
+        response += "• 'Resize image.png to 1920x1080'\n"
+        response += "• 'Crop that picture to 500x500'\n"
+        response += "• 'Rotate photo.jpg by 90 degrees'\n"
+        response += "• 'Convert image to grayscale'\n"
+        response += "• 'Batch process all PNG files'\n"
         response += "\nI understand context from our conversation! 🚀"
 
         return response
@@ -491,6 +564,34 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             return await self._handle_thumbnail_creation(media_files, output_prefs, user_message)
         elif primary_intent == "get_info":
             return await self._handle_media_info(media_files, user_message)
+        # Image processing intents
+        elif primary_intent == "resize_image":
+            return await self._handle_image_resize(media_files, output_prefs, user_message)
+        elif primary_intent == "crop_image":
+            return await self._handle_image_crop(media_files, output_prefs, user_message)
+        elif primary_intent == "rotate_image":
+            return await self._handle_image_rotate(media_files, output_prefs, user_message)
+        elif primary_intent == "convert_image":
+            return await self._handle_image_convert(media_files, output_prefs, user_message)
+        elif primary_intent == "grayscale_image":
+            return await self._handle_image_grayscale(media_files, output_prefs, user_message)
+        elif primary_intent == "adjust_image":
+            return await self._handle_image_adjust(media_files, output_prefs, user_message)
+        elif primary_intent == "blur_image":
+            return await self._handle_image_blur(media_files, output_prefs, user_message)
+        elif primary_intent == "batch_process_images":
+            return await self._handle_batch_image_processing(media_files, output_prefs, user_message)
+        # Watermarking and transparency intents
+        elif primary_intent == "apply_watermark":
+            return await self._handle_watermark_application(media_files, output_prefs, user_message)
+        elif primary_intent == "apply_text_watermark":
+            return await self._handle_text_watermark_application(media_files, output_prefs, user_message)
+        elif primary_intent == "remove_background":
+            return await self._handle_background_removal(media_files, output_prefs, user_message)
+        elif primary_intent == "create_transparent_canvas":
+            return await self._handle_transparent_canvas_creation(media_files, output_prefs, user_message)
+        elif primary_intent == "apply_alpha_mask":
+            return await self._handle_alpha_mask_application(media_files, output_prefs, user_message)
         else:
             return await self._handle_media_help_request(user_message)
 
@@ -1107,9 +1208,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             "- Convert audio formats (MP3, WAV, AAC, FLAC)\n"
             "- Extract from videos\n"
             "- Adjust quality settings\n\n"
+            "🖼️ **Image Processing**\n"
+            "- Resize and scale images\n"
+            "- Crop images to specific areas\n"
+            "- Rotate and flip images\n"
+            "- Convert formats (PNG, JPEG, GIF, BMP)\n"
+            "- Apply grayscale/black & white effects\n"
+            "- Adjust brightness, contrast, and saturation\n"
+            "- Apply blur, sharpen, and other filters\n"
+            "- Batch process multiple images\n\n"
             "🧠 **Smart Context Features**\n"
             "- Remembers files from previous messages\n"
-            "- Understands 'that video' and 'this file'\n"
+            "- Understands 'that video', 'this image', and 'that file'\n"
             "- Maintains working context\n\n"
         )
 
@@ -1127,6 +1237,11 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         response += "• 'Convert that video to MP4'\n"
         response += "• 'Resize it to 720p'\n"
         response += "• 'Create a thumbnail at 2 minutes'\n"
+        response += "• 'Resize image.png to 1920x1080'\n"
+        response += "• 'Crop that picture to 500x500'\n"
+        response += "• 'Rotate photo.jpg by 90 degrees'\n"
+        response += "• 'Convert image to grayscale'\n"
+        response += "• 'Batch process all PNG files'\n"
         response += "\nI understand context from our conversation! 🚀"
 
         return response
@@ -1384,6 +1499,395 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             )
         )
 
+        # ========================
+        # IMAGE PROCESSING TOOLS
+        # ========================
+
+        # Resize image tool
+        self.add_tool(
+            AgentTool(
+                name="resize_image",
+                description="Resize image to specific dimensions",
+                function=self._resize_image,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "width": {"type": "integer", "description": "Target width in pixels"},
+                        "height": {"type": "integer", "description": "Target height in pixels"},
+                    },
+                    "required": ["input_image", "width", "height"],
+                },
+            )
+        )
+
+        # Crop image tool
+        self.add_tool(
+            AgentTool(
+                name="crop_image",
+                description="Crop image to specific area",
+                function=self._crop_image,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "width": {"type": "integer", "description": "Crop width in pixels"},
+                        "height": {"type": "integer", "description": "Crop height in pixels"},
+                        "x": {"type": "integer", "description": "X offset for crop", "default": 0},
+                        "y": {"type": "integer", "description": "Y offset for crop", "default": 0},
+                        "position": {
+                            "type": "string",
+                            "enum": ["center", "top-left", "top-right", "bottom-left", "bottom-right"],
+                            "default": "center",
+                        },
+                    },
+                    "required": ["input_image", "width", "height"],
+                },
+            )
+        )
+
+        # Rotate image tool
+        self.add_tool(
+            AgentTool(
+                name="rotate_image",
+                description="Rotate image by specified angle",
+                function=self._rotate_image,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "angle": {
+                            "type": "number",
+                            "description": "Rotation angle in degrees (0-360)",
+                        },
+                    },
+                    "required": ["input_image", "angle"],
+                },
+            )
+        )
+
+        # Convert image format tool
+        self.add_tool(
+            AgentTool(
+                name="convert_image_format",
+                description="Convert image to different format",
+                function=self._convert_image_format,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "target_format": {
+                            "type": "string",
+                            "enum": ["png", "jpeg", "jpg", "gif", "bmp", "tiff", "webp"],
+                            "description": "Target image format",
+                        },
+                    },
+                    "required": ["input_image", "target_format"],
+                },
+            )
+        )
+
+        # Apply grayscale tool
+        self.add_tool(
+            AgentTool(
+                name="apply_grayscale",
+                description="Convert image to grayscale/black and white",
+                function=self._apply_grayscale,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                    },
+                    "required": ["input_image"],
+                },
+            )
+        )
+
+        # Adjust image properties tool
+        self.add_tool(
+            AgentTool(
+                name="adjust_image_properties",
+                description="Adjust image brightness, contrast, and saturation",
+                function=self._adjust_image_properties,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "adjustments": {
+                            "type": "object",
+                            "properties": {
+                                "brightness": {"type": "integer", "description": "Brightness adjustment (-100 to 100)"},
+                                "contrast": {"type": "integer", "description": "Contrast adjustment (0 to 300)"},
+                                "saturation": {"type": "integer", "description": "Saturation adjustment (0 to 300)"},
+                            },
+                            "description": "Dictionary of adjustments to apply",
+                        },
+                    },
+                    "required": ["input_image", "adjustments"],
+                },
+            )
+        )
+
+        # Apply blur/sharpen effect tool
+        self.add_tool(
+            AgentTool(
+                name="apply_blur_effect",
+                description="Apply blur or sharpen effect to image",
+                function=self._apply_blur_effect,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "effect_params": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["blur", "sharpen"],
+                                    "description": "Type of effect to apply",
+                                },
+                                "intensity": {
+                                    "type": "string",
+                                    "enum": ["slight", "medium", "strong"],
+                                    "description": "Effect intensity",
+                                    "default": "medium",
+                                },
+                            },
+                            "required": ["type"],
+                            "description": "Effect parameters",
+                        },
+                    },
+                    "required": ["input_image", "effect_params"],
+                },
+            )
+        )
+        
+        # ========================
+        # WATERMARKING AND TRANSPARENCY TOOLS
+        # ========================
+        
+        # Apply image watermark tool
+        self.add_tool(
+            AgentTool(
+                name="apply_image_watermark",
+                description="Apply image watermark to another image",
+                function=self._apply_image_watermark,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "watermark_image": {
+                            "type": "string",
+                            "description": "Path to watermark image file",
+                        },
+                        "position": {
+                            "type": "string",
+                            "enum": ["top-left", "top-right", "bottom-left", "bottom-right", "center"],
+                            "default": "bottom-right",
+                            "description": "Position of watermark on image",
+                        },
+                        "opacity": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
+                            "default": 1.0,
+                            "description": "Opacity of watermark (0.0 to 1.0)",
+                        },
+                        "scale": {
+                            "type": "number",
+                            "minimum": 0.1,
+                            "maximum": 3.0,
+                            "default": 1.0,
+                            "description": "Scale factor for watermark size",
+                        },
+                        "margin": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 10,
+                            "description": "Margin from edge in pixels",
+                        },
+                    },
+                    "required": ["input_image", "watermark_image"],
+                },
+            )
+        )
+        
+        # Apply text watermark tool
+        self.add_tool(
+            AgentTool(
+                name="apply_text_watermark",
+                description="Apply text watermark to image",
+                function=self._apply_text_watermark,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "text": {
+                            "type": "string",
+                            "description": "Text to apply as watermark",
+                        },
+                        "position": {
+                            "type": "string",
+                            "enum": ["top-left", "top-right", "bottom-left", "bottom-right", "center"],
+                            "default": "bottom-right",
+                            "description": "Position of text watermark",
+                        },
+                        "font_size": {
+                            "type": "integer",
+                            "minimum": 8,
+                            "maximum": 200,
+                            "default": 24,
+                            "description": "Font size in pixels",
+                        },
+                        "font_color": {
+                            "type": "string",
+                            "default": "white",
+                            "description": "Font color (e.g., 'white', 'black', '#FF0000')",
+                        },
+                        "font_family": {
+                            "type": "string",
+                            "default": "Arial",
+                            "description": "Font family name",
+                        },
+                        "opacity": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
+                            "default": 1.0,
+                            "description": "Text opacity (0.0 to 1.0)",
+                        },
+                        "margin": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 10,
+                            "description": "Margin from edge in pixels",
+                        },
+                    },
+                    "required": ["input_image", "text"],
+                },
+            )
+        )
+        
+        # Remove background tool
+        self.add_tool(
+            AgentTool(
+                name="remove_background",
+                description="Remove background color from image and make it transparent",
+                function=self._remove_background,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "background_color": {
+                            "type": "string",
+                            "default": "white",
+                            "description": "Background color to remove (e.g., 'white', 'green', '#00FF00')",
+                        },
+                        "similarity": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
+                            "default": 0.3,
+                            "description": "Color similarity threshold (0.0 to 1.0)",
+                        },
+                        "blend": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
+                            "default": 0.1,
+                            "description": "Blend factor for edge smoothing (0.0 to 1.0)",
+                        },
+                    },
+                    "required": ["input_image"],
+                },
+            )
+        )
+        
+        # Create transparent canvas tool
+        self.add_tool(
+            AgentTool(
+                name="create_transparent_canvas",
+                description="Create a transparent canvas/background image",
+                function=self._create_transparent_canvas,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "width": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 8000,
+                            "description": "Canvas width in pixels",
+                        },
+                        "height": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 8000,
+                            "description": "Canvas height in pixels",
+                        },
+                        "color": {
+                            "type": "string",
+                            "default": "transparent",
+                            "description": "Canvas color (use 'transparent' for transparent canvas)",
+                        },
+                    },
+                    "required": ["width", "height"],
+                },
+            )
+        )
+        
+        # Apply alpha mask tool
+        self.add_tool(
+            AgentTool(
+                name="apply_alpha_mask",
+                description="Apply alpha mask to make parts of image transparent",
+                function=self._apply_alpha_mask,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "input_image": {
+                            "type": "string",
+                            "description": "Path to input image file",
+                        },
+                        "mask_image": {
+                            "type": "string",
+                            "description": "Path to alpha mask image file",
+                        },
+                    },
+                    "required": ["input_image", "mask_image"],
+                },
+            )
+        )
+
     # Media processing method implementations
     async def _extract_audio_from_video_orig(
         self, input_video: str, output_format: str = "mp3", audio_quality: str = "medium"
@@ -1637,6 +2141,904 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         if width and height:
             return f"{width}x{height}"
         return "Unknown"
+
+    # ========================
+    # IMAGE PROCESSING CORE METHODS  
+    # ========================
+
+    async def _resize_image(self, input_image: str, width: int, height: int):
+        """Resize image using FFmpeg"""
+        try:
+            # Resolve the input file path
+            resolved_input = self._resolve_media_file(input_image)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image file not found: {input_image}. Searched in docker_shared/input/media/ and current directory."}
+
+            output_filename = f"resized_image_{int(time.time())}.png"
+            
+            # Use FFmpeg for image resizing - supports many formats
+            ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf scale={width}:{height} ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Image resized successfully to {width}x{height}",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "execution_time": result["execution_time"],
+                    "final_dimensions": f"{width}x{height}",
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _crop_image(self, input_image: str, width: int, height: int, x: int = 0, y: int = 0, position: str = "center"):
+        """Crop image using FFmpeg"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image file not found: {input_image}"}
+
+            output_filename = f"cropped_image_{int(time.time())}.png"
+            
+            # Calculate crop position if specified as position name
+            if position == "center":
+                # We'll let FFmpeg auto-center by using crop filter with just width:height
+                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf crop={width}:{height} ${{OUTPUT}}"
+            else:
+                # Use specific x,y coordinates
+                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf crop={width}:{height}:{x}:{y} ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Image cropped successfully to {width}x{height}",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "execution_time": result["execution_time"],
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _rotate_image(self, input_image: str, angle: float):
+        """Rotate image using FFmpeg"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image file not found: {input_image}"}
+
+            output_filename = f"rotated_image_{int(time.time())}.png"
+            
+            # Convert angle to FFmpeg rotation filter
+            # FFmpeg rotate filter uses radians, but also has shortcuts for common angles
+            if angle == 90:
+                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf transpose=1 ${{OUTPUT}}"
+            elif angle == 180:
+                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf transpose=2,transpose=2 ${{OUTPUT}}"
+            elif angle == 270:
+                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf transpose=2 ${{OUTPUT}}"
+            else:
+                # For arbitrary angles, use rotate filter (angle in radians)
+                angle_rad = angle * 3.14159 / 180
+                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf rotate={angle_rad} ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Image rotated successfully by {angle} degrees",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "execution_time": result["execution_time"],
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _convert_image_format(self, input_image: str, target_format: str):
+        """Convert image format using FFmpeg"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image file not found: {input_image}"}
+
+            # Map format names to file extensions
+            format_extensions = {
+                "png": "png", "jpeg": "jpg", "jpg": "jpg", "gif": "gif",
+                "bmp": "bmp", "tiff": "tiff", "webp": "webp"
+            }
+            
+            ext = format_extensions.get(target_format.lower(), target_format.lower())
+            output_filename = f"converted_image_{int(time.time())}.{ext}"
+            
+            # FFmpeg automatically handles format conversion based on extension
+            ffmpeg_command = f"ffmpeg -y -i ${{input_image}} ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Image converted successfully to {target_format.upper()}",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "execution_time": result["execution_time"],
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _apply_grayscale(self, input_image: str):
+        """Convert image to grayscale using FFmpeg"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image file not found: {input_image}"}
+
+            output_filename = f"grayscale_image_{int(time.time())}.png"
+            
+            # Apply grayscale filter
+            ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf format=gray ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Image converted to grayscale successfully",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "execution_time": result["execution_time"],
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _adjust_image_properties(self, input_image: str, adjustments: Dict[str, Any]):
+        """Adjust image brightness, contrast, saturation using FFmpeg"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image file not found: {input_image}"}
+
+            output_filename = f"adjusted_image_{int(time.time())}.png"
+            
+            # Build FFmpeg filter for adjustments
+            filters = []
+            
+            if "brightness" in adjustments:
+                # FFmpeg eq filter: brightness range -1.0 to 1.0
+                brightness = float(adjustments["brightness"]) / 100.0  # Convert percentage to decimal
+                filters.append(f"eq=brightness={brightness}")
+                
+            if "contrast" in adjustments:
+                # FFmpeg eq filter: contrast range 0.0 to 3.0 (1.0 = normal)
+                contrast = float(adjustments["contrast"]) / 100.0
+                filters.append(f"eq=contrast={contrast}")
+                
+            if "saturation" in adjustments:
+                # FFmpeg eq filter: saturation range 0.0 to 3.0 (1.0 = normal)
+                saturation = float(adjustments["saturation"]) / 100.0
+                filters.append(f"eq=saturation={saturation}")
+            
+            if not filters:
+                return {"success": False, "error": "No valid adjustments specified"}
+                
+            filter_string = ",".join(filters)
+            ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf {filter_string} ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Image adjusted successfully",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "execution_time": result["execution_time"],
+                    "adjustments": adjustments,
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _apply_blur_effect(self, input_image: str, effect_params: Dict[str, Any]):
+        """Apply blur or sharpen effect using FFmpeg"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image file not found: {input_image}"}
+
+            output_filename = f"effect_image_{int(time.time())}.png"
+            
+            effect_type = effect_params.get("type", "blur")
+            intensity = effect_params.get("intensity", "medium")
+            
+            # Map intensity to values
+            intensity_map = {"slight": 1, "medium": 3, "strong": 5}
+            radius = intensity_map.get(intensity, 3)
+            
+            if effect_type == "blur":
+                # Gaussian blur filter
+                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf gblur=sigma={radius} ${{OUTPUT}}"
+            elif effect_type == "sharpen":
+                # Unsharp mask for sharpening
+                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf unsharp=5:5:{radius} ${{OUTPUT}}"
+            else:
+                return {"success": False, "error": f"Unknown effect type: {effect_type}"}
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"{effect_type.title()} effect applied successfully",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "execution_time": result["execution_time"],
+                    "effect": effect_params,
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _find_batch_images(self, pattern: str):
+        """Find images matching a pattern for batch processing"""
+        import glob
+        
+        # Search in multiple locations
+        search_paths = [
+            str(self.input_dir / pattern),
+            str(Path.cwd() / pattern),
+        ]
+        
+        found_images = []
+        for search_path in search_paths:
+            found_images.extend(glob.glob(search_path))
+            
+        # Filter for supported image formats
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'}
+        filtered_images = [
+            img for img in found_images 
+            if Path(img).suffix.lower() in image_extensions
+        ]
+        
+        return filtered_images
+
+    # ========================
+    # WATERMARKING AND TRANSPARENCY METHODS
+    # ========================
+
+    async def _apply_image_watermark(
+        self, 
+        input_image: str, 
+        watermark_image: str, 
+        position: str = "bottom-right",
+        opacity: float = 1.0,
+        scale: float = 1.0,
+        margin: int = 10
+    ):
+        """Apply image watermark to an image"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            resolved_watermark = self._resolve_media_file(watermark_image)
+            
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image not found: {input_image}"}
+            if not Path(resolved_watermark).exists():
+                return {"success": False, "error": f"Watermark image not found: {watermark_image}"}
+
+            output_filename = f"watermarked_{int(time.time())}.png"
+            
+            # Position calculations
+            position_map = {
+                "top-left": f"{margin}:{margin}",
+                "top-right": f"main_w-overlay_w-{margin}:{margin}",
+                "bottom-left": f"{margin}:main_h-overlay_h-{margin}",
+                "bottom-right": f"main_w-overlay_w-{margin}:main_h-overlay_h-{margin}",
+                "center": "(main_w-overlay_w)/2:(main_h-overlay_h)/2",
+            }
+            
+            pos = position_map.get(position, position_map["bottom-right"])
+            
+            # Build filter complex for watermark with scaling and opacity
+            if scale != 1.0 or opacity != 1.0:
+                # Scale watermark and adjust opacity
+                scale_filter = f"scale=iw*{scale}:ih*{scale}"
+                opacity_filter = f"format=rgba,colorchannelmixer=aa={opacity}"
+                watermark_filter = f"[1]{scale_filter},{opacity_filter}[wm]"
+                overlay_filter = f"[0][wm]overlay={pos}"
+                filter_complex = f"{watermark_filter};{overlay_filter}"
+            else:
+                # Simple overlay
+                filter_complex = f"overlay={pos}"
+
+            ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -i ${{watermark_image}} -filter_complex {filter_complex} ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input, "watermark_image": resolved_watermark},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Image watermark applied successfully",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "watermark_image": resolved_watermark,
+                    "position": position,
+                    "opacity": opacity,
+                    "scale": scale,
+                    "execution_time": result["execution_time"],
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _apply_text_watermark(
+        self,
+        input_image: str,
+        text: str,
+        position: str = "bottom-right",
+        font_size: int = 24,
+        font_color: str = "white",
+        background: bool = False,
+        background_color: str = "black@0.5",
+        margin: int = 10
+    ):
+        """Apply text watermark to an image"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image not found: {input_image}"}
+
+            output_filename = f"text_watermarked_{int(time.time())}.png"
+            
+            # Position calculations for text
+            position_map = {
+                "top-left": f"x={margin}:y={margin}",
+                "top-right": f"x=w-tw-{margin}:y={margin}",
+                "bottom-left": f"x={margin}:y=h-th-{margin}",
+                "bottom-right": f"x=w-tw-{margin}:y=h-th-{margin}",
+                "center": "x=(w-tw)/2:y=(h-th)/2",
+            }
+            
+            pos = position_map.get(position, position_map["bottom-right"])
+            
+            # Build drawtext filter
+            drawtext_params = [
+                f"text='{text}'",
+                f"fontsize={font_size}",
+                f"fontcolor={font_color}",
+                pos
+            ]
+            
+            if background:
+                drawtext_params.extend([
+                    "box=1",
+                    f"boxcolor={background_color}",
+                    "boxborderw=5"
+                ])
+            
+            drawtext_filter = "drawtext=" + ":".join(drawtext_params)
+            
+            ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf {drawtext_filter} ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Text watermark applied successfully",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "watermark_text": text,
+                    "position": position,
+                    "font_size": font_size,
+                    "font_color": font_color,
+                    "execution_time": result["execution_time"],
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _remove_background(self, input_image: str, background_color: str = "white", similarity: float = 0.3, blend: float = 0.1):
+        """Remove background color and make it transparent"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image file not found: {input_image}"}
+
+            output_filename = f"transparent_bg_{int(time.time())}.png"
+            
+            # Use chromakey filter to remove background
+            ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf chromakey={background_color}:similarity={similarity}:blend={blend} -pix_fmt rgba ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Background removed successfully",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "background_color": background_color,
+                    "similarity": similarity,
+                    "execution_time": result["execution_time"],
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _create_transparent_canvas(self, width: int, height: int, color: str = "transparent"):
+        """Create a transparent canvas"""
+        try:
+            output_filename = f"transparent_canvas_{int(time.time())}.png"
+            
+            # Create transparent canvas
+            ffmpeg_command = f"ffmpeg -y -f lavfi -i color=c={color}:size={width}x{height}:d=1 -frames:v 1 -pix_fmt rgba ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={},  # No input files needed
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Transparent canvas created successfully",
+                    "output_file": result.get("output_file", {}),
+                    "execution_time": result["execution_time"],
+                    "dimensions": f"{width}x{height}",
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _apply_alpha_mask(self, input_image: str, mask_image: str):
+        """Apply an alpha mask to make parts transparent"""
+        try:
+            resolved_input = self._resolve_media_file(input_image)
+            resolved_mask = self._resolve_media_file(mask_image)
+            
+            if not Path(resolved_input).exists():
+                return {"success": False, "error": f"Input image not found: {input_image}"}
+            if not Path(resolved_mask).exists():
+                return {"success": False, "error": f"Mask image not found: {mask_image}"}
+
+            output_filename = f"alpha_masked_{int(time.time())}.png"
+            
+            # Apply alpha mask
+            ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -i ${{mask_image}} -filter_complex [0][1]alphamerge -pix_fmt rgba ${{OUTPUT}}"
+
+            result = self.media_executor.execute_ffmpeg_command(
+                ffmpeg_command=ffmpeg_command,
+                input_files={"input_image": resolved_input, "mask_image": resolved_mask},
+                output_filename=output_filename,
+            )
+
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Alpha mask applied successfully",
+                    "output_file": result.get("output_file", {}),
+                    "input_image": resolved_input,
+                    "mask_image": resolved_mask,
+                    "execution_time": result["execution_time"],
+                }
+            else:
+                return result
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ========================
+    # IMAGE PARSING HELPER METHODS
+    # ========================
+
+    def _parse_image_dimensions(self, dimensions: str, user_message: str) -> tuple:
+        """Parse image dimensions from preferences or message"""
+        if dimensions:
+            dimensions_str = str(dimensions).lower().strip()
+            if "x" in dimensions_str:
+                try:
+                    width, height = dimensions_str.split("x")
+                    return int(width), int(height)
+                except:
+                    pass
+        
+        # Parse from user message
+        import re
+        
+        # Look for WIDTHxHEIGHT pattern
+        dimension_matches = re.findall(r"(\d{1,5})\s*[x×]\s*(\d{1,5})", user_message)
+        if dimension_matches:
+            width, height = dimension_matches[0]
+            return int(width), int(height)
+            
+        # Look for percentage
+        percent_match = re.search(r"(\d+)%", user_message)
+        if percent_match:
+            # Return special values to indicate percentage scaling
+            percent = int(percent_match.group(1))
+            return percent, percent  # Will be handled specially by caller
+            
+        return None, None
+
+    def _parse_crop_parameters(self, user_message: str) -> Dict[str, Any]:
+        """Parse crop parameters from user message"""
+        import re
+        
+        # Look for dimensions
+        dimension_matches = re.findall(r"(\d{1,5})\s*[x×]\s*(\d{1,5})", user_message)
+        if not dimension_matches:
+            return None
+            
+        width, height = map(int, dimension_matches[0])
+        
+        # Look for position
+        position = "center"  # default
+        if "top" in user_message.lower() and "left" in user_message.lower():
+            position = "top-left"
+        elif "top" in user_message.lower() and "right" in user_message.lower():
+            position = "top-right"
+        elif "bottom" in user_message.lower() and "left" in user_message.lower():
+            position = "bottom-left"
+        elif "bottom" in user_message.lower() and "right" in user_message.lower():
+            position = "bottom-right"
+        elif "center" in user_message.lower():
+            position = "center"
+            
+        return {"width": width, "height": height, "position": position}
+
+    def _parse_rotation_angle(self, user_message: str) -> Optional[float]:
+        """Parse rotation angle from user message"""
+        import re
+        
+        # Look for degree values
+        degree_matches = re.findall(r"(\d+(?:\.\d+)?)\s*(?:degrees?|°)", user_message, re.IGNORECASE)
+        if degree_matches:
+            return float(degree_matches[0])
+            
+        # Look for common rotation terms
+        message_lower = user_message.lower()
+        if "90" in message_lower or "quarter" in message_lower:
+            if "counter" in message_lower or "anti" in message_lower:
+                return 270
+            return 90
+        elif "180" in message_lower or "half" in message_lower or "upside" in message_lower:
+            return 180
+        elif "270" in message_lower:
+            return 270
+        elif "clockwise" in message_lower:
+            return 90
+        elif "counter" in message_lower:
+            return 270
+            
+        return None
+
+    def _parse_image_format(self, user_message: str) -> Optional[str]:
+        """Parse target image format from user message"""
+        message_lower = user_message.lower()
+        
+        formats = ["png", "jpeg", "jpg", "gif", "bmp", "tiff", "webp"]
+        for fmt in formats:
+            if fmt in message_lower:
+                return fmt
+                
+        return None
+
+    def _parse_image_adjustments(self, user_message: str) -> Dict[str, Any]:
+        """Parse image adjustment parameters from user message"""
+        import re
+        
+        adjustments = {}
+        message_lower = user_message.lower()
+        
+        # Parse brightness
+        brightness_match = re.search(r"brightness.*?([+-]?\d+)%?", message_lower)
+        if brightness_match:
+            adjustments["brightness"] = int(brightness_match.group(1))
+        elif "brighter" in message_lower:
+            adjustments["brightness"] = 30
+        elif "darker" in message_lower:
+            adjustments["brightness"] = -30
+            
+        # Parse contrast
+        contrast_match = re.search(r"contrast.*?(\d+)%?", message_lower)
+        if contrast_match:
+            adjustments["contrast"] = int(contrast_match.group(1))
+        elif "more contrast" in message_lower:
+            adjustments["contrast"] = 150
+        elif "less contrast" in message_lower:
+            adjustments["contrast"] = 70
+            
+        # Parse saturation
+        saturation_match = re.search(r"saturat.*?(\d+)%?", message_lower)
+        if saturation_match:
+            adjustments["saturation"] = int(saturation_match.group(1))
+        elif "more saturated" in message_lower:
+            adjustments["saturation"] = 150
+        elif "less saturated" in message_lower:
+            adjustments["saturation"] = 70
+            
+        return adjustments
+
+    def _parse_blur_parameters(self, user_message: str) -> Dict[str, Any]:
+        """Parse blur/sharpen parameters from user message"""
+        message_lower = user_message.lower()
+        
+        # Determine effect type
+        if "sharpen" in message_lower:
+            effect_type = "sharpen"
+        elif "blur" in message_lower:
+            effect_type = "blur"
+        else:
+            return None
+            
+        # Determine intensity
+        intensity = "medium"  # default
+        if "slight" in message_lower or "light" in message_lower:
+            intensity = "slight"
+        elif "strong" in message_lower or "heavy" in message_lower:
+            intensity = "strong"
+        elif "medium" in message_lower:
+            intensity = "medium"
+            
+        return {"type": effect_type, "intensity": intensity}
+
+    def _parse_batch_operation(self, user_message: str) -> Dict[str, Any]:
+        """Parse batch operation from user message"""
+        import re
+        
+        message_lower = user_message.lower()
+        
+        # Determine operation type
+        operation = None
+        if "resize" in message_lower:
+            operation = "resize"
+        elif "convert" in message_lower:
+            operation = "convert"
+        elif "grayscale" in message_lower or "gray" in message_lower:
+            operation = "grayscale"
+        else:
+            return None
+            
+        result = {"operation": operation}
+        
+        # Parse file pattern
+        if "*.png" in user_message or "png files" in message_lower:
+            result["pattern"] = "*.png"
+        elif "*.jpg" in user_message or "jpeg files" in message_lower or "jpg files" in message_lower:
+            result["pattern"] = "*.jpg"
+        elif "*.gif" in user_message or "gif files" in message_lower:
+            result["pattern"] = "*.gif"
+        else:
+            result["pattern"] = "*.*"  # All files
+            
+        # Parse operation-specific parameters
+        if operation == "resize":
+            dimension_matches = re.findall(r"(\d{1,5})\s*[x×]\s*(\d{1,5})", user_message)
+            if dimension_matches:
+                result["width"], result["height"] = map(int, dimension_matches[0])
+                
+        elif operation == "convert":
+            target_format = self._parse_image_format(user_message)
+            if target_format:
+                result["format"] = target_format
+                
+        return result
+
+    def _parse_watermark_parameters(self, user_message: str) -> Dict[str, Any]:
+        """Parse watermark parameters from user message"""
+        import re
+        
+        params = {}
+        message_lower = user_message.lower()
+        
+        # Parse position
+        if "top" in message_lower and "left" in message_lower:
+            params["position"] = "top-left"
+        elif "top" in message_lower and "right" in message_lower:
+            params["position"] = "top-right" 
+        elif "bottom" in message_lower and "left" in message_lower:
+            params["position"] = "bottom-left"
+        elif "bottom" in message_lower and "right" in message_lower:
+            params["position"] = "bottom-right"
+        elif "center" in message_lower:
+            params["position"] = "center"
+        else:
+            params["position"] = "bottom-right"  # default
+        
+        # Parse opacity
+        opacity_match = re.search(r"opacity[:\s]*(\d+)%?", message_lower)
+        if opacity_match:
+            opacity = int(opacity_match.group(1))
+            params["opacity"] = opacity / 100.0 if opacity > 1 else opacity
+        
+        # Parse scale/size
+        scale_match = re.search(r"(?:scale|size)[:\s]*(\d+)%?", message_lower)
+        if scale_match:
+            scale = int(scale_match.group(1))
+            params["scale"] = scale / 100.0 if scale > 1 else scale
+        
+        # Parse text content (look for quoted text)
+        text_match = re.search(r"['\"]([^'\"]+)['\"]", user_message)
+        if text_match:
+            params["text"] = text_match.group(1)
+        
+        # Parse font size
+        size_match = re.search(r"(?:font[:\s]*)?size[:\s]*(\d+)", message_lower)
+        if size_match:
+            params["font_size"] = int(size_match.group(1))
+        
+        # Parse color
+        color_match = re.search(r"color[:\s]*(\w+)", message_lower)
+        if color_match:
+            params["font_color"] = color_match.group(1)
+        
+        # Check for background box
+        if "background" in message_lower or "box" in message_lower:
+            params["background"] = True
+        
+        return params
+
+    def _parse_transparency_parameters(self, user_message: str) -> Dict[str, Any]:
+        """Parse transparency/background removal parameters from user message"""
+        import re
+        
+        params = {}
+        message_lower = user_message.lower()
+        
+        # Parse background color
+        if "white" in message_lower:
+            params["background_color"] = "white"
+        elif "green" in message_lower:
+            params["background_color"] = "green"
+        elif "blue" in message_lower:
+            params["background_color"] = "blue"
+        elif "red" in message_lower:
+            params["background_color"] = "red"
+        elif "black" in message_lower:
+            params["background_color"] = "black"
+        else:
+            params["background_color"] = "white"  # default
+        
+        # Parse similarity tolerance
+        similarity_match = re.search(r"(?:similarity|tolerance)[:\s]*(\d+(?:\.\d+)?)%?", message_lower)
+        if similarity_match:
+            similarity = float(similarity_match.group(1))
+            params["similarity"] = similarity / 100.0 if similarity > 1 else similarity
+        
+        # Parse blend amount
+        blend_match = re.search(r"blend[:\s]*(\d+(?:\.\d+)?)%?", message_lower)
+        if blend_match:
+            blend = float(blend_match.group(1))
+            params["blend"] = blend / 100.0 if blend > 1 else blend
+        
+        return params
+
+    def _extract_watermark_text(self, user_message: str) -> str:
+        """Extract watermark text from user message"""
+        import re
+        
+        # Look for quoted text
+        quoted_match = re.search(r'["\']([^"\']+)["\']', user_message)
+        if quoted_match:
+            return quoted_match.group(1)
+        
+        # Look for common watermark phrases
+        copyright_match = re.search(r'©\s*\d{4}.*?(?:\s|$)', user_message)
+        if copyright_match:
+            return copyright_match.group(0).strip()
+        
+        # Look for "text:" pattern
+        text_match = re.search(r'text:\s*([^,\n]+)', user_message, re.IGNORECASE)
+        if text_match:
+            return text_match.group(1).strip()
+        
+        # Look for common watermark words
+        watermark_words = ["copyright", "confidential", "draft", "sample", "watermark"]
+        for word in watermark_words:
+            if word in user_message.lower():
+                return word.upper()
+        
+        return None
+
+    def _identify_watermark_files(self, user_message: str, media_files: List[str]) -> Dict[str, str]:
+        """Identify which file is the main image and which is the watermark"""
+        result = {"main_image": None, "watermark_image": None}
+        
+        if len(media_files) >= 2:
+            # Assume first file is main image, second is watermark
+            result["main_image"] = media_files[0]
+            result["watermark_image"] = media_files[1]
+        elif len(media_files) == 1:
+            result["main_image"] = media_files[0]
+            
+            # Look for watermark file mentions
+            message_lower = user_message.lower()
+            watermark_indicators = ["watermark", "logo", "stamp", "mark"]
+            
+            for indicator in watermark_indicators:
+                if indicator in message_lower:
+                    # Try to extract watermark filename
+                    import re
+                    # Look for filename patterns near watermark indicators
+                    pattern = rf"{indicator}\s*[:\s]*([a-zA-Z0-9_.-]+\.(png|jpg|jpeg|gif|bmp))"
+                    match = re.search(pattern, message_lower)
+                    if match:
+                        result["watermark_image"] = match.group(1)
+                        break
+        
+        return result
 
     # == end==
     async def _convert_video_format_orig(
@@ -2070,6 +3472,440 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             # No LLM or context available, use regular method
             return await self._handle_video_conversion(media_files, output_prefs, user_message)
 
+    # ========================
+    # IMAGE PROCESSING HANDLERS
+    # ========================
+
+    async def _handle_image_resize(
+        self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
+        """Handle image resizing with FFmpeg"""
+        
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                return f"I can resize images. Did you mean to resize **{recent_file}**? Please specify dimensions."
+            else:
+                return (
+                    "I can resize images! Please provide:\n\n"
+                    "**1. Image file path**\n"
+                    "**2. Target dimensions**\n\n"
+                    "**Examples:**\n"
+                    "• 'Resize image.png to 800x600'\n"
+                    "• 'Scale photo.jpg to 1920x1080'\n"
+                    "• 'Resize picture to 50% size'"
+                )
+
+        input_file = image_files[0]
+        dimensions = output_prefs.get("dimensions")
+        
+        # Parse dimensions from user message or preferences
+        width, height = self._parse_image_dimensions(dimensions, user_message)
+        
+        if not width or not height:
+            return (
+                f"I need specific dimensions to resize **{input_file}**.\n\n"
+                f"**Please specify:**\n"
+                f"• Exact dimensions: '800x600', '1920x1080'\n"
+                f"• Percentage: '50%', '200%'\n\n"
+                f"**Example:** 'Resize {input_file} to 800x600'"
+            )
+
+        try:
+            result = await self._resize_image(input_file, width, height)
+            
+            if result["success"]:
+                return (
+                    f"✅ **Image Resize Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"🖼️ **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f"📏 **Dimensions:** {width}x{height}\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n"
+                    f"📊 **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
+                    f"Your resized image is ready! 🎉"
+                )
+            else:
+                return f"❌ **Image resize failed:** {result.get('error', 'Unknown error')}"
+                
+        except Exception as e:
+            return f"❌ **Error during image resize:** {str(e)}"
+
+    async def _handle_image_crop(
+        self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
+        """Handle image cropping"""
+        
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                return f"I can crop images. Did you mean to crop **{recent_file}**? Please specify crop area."
+            else:
+                return (
+                    "I can crop images! Please provide:\n\n"
+                    "**1. Image file path**\n"
+                    "**2. Crop dimensions and position**\n\n"
+                    "**Examples:**\n"
+                    "• 'Crop image.png to 500x500 from center'\n"
+                    "• 'Crop photo.jpg 800x600 from top-left'\n"
+                    "• 'Crop to square 400x400'"
+                )
+
+        input_file = image_files[0]
+        
+        # Parse crop parameters from user message
+        crop_params = self._parse_crop_parameters(user_message)
+        
+        if not crop_params:
+            return (
+                f"I need crop specifications for **{input_file}**.\n\n"
+                f"**Please specify:**\n"
+                f"• Size: '500x500', '800x600'\n"
+                f"• Position: 'center', 'top-left', 'bottom-right'\n\n"
+                f"**Example:** 'Crop {input_file} to 500x500 from center'"
+            )
+
+        try:
+            result = await self._crop_image(input_file, **crop_params)
+            
+            if result["success"]:
+                return (
+                    f"✅ **Image Crop Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"✂️ **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f"📏 **Crop Area:** {crop_params.get('width')}x{crop_params.get('height')}\n"
+                    f"📍 **Position:** {crop_params.get('position', 'center')}\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your cropped image is ready! 🎉"
+                )
+            else:
+                return f"❌ **Image crop failed:** {result.get('error', 'Unknown error')}"
+                
+        except Exception as e:
+            return f"❌ **Error during image crop:** {str(e)}"
+
+    async def _handle_image_rotate(
+        self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
+        """Handle image rotation"""
+        
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                return f"I can rotate images. Did you mean to rotate **{recent_file}**? Please specify rotation angle."
+            else:
+                return (
+                    "I can rotate images! Please provide:\n\n"
+                    "**1. Image file path**\n"
+                    "**2. Rotation angle**\n\n"
+                    "**Examples:**\n"
+                    "• 'Rotate image.png by 90 degrees'\n"
+                    "• 'Turn photo.jpg 180 degrees'\n"
+                    "• 'Flip picture clockwise'"
+                )
+
+        input_file = image_files[0]
+        
+        # Parse rotation angle from user message
+        angle = self._parse_rotation_angle(user_message)
+        
+        if angle is None:
+            return (
+                f"I need a rotation angle for **{input_file}**.\n\n"
+                f"**Please specify:**\n"
+                f"• Degrees: '90', '180', '270', '45'\n"
+                f"• Direction: 'clockwise', 'counterclockwise'\n\n"
+                f"**Example:** 'Rotate {input_file} by 90 degrees'"
+            )
+
+        try:
+            result = await self._rotate_image(input_file, angle)
+            
+            if result["success"]:
+                return (
+                    f"✅ **Image Rotation Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"🔄 **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f"📐 **Rotation:** {angle}°\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your rotated image is ready! 🎉"
+                )
+            else:
+                return f"❌ **Image rotation failed:** {result.get('error', 'Unknown error')}"
+                
+        except Exception as e:
+            return f"❌ **Error during image rotation:** {str(e)}"
+
+    async def _handle_image_convert(
+        self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
+        """Handle image format conversion"""
+        
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                return f"I can convert image formats. Did you mean to convert **{recent_file}**? Please specify target format."
+            else:
+                return (
+                    "I can convert image formats! Please provide:\n\n"
+                    "**1. Image file path**\n"
+                    "**2. Target format**\n\n"
+                    "**Supported formats:** PNG, JPEG, GIF, BMP, TIFF, WEBP\n\n"
+                    "**Examples:**\n"
+                    "• 'Convert image.png to JPEG'\n"
+                    "• 'Change photo.jpg to PNG'"
+                )
+
+        input_file = image_files[0]
+        
+        # Parse target format from user message or preferences
+        target_format = output_prefs.get("format") or self._parse_image_format(user_message)
+        
+        if not target_format:
+            return (
+                f"I need a target format to convert **{input_file}**.\n\n"
+                f"**Supported formats:**\n"
+                f"• PNG (best quality, larger size)\n"
+                f"• JPEG (good quality, smaller size)\n"
+                f"• GIF (animations, limited colors)\n"
+                f"• BMP (uncompressed)\n"
+                f"• WEBP (modern, efficient)\n\n"
+                f"**Example:** 'Convert {input_file} to PNG'"
+            )
+
+        try:
+            result = await self._convert_image_format(input_file, target_format)
+            
+            if result["success"]:
+                return (
+                    f"✅ **Image Format Conversion Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"🔄 **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f"📊 **Format:** {target_format.upper()}\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n"
+                    f"📁 **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
+                    f"Your converted image is ready! 🎉"
+                )
+            else:
+                return f"❌ **Image format conversion failed:** {result.get('error', 'Unknown error')}"
+                
+        except Exception as e:
+            return f"❌ **Error during image format conversion:** {str(e)}"
+
+    async def _handle_image_grayscale(
+        self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
+        """Handle grayscale conversion"""
+        
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                return f"I can convert images to grayscale. Did you mean to convert **{recent_file}** to black and white?"
+            else:
+                return (
+                    "I can convert images to grayscale! Please provide an image file path.\n\n"
+                    "**Example:** 'Convert image.png to grayscale'"
+                )
+
+        input_file = image_files[0]
+
+        try:
+            result = await self._apply_grayscale(input_file)
+            
+            if result["success"]:
+                return (
+                    f"✅ **Grayscale Conversion Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"⚫ **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f"🎨 **Effect:** Black & White\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your grayscale image is ready! 🎉"
+                )
+            else:
+                return f"❌ **Grayscale conversion failed:** {result.get('error', 'Unknown error')}"
+                
+        except Exception as e:
+            return f"❌ **Error during grayscale conversion:** {str(e)}"
+
+    async def _handle_image_adjust(
+        self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
+        """Handle image adjustments (brightness, contrast, saturation)"""
+        
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                return f"I can adjust image properties. Did you mean to adjust **{recent_file}**? Please specify what to adjust."
+            else:
+                return (
+                    "I can adjust image properties! Please provide:\n\n"
+                    "**1. Image file path**\n"
+                    "**2. Adjustment type and value**\n\n"
+                    "**Examples:**\n"
+                    "• 'Increase brightness of image.png by 20%'\n"
+                    "• 'Adjust contrast to 150%'\n"
+                    "• 'Make photo.jpg more saturated'"
+                )
+
+        input_file = image_files[0]
+        
+        # Parse adjustment parameters from user message
+        adjustments = self._parse_image_adjustments(user_message)
+        
+        if not adjustments:
+            return (
+                f"I need adjustment specifications for **{input_file}**.\n\n"
+                f"**Available adjustments:**\n"
+                f"• Brightness: 'brightness +20%', 'brighter'\n"
+                f"• Contrast: 'contrast 150%', 'more contrast'\n"
+                f"• Saturation: 'saturation 80%', 'less saturated'\n\n"
+                f"**Example:** 'Increase brightness of {input_file} by 30%'"
+            )
+
+        try:
+            result = await self._adjust_image_properties(input_file, adjustments)
+            
+            if result["success"]:
+                adj_desc = ", ".join([f"{k}: {v}" for k, v in adjustments.items()])
+                return (
+                    f"✅ **Image Adjustment Completed**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"🎨 **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f"⚙️ **Adjustments:** {adj_desc}\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your adjusted image is ready! 🎉"
+                )
+            else:
+                return f"❌ **Image adjustment failed:** {result.get('error', 'Unknown error')}"
+                
+        except Exception as e:
+            return f"❌ **Error during image adjustment:** {str(e)}"
+
+    async def _handle_image_blur(
+        self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
+        """Handle image blur/sharpen effects"""
+        
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                return f"I can apply blur/sharpen effects. Did you mean to modify **{recent_file}**? Please specify the effect."
+            else:
+                return (
+                    "I can apply blur and sharpen effects! Please provide:\n\n"
+                    "**1. Image file path**\n"
+                    "**2. Effect type and intensity**\n\n"
+                    "**Examples:**\n"
+                    "• 'Blur image.png slightly'\n"
+                    "• 'Sharpen photo.jpg'\n"
+                    "• 'Apply gaussian blur with radius 5'"
+                )
+
+        input_file = image_files[0]
+        
+        # Parse blur/sharpen parameters from user message
+        effect_params = self._parse_blur_parameters(user_message)
+        
+        if not effect_params:
+            return (
+                f"I need effect specifications for **{input_file}**.\n\n"
+                f"**Available effects:**\n"
+                f"• Blur: 'blur', 'gaussian blur', 'soft blur'\n"
+                f"• Sharpen: 'sharpen', 'enhance sharpness'\n"
+                f"• Intensity: 'slight', 'medium', 'strong', or radius value\n\n"
+                f"**Example:** 'Apply medium blur to {input_file}'"
+            )
+
+        try:
+            result = await self._apply_blur_effect(input_file, effect_params)
+            
+            if result["success"]:
+                effect_desc = f"{effect_params.get('type', 'blur')} (intensity: {effect_params.get('intensity', 'medium')})"
+                return (
+                    f"✅ **Image Effect Applied**\n\n"
+                    f"📁 **Input:** {input_file}\n"
+                    f"✨ **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f"🎭 **Effect:** {effect_desc}\n"
+                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your processed image is ready! 🎉"
+                )
+            else:
+                return f"❌ **Image effect failed:** {result.get('error', 'Unknown error')}"
+                
+        except Exception as e:
+            return f"❌ **Error during image effect processing:** {str(e)}"
+
+    async def _handle_batch_image_processing(
+        self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+    ) -> str:
+        """Handle batch processing of multiple images"""
+        
+        # Parse batch operation from user message
+        batch_operation = self._parse_batch_operation(user_message)
+        
+        if not batch_operation:
+            return (
+                "I can batch process multiple images! Please specify:\n\n"
+                "**1. Operation type**\n"
+                "**2. File pattern or folder**\n\n"
+                "**Examples:**\n"
+                "• 'Resize all PNG files to 800x600'\n"
+                "• 'Convert all JPEG files to PNG'\n"
+                "• 'Apply grayscale to all images in folder'\n"
+                "• 'Batch resize *.jpg to 50% size'"
+            )
+
+        try:
+            # Find images to process
+            images_to_process = await self._find_batch_images(batch_operation.get("pattern", "*.png"))
+            
+            if not images_to_process:
+                return (
+                    f"❌ **No images found** matching pattern: {batch_operation.get('pattern', 'N/A')}\n\n"
+                    f"**Searched in:**\n"
+                    f"• docker_shared/input/media/\n"
+                    f"• Current directory\n\n"
+                    f"**Supported formats:** PNG, JPEG, GIF, BMP, TIFF"
+                )
+
+            # Process each image
+            results = []
+            failed_count = 0
+            
+            for i, image_file in enumerate(images_to_process):
+                try:
+                    if batch_operation["operation"] == "resize":
+                        result = await self._resize_image(image_file, batch_operation["width"], batch_operation["height"])
+                    elif batch_operation["operation"] == "convert":
+                        result = await self._convert_image_format(image_file, batch_operation["format"])
+                    elif batch_operation["operation"] == "grayscale":
+                        result = await self._apply_grayscale(image_file)
+                    else:
+                        continue
+                        
+                    if result["success"]:
+                        results.append(f"✅ {Path(image_file).name}")
+                    else:
+                        results.append(f"❌ {Path(image_file).name}")
+                        failed_count += 1
+                        
+                except Exception:
+                    results.append(f"❌ {Path(image_file).name}")
+                    failed_count += 1
+
+            success_count = len(images_to_process) - failed_count
+            
+            return (
+                f"✅ **Batch Processing Completed**\n\n"
+                f"📊 **Results:** {success_count}/{len(images_to_process)} successful\n"
+                f"⚙️ **Operation:** {batch_operation['operation']}\n"
+                f"📁 **Processed files:**\n" + "\n".join(results[:10]) +
+                (f"\n... and {len(results) - 10} more" if len(results) > 10 else "") +
+                f"\n\n🎉 Batch processing complete!"
+            )
+                
+        except Exception as e:
+            return f"❌ **Error during batch processing:** {str(e)}"
+
     def get_agent_status(self) -> Dict[str, Any]:
         """Get current agent status and configuration"""
         return {
@@ -2125,9 +3961,291 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 "media_trimming",
                 "thumbnail_creation",
                 "media_info_retrieval",
+                "image_resizing",
+                "image_cropping",
+                "image_rotation",
+                "image_format_conversion",
+                "grayscale_conversion",
+                "image_adjustments",
+                "blur_sharpen_effects",
+                "batch_image_processing",
+                "image_watermarking",
+                "text_watermarking",
+                "background_removal",
+                "transparent_canvas_creation",
+                "alpha_mask_application",
                 "context_awareness",
                 "ffmpeg_processing",
                 "docker_execution",
                 "streaming_responses",
             ],
         }
+# ========================
+# WATERMARKING AND TRANSPARENCY HANDLERS
+# ========================
+
+async def _handle_watermark_application(
+    self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+) -> str:
+    """Handle image watermarking requests"""
+    
+    # Parse watermark parameters from user message
+    watermark_params = self._parse_watermark_parameters(user_message)
+    
+    if not watermark_params:
+        return (
+            "I can apply image watermarks! Please specify:\n\n"
+            "**1. Source image to watermark**\n"
+            "**2. Watermark image file**\n"
+            "**3. Position (optional)**\n\n"
+            "**Examples:**\n"
+            "• 'Add logo.png watermark to photo.jpg at bottom-right'\n"
+            "• 'Apply watermark.png to image.jpg with 70% opacity'\n"
+            "• 'Watermark photo.jpg with logo.png at top-left corner'"
+        )
+        
+    try:
+        # Get input image
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                input_image = recent_file
+            else:
+                return "❌ **No image specified.** Please provide an image file to watermark."
+        else:
+            input_image = image_files[0]
+        
+        # Get watermark image from parameters
+        watermark_image = watermark_params.get("watermark_file")
+        if not watermark_image:
+            return "❌ **No watermark image specified.** Please provide a watermark image file."
+        
+        # Apply image watermark
+        result = await self._apply_image_watermark(
+            input_image=input_image,
+            watermark_image=watermark_image,
+            position=watermark_params.get("position", "bottom-right"),
+            opacity=watermark_params.get("opacity", 1.0),
+            scale=watermark_params.get("scale", 1.0),
+            margin=watermark_params.get("margin", 10)
+        )
+        
+        if result["success"]:
+            return (
+                f"✅ **Watermark Applied Successfully!**\n\n"
+                f"📁 **Source:** {input_image}\n"
+                f"🖼️ **Watermark:** {watermark_image}\n"
+                f"📍 **Position:** {watermark_params.get('position', 'bottom-right')}\n"
+                f"🎨 **Opacity:** {watermark_params.get('opacity', 1.0)*100:.0f}%\n"
+                f"📏 **Scale:** {watermark_params.get('scale', 1.0)*100:.0f}%\n"
+                f"💾 **Output:** {result['output_file']}\n"
+                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your watermarked image is ready! 🎉"
+            )
+        else:
+            return f"❌ **Watermark application failed:** {result.get('error', 'Unknown error')}"
+            
+    except Exception as e:
+        return f"❌ **Error during watermark application:** {str(e)}"
+
+async def _handle_text_watermark_application(
+    self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+) -> str:
+    """Handle text watermarking requests"""
+    
+    # Parse text watermark parameters from user message
+    watermark_text = self._extract_watermark_text(user_message)
+    watermark_params = self._parse_watermark_parameters(user_message)
+    
+    if not watermark_text:
+        return (
+            "I can add text watermarks! Please specify:\n\n"
+            "**1. Source image**\n"
+            "**2. Text to add**\n"
+            "**3. Position (optional)**\n\n"
+            "**Examples:**\n"
+            "• 'Add text watermark \"Copyright 2024\" to photo.jpg'\n"
+            "• 'Apply \"DRAFT\" text watermark at top-left of image.png'\n"
+            "• 'Watermark photo.jpg with text \"My Company\" at bottom center'"
+        )
+        
+    try:
+        # Get input image
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                input_image = recent_file
+            else:
+                return "❌ **No image specified.** Please provide an image file to watermark."
+        else:
+            input_image = image_files[0]
+        
+        # Apply text watermark
+        result = await self._apply_text_watermark(
+            input_image=input_image,
+            text=watermark_text,
+            position=watermark_params.get("position", "bottom-right"),
+            font_size=watermark_params.get("font_size", 24),
+            font_color=watermark_params.get("font_color", "white"),
+            font_family=watermark_params.get("font_family", "Arial"),
+            opacity=watermark_params.get("opacity", 1.0),
+            margin=watermark_params.get("margin", 10)
+        )
+        
+        if result["success"]:
+            return (
+                f"✅ **Text Watermark Applied Successfully!**\n\n"
+                f"📁 **Source:** {input_image}\n"
+                f"📝 **Text:** {watermark_text}\n"
+                f"📍 **Position:** {watermark_params.get('position', 'bottom-right')}\n"
+                f"🎨 **Color:** {watermark_params.get('font_color', 'white')}\n"
+                f"📏 **Size:** {watermark_params.get('font_size', 24)}px\n"
+                f"💾 **Output:** {result['output_file']}\n"
+                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your text watermarked image is ready! 🎉"
+            )
+        else:
+            return f"❌ **Text watermark application failed:** {result.get('error', 'Unknown error')}"
+            
+    except Exception as e:
+        return f"❌ **Error during text watermark application:** {str(e)}"
+
+async def _handle_background_removal(
+    self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+) -> str:
+    """Handle background removal requests"""
+    
+    # Parse transparency parameters from user message
+    transparency_params = self._parse_transparency_parameters(user_message)
+    
+    try:
+        # Get input image
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                input_image = recent_file
+            else:
+                return "❌ **No image specified.** Please provide an image file for background removal."
+        else:
+            input_image = image_files[0]
+        
+        # Remove background
+        result = await self._remove_background(
+            input_image=input_image,
+            background_color=transparency_params.get("background_color", "white"),
+            similarity=transparency_params.get("similarity", 0.3),
+            blend=transparency_params.get("blend", 0.1)
+        )
+        
+        if result["success"]:
+            return (
+                f"✅ **Background Removed Successfully!**\n\n"
+                f"📁 **Source:** {input_image}\n"
+                f"🎨 **Background Color:** {transparency_params.get('background_color', 'white')}\n"
+                f"🎯 **Similarity:** {transparency_params.get('similarity', 0.3)*100:.0f}%\n"
+                f"🌀 **Blend:** {transparency_params.get('blend', 0.1)*100:.0f}%\n"
+                f"💾 **Output:** {result['output_file']}\n"
+                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your transparent image is ready! 🎉"
+            )
+        else:
+            return f"❌ **Background removal failed:** {result.get('error', 'Unknown error')}"
+            
+    except Exception as e:
+        return f"❌ **Error during background removal:** {str(e)}"
+
+async def _handle_transparent_canvas_creation(
+    self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+) -> str:
+    """Handle transparent canvas creation requests"""
+    
+    # Parse dimensions from user message
+    dimensions = self._parse_image_dimensions(output_prefs, user_message)
+    
+    if not dimensions or not all(dimensions):
+        return (
+            "I can create transparent canvases! Please specify dimensions:\n\n"
+            "**Examples:**\n"
+            "• 'Create a transparent canvas 800x600'\n"
+            "• 'Make a blank transparent image 1920x1080'\n"
+            "• 'Generate empty transparent canvas 500x500'"
+        )
+        
+    try:
+        width, height = dimensions
+        
+        # Create transparent canvas
+        result = await self._create_transparent_canvas(
+            width=width,
+            height=height,
+            color="transparent"
+        )
+        
+        if result["success"]:
+            return (
+                f"✅ **Transparent Canvas Created Successfully!**\n\n"
+                f"📏 **Dimensions:** {width}x{height}\n"
+                f"🎨 **Type:** Transparent RGBA\n"
+                f"💾 **Output:** {result['output_file']}\n"
+                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your transparent canvas is ready! 🎉"
+            )
+        else:
+            return f"❌ **Transparent canvas creation failed:** {result.get('error', 'Unknown error')}"
+            
+    except Exception as e:
+        return f"❌ **Error during transparent canvas creation:** {str(e)}"
+
+async def _handle_alpha_mask_application(
+    self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
+) -> str:
+    """Handle alpha mask application requests"""
+    
+    # Parse mask parameters from user message
+    mask_files = self._identify_watermark_files(user_message, file_type="mask")
+    
+    if not mask_files:
+        return (
+            "I can apply alpha masks! Please specify:\n\n"
+            "**1. Source image**\n"
+            "**2. Mask image file**\n\n"
+            "**Examples:**\n"
+            "• 'Apply mask.png to photo.jpg'\n"
+            "• 'Use alpha_mask.png on image.jpg'\n"
+            "• 'Apply transparency mask shape.png to picture.jpg'"
+        )
+        
+    try:
+        # Get input image
+        if not image_files:
+            recent_file = self.get_recent_media_file()
+            if recent_file:
+                input_image = recent_file
+            else:
+                return "❌ **No image specified.** Please provide an image file for alpha mask application."
+        else:
+            input_image = image_files[0]
+        
+        # Get mask image
+        mask_image = mask_files[0]
+        
+        # Apply alpha mask
+        result = await self._apply_alpha_mask(
+            input_image=input_image,
+            mask_image=mask_image
+        )
+        
+        if result["success"]:
+            return (
+                f"✅ **Alpha Mask Applied Successfully!**\n\n"
+                f"📁 **Source:** {input_image}\n"
+                f"🎭 **Mask:** {mask_image}\n"
+                f"💾 **Output:** {result['output_file']}\n"
+                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your masked image is ready! 🎉"
+            )
+        else:
+            return f"❌ **Alpha mask application failed:** {result.get('error', 'Unknown error')}"
+            
+    except Exception as e:
+        return f"❌ **Error during alpha mask application:** {str(e)}"
