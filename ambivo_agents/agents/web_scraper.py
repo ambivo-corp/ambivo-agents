@@ -156,7 +156,7 @@ async def scrape_url():
                 'success': True,
                 'url': '{task.url}',
                 'title': title,
-                'content': content[:5000],  # Limit content
+                'content': content[:self.scraper_config.get("max_content_length", 75000)],  # Configurable content limit
                 'content_length': len(content),
                 'links': links,
                 'images': images,
@@ -960,19 +960,88 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             )
         )
 
-    async def _scrape_url(self, url: str, method: str = "auto", **kwargs) -> Dict[str, Any]:
-        """Unified URL scraping method"""
+    def _save_scraped_content_to_file(self, scraped_data: Dict[str, Any], topic: str = "web_scraping") -> str:
+        """Save scraped content to shared file for handoff"""
+        import os
+        from datetime import datetime
+        
+        # Create handoff directory if it doesn't exist  
         try:
+            shared_manager = get_shared_manager()
+            base_path = getattr(shared_manager, 'base_path', None) or getattr(shared_manager, 'shared_path', './docker_shared')
+        except:
+            base_path = './docker_shared'
+        
+        # Create session-based topic-specific subdirectory for content isolation
+        # This ensures all scrapes for the same session/topic go to the same directory
+        topic_clean = topic.replace(' ', '_').replace('-', '_')[:50]
+        
+        # Use session_id if available, otherwise create session-based identifier
+        if hasattr(self, 'session_id') and self.session_id:
+            session_identifier = self.session_id[:8]  # First 8 chars of session ID
+        elif hasattr(self, 'user_id') and self.user_id:
+            session_identifier = f"{self.user_id}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+        else:
+            session_identifier = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        topic_subdir = f"scraper_{topic_clean}_{session_identifier}"
+        
+        handoff_dir = os.path.join(base_path, "handoff", "scraper", topic_subdir)
+        os.makedirs(handoff_dir, exist_ok=True)
+        
+        # Create filename with timestamp
+        file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        url_hash = str(hash(scraped_data.get('url', 'unknown')))[-6:]
+        filename = f"scraped_{topic.replace(' ', '_')}_{url_hash}_{file_timestamp}.json"
+        filepath = os.path.join(handoff_dir, filename)
+        
+        # Extract meaningful content for the file
+        content_summary = {
+            'url': scraped_data.get('url', 'N/A'),
+            'title': scraped_data.get('title', 'N/A'),
+            'success': scraped_data.get('success', False),
+            'scraped_at': datetime.now().isoformat(),
+            'topic': topic,
+            'content_length': len(str(scraped_data.get('content', ''))),
+            'raw_content': scraped_data.get('content', ''),
+            'status_code': scraped_data.get('status_code', 0),
+            'method': scraped_data.get('method', 'unknown'),
+            'links': scraped_data.get('links', [])[:10],  # First 10 links
+            'images': scraped_data.get('images', [])[:5],  # First 5 images
+        }
+        
+        # Save to JSON file
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(content_summary, f, indent=2, ensure_ascii=False)
+        
+        return filepath
+
+    async def _scrape_url(self, url: str, method: str = "auto", **kwargs) -> Dict[str, Any]:
+        """Unified URL scraping method with file saving"""
+        try:
+            # Perform the actual scraping
             if (
                 self.execution_mode == "docker"
                 and self.docker_executor
                 and self.docker_executor.available
             ):
-                return await self._scrape_with_docker(url, method, **kwargs)
+                result = await self._scrape_with_docker(url, method, **kwargs)
             elif self.execution_mode == "proxy" and self.proxy_config:
-                return await self._scrape_with_proxy(url, method, **kwargs)
+                result = await self._scrape_with_proxy(url, method, **kwargs)
             else:
-                return await self._scrape_locally(url, method, **kwargs)
+                result = await self._scrape_locally(url, method, **kwargs)
+            
+            # Save successful scrapes to file for handoff
+            if result.get('success') and result.get('content'):
+                topic = kwargs.get('topic', 'web_scraping')
+                try:
+                    filepath = self._save_scraped_content_to_file(result, topic)
+                    result['saved_to_file'] = filepath
+                    self.logger.info(f"Scraped content saved to: {filepath}")
+                except Exception as save_error:
+                    self.logger.warning(f"Failed to save scraped content: {save_error}")
+            
+            return result
 
         except Exception as e:
             self.logger.error(f"Scraping error for {url}: {e}")
@@ -1084,7 +1153,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                     "success": True,
                     "url": url,
                     "title": title,
-                    "content": content[:5000],
+                    "content": content[:self.scraper_config.get("max_content_length", 75000)],
                     "content_length": len(content),
                     "links": links,
                     "images": images,
@@ -1170,7 +1239,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 "success": True,
                 "url": url,
                 "title": title,
-                "content": content[:5000],
+                "content": content[:self.scraper_config.get("max_content_length", 75000)],
                 "content_length": len(content),
                 "links": links,
                 "images": images,
@@ -1236,7 +1305,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 "success": True,
                 "url": url,
                 "title": title,
-                "content": content[:5000],
+                "content": content[:self.scraper_config.get("max_content_length", 75000)],
                 "content_length": len(content),
                 "status_code": response.status if response else None,
                 "response_time": response_time,
@@ -1271,7 +1340,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             "success": True,
             "url": url,
             "title": title,
-            "content": content[:5000],
+            "content": content[:self.scraper_config.get("max_content_length", 75000)],
             "content_length": len(content),
             "status_code": response.status_code,
             "response_time": response_time,

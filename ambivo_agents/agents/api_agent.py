@@ -1476,7 +1476,7 @@ except Exception as e:
             raise Exception("LLM service not available for documentation parsing")
 
         # Limit content size for LLM processing
-        max_content_length = 8000
+        max_content_length = 10000
         if len(content) > max_content_length:
             content = content[:max_content_length] + "... [content truncated]"
 
