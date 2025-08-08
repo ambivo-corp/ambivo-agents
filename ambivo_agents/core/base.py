@@ -687,17 +687,21 @@ class BaseAgent(ABC):
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
                     try:
-                        return new_loop.run_until_complete(self.chat(message, **kwargs))
+                        # Filter out timeout parameter for async chat call
+                        filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'timeout'}
+                        return new_loop.run_until_complete(self.chat(message, **filtered_kwargs))
                     finally:
                         new_loop.close()
 
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(run_chat)
-                    return future.result(timeout=120)  # 2 minute timeout
+                    return future.result()
 
             except RuntimeError:
                 # No event loop running, safe to use asyncio.run()
-                return asyncio.run(self.chat(message, **kwargs))
+                # Filter out timeout parameter that asyncio.run() doesn't accept
+                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'timeout'}
+                return asyncio.run(self.chat(message, **filtered_kwargs))
 
         except Exception as e:
             error_msg = f"Sync chat error: {str(e)}"
@@ -1633,19 +1637,23 @@ def quick_chat_sync(agent_class, message: str, user_id: str = None, **kwargs) ->
                 new_loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(new_loop)
                 try:
+                    # Filter out timeout parameter for async quick_chat call
+                    filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'timeout'}
                     return new_loop.run_until_complete(
-                        quick_chat(agent_class, message, user_id, **kwargs)
+                        quick_chat(agent_class, message, user_id, **filtered_kwargs)
                     )
                 finally:
                     new_loop.close()
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(run_quick_chat)
-                return future.result(timeout=120)
+                return future.result()
 
         except RuntimeError:
             # No event loop, safe to use asyncio.run
-            return asyncio.run(quick_chat(agent_class, message, user_id, **kwargs))
+            # Filter out timeout parameter that asyncio.run() doesn't accept
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'timeout'}
+            return asyncio.run(quick_chat(agent_class, message, user_id, **filtered_kwargs))
 
     except Exception as e:
         return f"Quick sync chat error: {str(e)}"
