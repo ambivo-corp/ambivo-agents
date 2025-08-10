@@ -960,34 +960,39 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             )
         )
 
-    def _save_scraped_content_to_file(self, scraped_data: Dict[str, Any], topic: str = "web_scraping") -> str:
+    def _save_scraped_content_to_file(self, scraped_data: Dict[str, Any], topic: str = "web_scraping", external_handoff_dir: str = None) -> str:
         """Save scraped content to shared file for handoff"""
         import os
         from datetime import datetime
         
-        # Create handoff directory if it doesn't exist  
-        try:
-            shared_manager = get_shared_manager()
-            base_path = getattr(shared_manager, 'base_path', None) or getattr(shared_manager, 'shared_path', './docker_shared')
-        except:
-            base_path = './docker_shared'
-        
-        # Create session-based topic-specific subdirectory for content isolation
-        # This ensures all scrapes for the same session/topic go to the same directory
-        topic_clean = topic.replace(' ', '_').replace('-', '_')[:50]
-        
-        # Use session_id if available, otherwise create session-based identifier
-        if hasattr(self, 'session_id') and self.session_id:
-            session_identifier = self.session_id[:8]  # First 8 chars of session ID
-        elif hasattr(self, 'user_id') and self.user_id:
-            session_identifier = f"{self.user_id}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+        # Use external handoff directory if provided (for topic isolation)
+        if external_handoff_dir:
+            handoff_dir = external_handoff_dir
+            os.makedirs(handoff_dir, exist_ok=True)
         else:
-            session_identifier = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        topic_subdir = f"scraper_{topic_clean}_{session_identifier}"
-        
-        handoff_dir = os.path.join(base_path, "handoff", "scraper", topic_subdir)
-        os.makedirs(handoff_dir, exist_ok=True)
+            # Create handoff directory if it doesn't exist  
+            try:
+                shared_manager = get_shared_manager()
+                base_path = getattr(shared_manager, 'base_path', None) or getattr(shared_manager, 'shared_path', './docker_shared')
+            except:
+                base_path = './docker_shared'
+            
+            # Create session-based topic-specific subdirectory for content isolation
+            # This ensures all scrapes for the same session/topic go to the same directory
+            topic_clean = topic.replace(' ', '_').replace('-', '_')[:50]
+            
+            # Use session_id if available, otherwise create session-based identifier
+            if hasattr(self, 'session_id') and self.session_id:
+                session_identifier = self.session_id[:8]  # First 8 chars of session ID
+            elif hasattr(self, 'user_id') and self.user_id:
+                session_identifier = f"{self.user_id}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+            else:
+                session_identifier = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            topic_subdir = f"scraper_{topic_clean}_{session_identifier}"
+            
+            handoff_dir = os.path.join(base_path, "handoff", "scraper", topic_subdir)
+            os.makedirs(handoff_dir, exist_ok=True)
         
         # Create filename with timestamp
         file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1034,8 +1039,9 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             # Save successful scrapes to file for handoff
             if result.get('success') and result.get('content'):
                 topic = kwargs.get('topic', 'web_scraping')
+                external_handoff_dir = kwargs.get('external_handoff_dir', None)
                 try:
-                    filepath = self._save_scraped_content_to_file(result, topic)
+                    filepath = self._save_scraped_content_to_file(result, topic, external_handoff_dir)
                     result['saved_to_file'] = filepath
                     self.logger.info(f"Scraped content saved to: {filepath}")
                 except Exception as save_error:
