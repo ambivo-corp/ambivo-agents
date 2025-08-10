@@ -436,9 +436,13 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 user_message, conversation_context, llm_context
             )
 
+            # Extract kwargs from message metadata (passed from chat interface)
+            chat_kwargs = {k: v for k, v in message.metadata.items() 
+                          if k not in ['chat_interface', 'simplified_call']}
+            
             # Route request based on LLM analysis with context
             response_content = await self._route_scraping_with_llm_analysis_with_context(
-                intent_analysis, user_message, context, llm_context
+                intent_analysis, user_message, context, llm_context, chat_kwargs
             )
 
             response = self.create_response(
@@ -523,6 +527,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         user_message: str,
         context: ExecutionContext,
         llm_context: Dict[str, Any],
+        chat_kwargs: Dict[str, Any] = None,
     ) -> str:
         """Route scraping request based on LLM intent analysis - FIXED: With context preservation"""
 
@@ -538,12 +543,14 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 urls = [recent_url]
 
         # Route based on intent
+        chat_kwargs = chat_kwargs or {}
+        
         if primary_intent == "help_request":
             return await self._handle_scraping_help_request_with_context(user_message, llm_context)
         elif primary_intent == "scrape_single":
-            return await self._handle_single_scrape(urls, extraction_prefs, user_message)
+            return await self._handle_single_scrape(urls, extraction_prefs, user_message, **chat_kwargs)
         elif primary_intent == "scrape_batch":
-            return await self._handle_batch_scrape(urls, extraction_prefs, user_message)
+            return await self._handle_batch_scrape(urls, extraction_prefs, user_message, **chat_kwargs)
         elif primary_intent == "check_accessibility":
             return await self._handle_accessibility_check(urls, user_message)
         else:
@@ -655,7 +662,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             return await self._handle_scraping_help_request(user_message)
 
     async def _handle_single_scrape(
-        self, urls: List[str], extraction_prefs: Dict[str, Any], user_message: str
+        self, urls: List[str], extraction_prefs: Dict[str, Any], user_message: str, **kwargs
     ) -> str:
         """Handle single URL scraping"""
         if not urls:
@@ -676,6 +683,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 extract_links=extraction_prefs.get("extract_links", True),
                 extract_images=extraction_prefs.get("extract_images", True),
                 take_screenshot=extraction_prefs.get("take_screenshot", False),
+                **kwargs  # Pass through topic, external_handoff_dir, etc.
             )
 
             if result["success"]:
@@ -702,7 +710,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             return f"❌ **Error during scraping:** {str(e)}"
 
     async def _handle_batch_scrape(
-        self, urls: List[str], extraction_prefs: Dict[str, Any], user_message: str
+        self, urls: List[str], extraction_prefs: Dict[str, Any], user_message: str, **kwargs
     ) -> str:
         """Handle batch URL scraping"""
         if not urls:
@@ -712,7 +720,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             )
 
         try:
-            result = await self._batch_scrape(urls=urls, method="auto")
+            result = await self._batch_scrape(urls=urls, method="auto", **kwargs)
 
             if result["success"]:
                 successful = result["successful"]
@@ -1354,14 +1362,14 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             "execution_mode": "local",
         }
 
-    async def _batch_scrape(self, urls: List[str], method: str = "auto") -> Dict[str, Any]:
+    async def _batch_scrape(self, urls: List[str], method: str = "auto", **kwargs) -> Dict[str, Any]:
         """Batch scraping with rate limiting from config"""
         results = []
         rate_limit = self.scraper_config.get("rate_limit_seconds", 1.0)
 
         for i, url in enumerate(urls):
             try:
-                result = await self._scrape_url(url, method)
+                result = await self._scrape_url(url, method, **kwargs)
                 results.append(result)
 
                 if i < len(urls) - 1:
