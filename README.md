@@ -2039,3 +2039,49 @@ The authors and contributors are not liable for any damages arising from the use
 ---
 
 *Developed by the Ambivo team.*
+
+
+### Query Across Multiple Knowledge Bases
+
+You can query multiple knowledge bases by passing kb_names via metadata on either the ExecutionContext or the AgentMessage. The agent accepts kb_names as a list of strings, a list of dicts ({kb_name, description}), or a JSON string.
+
+```python
+from ambivo_agents.agents.knowledge_base import KnowledgeBaseAgent
+from ambivo_agents.core.base import ExecutionContext, AgentMessage
+import asyncio
+
+async def demo():
+    agent = KnowledgeBaseAgent()
+
+    # 1) Via ExecutionContext.metadata — list of strings
+    ctx = ExecutionContext(
+        user_id="u",
+        session_id="s",
+        conversation_id="c",
+        metadata={"kb_names": ["product_docs", "engineering_wiki"]},
+    )
+    resp = await agent.process_message("What changed in v2.0 API?", context=ctx)
+    print(resp.content)
+    print(resp.metadata)  # includes used_kbs, primary_kb, sources_dict
+
+    # 2) Via AgentMessage.metadata — list of dicts
+    msg = AgentMessage(
+        id="m1",
+        sender_id="u",
+        recipient_id=agent.agent_id,
+        content="Summarize PTO policy.",
+        metadata={
+            "kb_names": [
+                {"kb_name": "hr_policies", "description": "HR docs"},
+                {"kb_name": "employee_handbook"},
+            ]
+        },
+    )
+    resp2 = await agent.process_message(msg)
+    print(resp2.content)
+    print(resp2.metadata)
+
+asyncio.run(demo())
+```
+
+See examples/knowledge_base_multiple.py for a more complete example, including passing kb_names as a JSON string.

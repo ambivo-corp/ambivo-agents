@@ -256,7 +256,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
     async def _llm_analyze_kb_intent(
         self, user_message: str, conversation_context: str = ""
     ) -> Dict[str, Any]:
-        """Use LLM to analyze knowledge base related intent"""
+        """Use LLM to analyze knowledge base related intent and topics"""
         if not self.llm_service:
             return self._keyword_based_kb_analysis(user_message)
 
@@ -268,6 +268,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         4. Query content (if querying)
         5. Context references (referring to previous KB operations)
         6. Operation specifics (metadata, query type, etc.)
+        7. Key topics and keywords for routing to the right knowledge base(s)
 
         Conversation Context:
         {conversation_context}
@@ -287,6 +288,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 "custom_metadata": {{}},
                 "source_type": "file|url|text"
             }},
+            "topics": ["topic1", "topic2", "keywordA"],
             "confidence": 0.0-1.0
         }}
         """
@@ -304,7 +306,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             return self._keyword_based_kb_analysis(user_message)
 
     def _keyword_based_kb_analysis(self, user_message: str) -> Dict[str, Any]:
-        """Fallback keyword-based KB intent analysis"""
+        """Fallback keyword-based KB intent analysis with simple topic extraction"""
         content_lower = user_message.lower()
 
         # Determine intent
@@ -337,6 +339,12 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             self._extract_query_from_kb_message(user_message) if intent == "query_kb" else None
         )
 
+        # Simple topic extraction: keywords longer than 3 chars, minus stopwords
+        stop = {"the","and","for","with","this","that","into","what","how","where","why","when","from","about","please","can","you","me","to","in","on","of","a","an","is","are"}
+        topics = [w.strip(".,:;!?()[]{}\"\'") for w in user_message.lower().split()]
+        topics = [w for w in topics if len(w) > 3 and w not in stop]
+        topics = list(dict.fromkeys(topics))[:10]
+
         return {
             "primary_intent": intent,
             "kb_name": kb_names[0] if kb_names else None,
@@ -349,6 +357,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 "custom_metadata": {},
                 "source_type": "file",
             },
+            "topics": topics,
             "confidence": 0.7,
         }
 
@@ -404,19 +413,38 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 user_message, conversation_context, llm_context
             )
 
+            # Merge external kb_names/topics into operation_details for routing
+            try:
+                op = intent_analysis.get("operation_details") or {}
+                # bring topics from intent
+                if intent_analysis.get("topics") is not None:
+                    op["topics"] = intent_analysis.get("topics")
+                op["primary_intent_inferred"] = intent_analysis.get("primary_intent")
+                # pick kb_names from message metadata or context metadata
+                external_kbs = []
+                if isinstance(original_message, AgentMessage) and original_message.metadata:
+                    external_kbs = original_message.metadata.get("kb_names") or []
+                if not external_kbs and context and getattr(context, "metadata", None):
+                    external_kbs = context.metadata.get("kb_names") or []
+                if external_kbs:
+                    op["kb_names"] = external_kbs
+                intent_analysis["operation_details"] = op
+            except Exception as _:
+                pass
+
             # Route request based on LLM analysis with context
             response_content = await self._route_kb_with_llm_analysis_with_context(
                 intent_analysis, user_message, context, llm_context
             )
 
             if isinstance(response_content, tuple):
-                response_content, sources_dict = response_content
+                response_content, resp_metadata = response_content
             else:
-                sources_dict = {}
+                resp_metadata = {}
 
             response = self.create_response(
                 content=response_content,
-                metadata={"sources_dict": sources_dict},
+                metadata=resp_metadata,
                 recipient_id=original_message.sender_id,
                 session_id=original_message.session_id,
                 conversation_id=original_message.conversation_id,
@@ -438,7 +466,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
     async def _llm_analyze_kb_intent_with_context(
         self, user_message: str, conversation_context: str = "", llm_context: Dict[str, Any] = None
     ) -> Dict[str, Any]:
-        """Use LLM to analyze knowledge base related intent - FIXED: With conversation context"""
+        """Use LLM to analyze knowledge base related intent - FIXED: With conversation context and topics"""
         if not self.llm_service:
             return self._keyword_based_kb_analysis(user_message)
 
@@ -450,6 +478,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         4. Query content (if querying)
         5. Context references (referring to previous KB operations)
         6. Operation specifics (metadata, query type, etc.)
+        7. Key topics and keywords for routing to the right knowledge base(s)
 
         Conversation Context:
         {conversation_context}
@@ -469,6 +498,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 "custom_metadata": {{}},
                 "source_type": "file|url|text"
             }},
+            "topics": ["topic1", "topic2", "keywordA"],
             "confidence": 0.0-1.0
         }}
         """
@@ -1025,8 +1055,64 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
     async def _handle_kb_query(
         self, kb_name: str, query_content: str, operation_details: Dict[str, Any]
     ) -> str | tuple[Any, dict]:
-        """Handle KB queries with LLM analysis"""
+        """Handle KB queries with single or multiple knowledge bases.
+        - If operation_details.kb_names provided with one KB, query it directly.
+        - If multiple KBs provided, score/select candidates and consolidate results.
+        - Keep answer crisp; attribution, topics, and intent go in metadata only.
+        """
 
+        op = operation_details or {}
+        provided_kbs = self._normalize_kb_names_input(op.get("kb_names")) if op.get("kb_names") else []
+        topics = op.get("topics") or []
+        inferred_intent = op.get("primary_intent_inferred")
+
+        # If multiple KBs provided, select and query across them
+        if provided_kbs and len(provided_kbs) > 1:
+            if not query_content:
+                return "What question would you like to ask across the provided knowledge bases?"
+            # Score and select top candidates (top 2 by score; fallback to first 2)
+            scored = [
+                (kb, self._score_kb_for_query(kb, query_content or "", topics)) for kb in provided_kbs
+            ]
+            scored.sort(key=lambda x: x[1], reverse=True)
+            top = [kb for kb, sc in scored if sc > 0][:2]
+            if not top:
+                top = provided_kbs[:2]
+            answer, metadata = await self._multi_kb_query_and_consolidate(top, query_content, question_type=op.get("query_type", "free-text"))
+            # add intent/topics to metadata
+            metadata.update({
+                "intent_topics": {
+                    "primary_intent": inferred_intent,
+                    "topics": topics,
+                }
+            })
+            return answer, metadata
+
+        # If exactly one KB provided, use it directly
+        if provided_kbs and len(provided_kbs) == 1:
+            target_kb = provided_kbs[0].get("kb_name")
+            if not query_content:
+                return f"I'll search the **{target_kb}** knowledge base. What would you like me to find?"
+            try:
+                query_type = op.get("query_type", "free-text")
+                result = await self._query_knowledge_base(target_kb, query_content, question_type=query_type)
+                if result.get("success"):
+                    metadata = {
+                        "used_kbs": [{"kb_name": target_kb, "description": provided_kbs[0].get("description")}],
+                        "primary_kb": target_kb,
+                        "sources_dict": result.get("source_details", {}),
+                        "intent_topics": {
+                            "primary_intent": inferred_intent,
+                            "topics": topics,
+                        },
+                    }
+                    return result.get("answer"), metadata
+                else:
+                    return f"❌ **Query failed:** {result['error']}"
+            except Exception as e:
+                return f"❌ **Error during query:** {str(e)}"
+
+        # No provided_kbs: use existing single-KB behavior with enriched metadata
         # Resolve missing parameters
         if not kb_name:
             available_kbs = self.conversation_state.knowledge_bases
@@ -1047,21 +1133,21 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             return f"I'll search the **{kb_name}** knowledge base. What would you like me to find?"
 
         try:
-            query_type = operation_details.get("query_type", "free-text")
+            query_type = op.get("query_type", "free-text")
             result = await self._query_knowledge_base(
                 kb_name, query_content, question_type=query_type
             )
-            sources_dict = {}
-            if result["success"]:
-                answer = result["answer"]
-                source_count = len(result.get("source_details", []))
-                sources_dict: dict = result.get("source_details", {})
-
-                # return f"🔍 **Query Results from {kb_name}**\n\n" \
-                #        f"**Question:** {query_content}\n\n" \
-                #        f"**Answer:**\n{answer}\n\n" \
-                #        f"📊 **Sources:** {source_count} relevant documents found"
-                return answer, sources_dict
+            if result.get("success"):
+                metadata = {
+                    "used_kbs": [{"kb_name": kb_name}],
+                    "primary_kb": kb_name,
+                    "sources_dict": result.get("source_details", {}),
+                    "intent_topics": {
+                        "primary_intent": inferred_intent,
+                        "topics": topics,
+                    },
+                }
+                return result.get("answer"), metadata
             else:
                 return f"❌ **Query failed:** {result['error']}"
 
@@ -1208,6 +1294,12 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         else:
             intent = "help_request"
 
+        # Simple topics from user_message as fallback
+        stop = {"the","and","for","with","this","that","into","what","how","where","why","when","from","about","please","can","you","me","to","in","on","of","a","an","is","are"}
+        topics = [w.strip(".,:;!?()[]{}\"\'") for w in user_message.lower().split()]
+        topics = [w for w in topics if len(w) > 3 and w not in stop]
+        topics = list(dict.fromkeys(topics))[:10]
+
         return {
             "primary_intent": intent,
             "kb_name": None,
@@ -1216,8 +1308,100 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             "uses_context_reference": False,
             "context_type": "none",
             "operation_details": {"query_type": "free-text"},
+            "topics": topics,
             "confidence": 0.6,
         }
+
+    # --- Helper methods for multi-KB routing and consolidation ---
+    def _normalize_kb_names_input(self, kb_names_input: Any) -> List[Dict[str, Optional[str]]]:
+        """Normalize kb_names input to a list of dicts with kb_name and optional description.
+        Accepts list of strings, list of dicts, or JSON string."""
+        normalized: List[Dict[str, Optional[str]]] = []
+        try:
+            data = kb_names_input
+            if isinstance(kb_names_input, str):
+                try:
+                    data = json.loads(kb_names_input)
+                except Exception:
+                    # single name string
+                    data = [kb_names_input]
+            if isinstance(data, dict):
+                data = [data]
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, str):
+                        normalized.append({"kb_name": item, "description": None})
+                    elif isinstance(item, dict):
+                        name = item.get("kb_name") or item.get("name") or item.get("id")
+                        desc = item.get("description")
+                        if name:
+                            normalized.append({"kb_name": name, "description": desc})
+            # de-duplicate by kb_name preserving order
+            seen = set()
+            deduped = []
+            for entry in normalized:
+                n = entry.get("kb_name")
+                if n and n not in seen:
+                    seen.add(n)
+                    deduped.append(entry)
+            return deduped
+        except Exception:
+            return []
+
+    def _score_kb_for_query(self, kb_entry: Dict[str, Any], user_message: str, topics: List[str]) -> float:
+        """Score a KB using keyword overlap between topics/user_message and kb name/description."""
+        name = (kb_entry.get("kb_name") or "").lower()
+        desc = (kb_entry.get("description") or "").lower()
+        haystack = f"{name} {desc}"
+        # Build candidate keywords
+        stop = {"the","and","for","with","this","that","into","what","how","where","why","when","from","about","please","can","you","me","to","in","on","of","a","an","is","are"}
+        msg_tokens = [w.strip(".,:;!?()[]{}\"\'") for w in user_message.lower().split()]
+        msg_tokens = [w for w in msg_tokens if len(w) > 3 and w not in stop]
+        keywords = set(topics or []) | set(msg_tokens)
+        score = 0.0
+        for kw in keywords:
+            if not kw:
+                continue
+            if kw in haystack:
+                score += 1.0
+        # bonus if description mentions domain-like hints
+        if "legal" in haystack and any(kw in {"law","legal","contract","policy","regulation"} for kw in keywords):
+            score += 1.5
+        if "finance" in haystack and any(kw in {"finance","budget","revenue","cost","profit"} for kw in keywords):
+            score += 1.0
+        return score
+
+    async def _multi_kb_query_and_consolidate(self, selected_kbs: List[Dict[str, Any]], query: str, question_type: str = "free-text") -> tuple[str, Dict[str, Any]]:
+        """Query multiple KBs and consolidate result. Returns (answer, metadata)."""
+        per_kb_results: Dict[str, Any] = {}
+        sources_dict: Dict[str, Any] = {}
+        best_answer = None
+        best_kb = None
+        best_source_count = -1
+        for kb in selected_kbs:
+            name = kb["kb_name"]
+            result = await self._query_knowledge_base(name, query, question_type=question_type)
+            per_kb_results[name] = result
+            if result.get("success"):
+                srcs = result.get("source_details", [])
+                sources_dict[name] = srcs
+                src_count = len(srcs)
+                if src_count > best_source_count:
+                    best_source_count = src_count
+                    best_answer = result.get("answer")
+                    best_kb = name
+        # Fallback: if no success, return error string
+        if best_answer is None:
+            return ("No relevant information found in the provided knowledge bases.", {
+                "used_kbs": [{"kb_name": kb["kb_name"], "description": kb.get("description")} for kb in selected_kbs],
+                "sources_dict": sources_dict,
+            })
+        metadata = {
+            "used_kbs": [{"kb_name": kb["kb_name"], "description": kb.get("description")} for kb in selected_kbs],
+            "primary_kb": best_kb,
+            "sources_dict": sources_dict,
+        }
+        return best_answer, metadata
 
     # Tool implementations
     def _add_knowledge_base_tools(self):
