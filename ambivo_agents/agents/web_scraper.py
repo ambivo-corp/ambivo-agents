@@ -156,7 +156,7 @@ async def scrape_url():
                 'success': True,
                 'url': '{task.url}',
                 'title': title,
-                'content': content[:self.scraper_config.get("max_content_length", 75000)],  # Configurable content limit
+                'content': content,  # Full content preserved
                 'content_length': len(content),
                 'links': links,
                 'images': images,
@@ -699,7 +699,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 **Title:** {result.get('title', 'No title')}
 
 **Content Preview:**
-{result.get('content', '')[:300]}{'...' if len(result.get('content', '')) > 300 else ''}
+{result.get('content', '')[:self.scraper_config.get('max_content_length', 75000)]}{'...' if len(result.get('content', '')) > self.scraper_config.get('max_content_length', 75000) else ''}
 
 **Links Found:** {len(result.get('links', []))}
 **Images Found:** {len(result.get('images', []))}"""
@@ -1167,7 +1167,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                     "success": True,
                     "url": url,
                     "title": title,
-                    "content": content[:self.scraper_config.get("max_content_length", 75000)],
+                    "content": content,  # Full content preserved
                     "content_length": len(content),
                     "links": links,
                     "images": images,
@@ -1253,7 +1253,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 "success": True,
                 "url": url,
                 "title": title,
-                "content": content[:self.scraper_config.get("max_content_length", 75000)],
+                "content": content,  # Full content preserved
                 "content_length": len(content),
                 "links": links,
                 "images": images,
@@ -1319,7 +1319,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 "success": True,
                 "url": url,
                 "title": title,
-                "content": content[:self.scraper_config.get("max_content_length", 75000)],
+                "content": content,  # Full content preserved
                 "content_length": len(content),
                 "status_code": response.status if response else None,
                 "response_time": response_time,
@@ -1354,7 +1354,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             "success": True,
             "url": url,
             "title": title,
-            "content": content[:self.scraper_config.get("max_content_length", 75000)],
+            "content": content,  # Full content preserved
             "content_length": len(content),
             "status_code": response.status_code,
             "response_time": response_time,
@@ -1617,9 +1617,10 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 yield f"• **Time:** {result['response_time']:.2f}s\n\n"
 
                 # Show content preview
-                content_preview = result.get("content", "")[:300]
+                preview_length = self.scraper_config.get('max_content_length', 75000)
+                content_preview = result.get("content", "")[:preview_length]
                 if content_preview:
-                    yield f"📄 **Content Preview:**\n{content_preview}{'...' if len(result.get('content', '')) > 300 else ''}\n"
+                    yield f"📄 **Content Preview:**\n{content_preview}{'...' if len(result.get('content', '')) > preview_length else ''}\n"
 
             else:
                 yield f"❌ **Scraping failed:** {result['error']}\n"
