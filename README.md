@@ -215,6 +215,57 @@ await agent.cleanup_session()
 - Docker-based execution with pytubefix
 - Automatic title sanitization and metadata extraction
 
+### Gather Agent
+- Conversational form-filling assistant that asks one question at a time and validates answers.
+- Ingest questionnaire from JSON/YAML pasted into chat, a local file path, or a URL.
+- Supported types: free-text, yes-no, single-select, multi-select. Prompts include available options for yes-no/single/multi.
+- Conditional Dependent Question Logic:
+  - Yes–No: dependent question shown when parent is affirmative (Yes/Y/True) unless specific trigger values are configured.
+  - Single-Select: shown when selected value is in trigger list; default is any value except explicit "No" if no triggers.
+  - Multi-Select: shown when at least one selected value is in trigger list; default is non-empty selection if no triggers.
+  - Free-Text: shown when parent answer is non-empty (optional yes/no interpretation if triggers include yes/no terms).
+- Submission to a configured endpoint with statuses: successfully_collected, partially_collected, conversation_aborted.
+- Session memory persists for ~1 hour by default (configurable).
+- Optional LLM-based validation for free‑text answers and optional LLM prompt rephrasing.
+
+Usage
+```bash
+# Interactive CLI demo (waits for your input after each question)
+python examples/gather_cli.py
+
+# Load questionnaire from a file path or URL
+python examples/gather_cli.py --path ./questionnaire.yaml
+python examples/gather_cli.py --path https://example.com/questionnaire.json
+
+# Do a real HTTP submission (configure endpoint in agent_config.yaml)
+python examples/gather_cli.py --real-submit
+
+# Minimal scripted example
+python examples/gather_simple.py
+```
+
+Configuration
+```yaml
+agent_capabilities:
+  enable_gather: true
+
+gather:
+  submission_endpoint: "https://your-api.example.com/submit"
+  submission_method: "POST"
+  submission_headers:
+    Authorization: "Bearer your-api-token"
+    Content-Type: "application/json"
+  memory_ttl_seconds: 3600
+  # Optional: Validate free-text answers with LLM before proceeding
+  enable_llm_answer_validation: false
+  answer_validation:
+    default_min_length: 1
+  # Optional: Let LLM rewrite prompts (off by default for predictability)
+  enable_llm_prompt_rewrite: false
+```
+
+See also: examples/gather_cli.py and examples/gather_simple.py for end-to-end demos. You can also wrap GatherAgent behind a small REST API for chatbot UIs (start/reply/finish/abort pattern).
+
 ### API Agent
 - Comprehensive HTTP/REST API integration
 - Multiple authentication methods (Bearer, API Key, Basic, OAuth2)

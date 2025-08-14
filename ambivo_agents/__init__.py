@@ -4,7 +4,7 @@ Ambivo Agents Framework
 A minimalistic agent framework for building AI applications.
 """
 
-__version__ = "1.3.1"
+__version__ = "1.3.2"
 
 # Agent imports
 from .agents.analytics import AnalyticsAgent

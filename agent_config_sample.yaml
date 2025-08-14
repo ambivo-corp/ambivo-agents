@@ -187,6 +187,7 @@ agent_capabilities:
   enable_proxy_mode: true
   enable_media_editor: true
   enable_youtube_download: true
+  enable_gather: true
 
   # Cross-agent features
   enable_agent_collaboration: true
@@ -388,3 +389,22 @@ moderator:
     restrict_code_execution: true
     sanitize_inputs: true
     log_all_routing: true
+
+# Gather Agent Configuration
+# Conversational form-filling agent that collects answers and submits to an API
+# Enable via agent_capabilities.enable_gather: true
+# Provide endpoint and optional headers below
+gather:
+  submission_endpoint: "https://your-api.example.com/submit"
+  submission_method: "POST"
+  submission_headers:
+    Authorization: "Bearer your-api-token"
+    Content-Type: "application/json"
+  memory_ttl_seconds: 3600
+  # Optional: Use LLM to evaluate free-text answers before moving on
+  enable_llm_answer_validation: false
+  answer_validation:
+    # Default minimum length for free-text answers (can be overridden per question via min_answer_length)
+    default_min_length: 1
+  # Optional: Use LLM to rewrite question prompts for friendlier phrasing
+  enable_llm_prompt_rewrite: false

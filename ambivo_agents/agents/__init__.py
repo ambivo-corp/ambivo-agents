@@ -11,6 +11,7 @@ from .web_scraper import WebScraperAgent
 from .web_search import WebSearchAgent
 from .workflow_developer import WorkflowDeveloperAgent
 from .youtube_download import YouTubeDownloadAgent
+from .gather_agent import GatherAgent
 
 __all__ = [
     "AnalyticsAgent",
@@ -25,4 +26,5 @@ __all__ = [
     "ModeratorAgent",
     "APIAgent",
     "WorkflowDeveloperAgent",
+    "GatherAgent",
 ]

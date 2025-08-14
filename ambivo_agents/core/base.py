@@ -36,6 +36,13 @@ try:
 except ImportError:
     YAML_AVAILABLE = False
 
+# Optional requests import for URL fallback
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+
 # Docker imports
 try:
     import docker
@@ -1158,28 +1165,47 @@ class BaseAgent(ABC):
             
             # Check if it's a URL
             if file_path.startswith(('http://', 'https://')):
-                if not AIOHTTP_AVAILABLE:
-                    return {
-                        'success': False,
-                        'error': 'aiohttp not available. Install with: pip install aiohttp'
-                    }
-                
-                import aiohttp
-                # Read from URL
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(file_path) as response:
-                        response.raise_for_status()
-                        content = await response.text()
-                        
+                # Prefer aiohttp when available, fallback to requests
+                if AIOHTTP_AVAILABLE:
+                    import aiohttp
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(file_path) as response:
+                            response.raise_for_status()
+                            content = await response.text()
+                            return {
+                                'success': True,
+                                'content': content,
+                                'source': 'url',
+                                'path': file_path,
+                                'size': len(content),
+                                'content_type': response.headers.get('Content-Type', 'text/plain'),
+                                'encoding': encoding
+                            }
+                elif REQUESTS_AVAILABLE:
+                    try:
+                        resp = requests.get(file_path, timeout=15)
+                        resp.raise_for_status()
+                        content = resp.text
                         return {
                             'success': True,
                             'content': content,
                             'source': 'url',
                             'path': file_path,
                             'size': len(content),
-                            'content_type': response.headers.get('Content-Type', 'text/plain'),
-                            'encoding': encoding
+                            'content_type': resp.headers.get('Content-Type', 'text/plain'),
+                            'encoding': resp.encoding or encoding
                         }
+                    except Exception as e:
+                        return {
+                            'success': False,
+                            'error': str(e),
+                            'path': file_path
+                        }
+                else:
+                    return {
+                        'success': False,
+                        'error': 'No HTTP client available. Install aiohttp or requests to read URLs.'
+                    }
             else:
                 # Read from local file
                 path = Path(file_path)

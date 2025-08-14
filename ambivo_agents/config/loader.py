@@ -1005,6 +1005,7 @@ CAPABILITY_TO_AGENT_TYPE = {
     "web_search": "web_search",
     "media_editor": "media_editor",
     "youtube_download": "youtube_download",
+    "gather": "gather_agent",
 }
 
 CONFIG_FLAG_TO_CAPABILITY = {
@@ -1015,6 +1016,7 @@ CONFIG_FLAG_TO_CAPABILITY = {
     "enable_youtube_download": "youtube_download",
     "enable_code_execution": "code_execution",
     "enable_proxy_mode": "proxy",
+    "enable_gather": "gather",
 }
 
 
@@ -1050,6 +1052,10 @@ def validate_agent_capabilities(config: Dict[str, Any] = None) -> Dict[str, bool
 
     capabilities["youtube_download"] = (
         agent_caps.get("enable_youtube_download", False) and "youtube_download" in config
+    )
+
+    capabilities["gather"] = (
+        agent_caps.get("enable_gather", False) and "gather" in config
     )
 
     return capabilities

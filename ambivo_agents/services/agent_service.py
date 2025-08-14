@@ -177,6 +177,21 @@ class AgentSession:
             except Exception as e:
                 self.logger.error(f"Failed to create YouTubeDownloadAgent: {e}")
 
+        # Gather Agent (if enabled)
+        if self.capabilities.get("gather", False):
+            gather_id = f"gather_{self.session_id}"
+            gather_memory = create_redis_memory_manager(gather_id, self.redis_config)
+
+            try:
+                from ..agents.gather_agent import GatherAgent
+
+                self.agents["gather_agent"] = GatherAgent(
+                    agent_id=gather_id, memory_manager=gather_memory, llm_service=self.llm_service, config=self.config
+                )
+                self.logger.info("Created GatherAgent")
+            except Exception as e:
+                self.logger.error(f"Failed to create GatherAgent: {e}")
+
         if self.capabilities.get("moderator", False):
             moderator_id = f"moderator_{self.session_id}"
             moderator_memory = create_redis_memory_manager(moderator_id, self.redis_config)
