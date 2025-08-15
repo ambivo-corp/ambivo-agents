@@ -122,6 +122,7 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}WEB_SCRAPING_PROXY_ENABLED": ("web_scraping", "proxy_enabled"),
     f"{ENV_PREFIX}WEB_SCRAPING_TIMEOUT": ("web_scraping", "timeout"),
     f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_MEMORY_LIMIT": ("web_scraping", "docker_memory_limit"),
+    f"{ENV_PREFIX}WEB_SCRAPING_PROXY_HTTP": ("web_scraping", "proxy_config", "http_proxy"),
     
     # Database Agent Configuration (Basic settings only)
     f"{ENV_PREFIX}DATABASE_AGENT_STRICT_MODE": ("database_agent", "strict_mode"),
