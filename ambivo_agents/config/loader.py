@@ -154,6 +154,12 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}SERVICE_SESSION_TIMEOUT": ("service", "session_timeout"),
     f"{ENV_PREFIX}SERVICE_LOG_TO_FILE": ("service", "log_to_file"),
     
+    # Gather Agent Configuration (Natural language parsing and submission)
+    f"{ENV_PREFIX}GATHER_ENABLE_NATURAL_LANGUAGE_PARSING": ("gather", "enable_natural_language_parsing"),
+    f"{ENV_PREFIX}GATHER_SUBMISSION_ENDPOINT": ("gather", "submission_endpoint"),
+    f"{ENV_PREFIX}GATHER_SUBMISSION_METHOD": ("gather", "submission_method"),
+    f"{ENV_PREFIX}GATHER_MEMORY_TTL_SECONDS": ("gather", "memory_ttl_seconds"),
+    
     # Agent Enablement Configuration (New - all used)
     f"{ENV_PREFIX}MODERATOR_ENABLED": ("agents", "moderator", "enabled"),
     f"{ENV_PREFIX}ANALYTICS_ENABLED": ("agents", "analytics", "enabled"),

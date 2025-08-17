@@ -110,6 +110,8 @@ class GatherAgent(BaseAgent):
         self.default_min_answer_length: int = int(self.answer_validation_cfg.get("default_min_length", 1))
         # Control whether to use LLM to rephrase question prompts (disabled by default for predictability)
         self.enable_llm_prompt_rewrite: bool = bool(cfg.get("enable_llm_prompt_rewrite", False))
+        # NEW: Enable natural language parsing for conversational responses
+        self.enable_natural_language_parsing: bool = bool(cfg.get("enable_natural_language_parsing", False))
 
     # -------- State Management --------
     def _state_key(self, session_id: str) -> str:
@@ -329,6 +331,103 @@ class GatherAgent(BaseAgent):
             return f"{qtext} (Yes/No)"
         else:
             return qtext
+
+    async def _extract_answer_with_llm(self, q: Dict[str, Any], user_text: str) -> Tuple[bool, Any, str]:
+        """Use LLM to extract structured answer from natural language response"""
+        if not self.llm_service:
+            return False, None, "LLM service not available for natural language parsing"
+        
+        qtype = (q.get("type") or "free-text").lower()
+        qtext = q.get("text", "")
+        choices = q.get("answer_option_dict_list") or []
+        
+        # Build prompt based on question type
+        if qtype == "yes-no":
+            prompt = f"""Extract a yes/no answer from the user's response.
+Question asked: "{qtext}"
+User response: "{user_text}"
+
+Analyze the user's intent and respond with ONLY: {{"answer": "Yes"}} or {{"answer": "No"}}
+
+Examples:
+- "Absolutely!" -> {{"answer": "Yes"}}
+- "I don't think so" -> {{"answer": "No"}}
+- "Yeah, we use that" -> {{"answer": "Yes"}}"""
+        
+        elif qtype == "single-select":
+            choices_str = "\n".join([f"- {c.get('label', c.get('value'))}: {c.get('value')}" for c in choices])
+            prompt = f"""Extract the selected option from the user's natural language response.
+Question asked: "{qtext}"
+Available options:
+{choices_str}
+
+User response: "{user_text}"
+
+Match the user's intent to ONE option and respond with ONLY: {{"answer": "exact_value_here"}}
+
+Examples:
+- "I'd prefer the first one" -> match to first option's value
+- "The blue option sounds good" -> match to the option mentioning blue"""
+        
+        elif qtype == "multi-select":
+            choices_str = "\n".join([f"- {c.get('label', c.get('value'))}: {c.get('value')}" for c in choices])
+            prompt = f"""Extract multiple selected options from the user's natural language response.
+Question asked: "{qtext}"
+Available options:
+{choices_str}
+
+User response: "{user_text}"
+
+Match the user's intent to one or more options and respond with ONLY: {{"answer": ["value1", "value2"]}}
+
+Examples:
+- "Both the first and third options" -> match to first and third option values
+- "I'll take email and SMS" -> match options mentioning email and SMS"""
+        
+        else:  # free-text
+            return True, user_text, ""
+        
+        try:
+            response = await self.llm_service.generate_response(
+                prompt,
+                context={"conversation_history": []},
+                system_message="You are a precise data extraction assistant. Extract structured answers from natural language. Respond only with JSON."
+            )
+            
+            # Parse LLM response
+            if response:
+                import json as _json
+                response_str = str(response)
+                # Try to find JSON in response
+                start = response_str.find("{")
+                end = response_str.rfind("}")
+                if start != -1 and end != -1:
+                    try:
+                        parsed = _json.loads(response_str[start:end+1])
+                        answer = parsed.get("answer")
+                        if answer is not None:
+                            # Validate the answer matches expected format
+                            if qtype == "yes-no" and answer in ["Yes", "No"]:
+                                return True, answer, ""
+                            elif qtype == "single-select":
+                                # Check if answer is valid choice
+                                valid_values = [c.get("value") for c in choices]
+                                if answer in valid_values:
+                                    return True, answer, ""
+                            elif qtype == "multi-select" and isinstance(answer, list):
+                                # Check if all answers are valid choices
+                                valid_values = [c.get("value") for c in choices]
+                                if all(a in valid_values for a in answer):
+                                    return True, answer, ""
+                    except Exception:
+                        pass
+            
+            # If LLM parsing failed, return false to fall back to strict parsing
+            return False, None, None
+            
+        except Exception as e:
+            self.logger.warning(f"LLM answer extraction failed: {e}")
+            return False, None, None
 
     def _validate_and_parse_answer(self, q: Dict[str, Any], user_text: str) -> Tuple[bool, Any, str]:
         qtype = (q.get("type") or "free-text").lower()
@@ -575,7 +674,15 @@ class GatherAgent(BaseAgent):
             return self.create_response(content=q_prompt, recipient_id=message.sender_id, message_type=MessageType.AGENT_RESPONSE, session_id=message.session_id, conversation_id=message.conversation_id)
 
         # We have a current question and a user answer
+        # First try standard parsing
         ok, parsed_answer, error_msg = self._validate_and_parse_answer(current_q, user_text)
+        
+        # If standard parsing failed and natural language parsing is enabled, try LLM extraction
+        if not ok and self.enable_natural_language_parsing and self.llm_service:
+            llm_ok, llm_answer, llm_error = await self._extract_answer_with_llm(current_q, user_text)
+            if llm_ok:
+                ok, parsed_answer, error_msg = True, llm_answer, ""
+        
         if not ok:
             # Re-ask with guidance
             guidance = error_msg or "Please provide a valid answer."

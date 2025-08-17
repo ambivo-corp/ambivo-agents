@@ -160,24 +160,34 @@ await agent.cleanup_session()
 - Workflow execution and coordination
 
 ### Database Agent (Optional)
-- Secure connections to MongoDB, MySQL, and PostgreSQL databases
-- Schema inspection and table structure exploration
-- Natural language to SQL/MongoDB query conversion
-- Safe query execution with read-only mode by default
-- **File ingestion support**: Insert JSON/CSV files directly into database tables
-- Data export to CSV for analytics handoff
-- Automatic integration with Analytics Agent for visualization
-- Query result formatting with tables and statistics
+**Best for: Database connections, data exploration, and basic queries**
+- ✅ **Multi-Database Support**: MongoDB, MySQL, and PostgreSQL connections
+- ✅ **Schema Analysis**: Automatic database structure discovery and exploration  
+- ✅ **Natural Language Queries**: Convert conversational requests to SQL/MongoDB queries
+- ✅ **File Ingestion**: Direct JSON/CSV import into database tables
+- ✅ **Safety-First Design**: Read-only mode by default, simple SELECT queries only
+- ✅ **Export Integration**: Seamless handoff to AnalyticsAgent for complex analysis
+- ⚠️ **Intentionally Limited**: Simple queries only (no JOINs, window functions, CTEs)
+- 📋 **Use Cases**: Data exploration, basic queries, file imports, database connections
 - **Note**: Requires installation with `pip install ambivo-agents[database]`
 
-### Analytics Agent
-- CSV/XLS file ingestion into in-memory DuckDB
-- Schema exploration and data quality assessment  
-- Natural language to SQL query conversion
-- Text-based chart generation (bar charts, line charts, tables)
-- Chart recommendations based on data characteristics
-- Docker-only execution for security
-- Business intelligence and data insights
+### Analytics Agent  
+**Best for: Complex data analysis, advanced SQL, and statistical operations**
+- 🚀 **Advanced SQL Engine**: Full DuckDB support with complex operations
+- ✅ **Complex JOINs**: INNER, LEFT, RIGHT, OUTER joins across multiple datasets
+- ✅ **Window Functions**: ROW_NUMBER(), RANK(), SUM() OVER(), statistical analysis
+- ✅ **Advanced Aggregations**: GROUP BY with HAVING, complex statistical functions
+- ✅ **CTEs & Subqueries**: WITH clauses, correlated subqueries, complex logic
+- ✅ **UNION Operations**: Combine result sets with UNION/UNION ALL
+- ✅ **Multi-File Analysis**: Load and join multiple CSV/XLSX files simultaneously
+- ✅ **Statistical Functions**: Percentiles, correlations, trend analysis, outlier detection
+- ✅ **Visualization**: Text-based charts and intelligent chart recommendations
+- ✅ **Docker Security**: All operations run in isolated containers
+- 📊 **Use Cases**: Business intelligence, complex analytics, statistical modeling, data science
+
+**When to Use Which Agent:**
+- **DatabaseAgent**: Simple queries, database connections, data exploration
+- **AnalyticsAgent**: Complex analysis, joins, statistical operations, advanced SQL
 
 ### Assistant Agent
 - General purpose conversational AI
@@ -216,17 +226,29 @@ await agent.cleanup_session()
 - Automatic title sanitization and metadata extraction
 
 ### Gather Agent
-- Conversational form-filling assistant that asks one question at a time and validates answers.
-- Ingest questionnaire from JSON/YAML pasted into chat, a local file path, or a URL.
-- Supported types: free-text, yes-no, single-select, multi-select. Prompts include available options for yes-no/single/multi.
-- Conditional Dependent Question Logic:
-  - Yes–No: dependent question shown when parent is affirmative (Yes/Y/True) unless specific trigger values are configured.
-  - Single-Select: shown when selected value is in trigger list; default is any value except explicit "No" if no triggers.
-  - Multi-Select: shown when at least one selected value is in trigger list; default is non-empty selection if no triggers.
-  - Free-Text: shown when parent answer is non-empty (optional yes/no interpretation if triggers include yes/no terms).
-- Submission to a configured endpoint with statuses: successfully_collected, partially_collected, conversation_aborted.
-- Session memory persists for ~1 hour by default (configurable).
-- Optional LLM-based validation for free‑text answers and optional LLM prompt rephrasing.
+**Intelligent conversational form-filling with natural language understanding**
+- ✅ **Conversational Interface**: Ask questions one at a time with natural flow
+- ✅ **Multiple Question Types**: free-text, yes-no, single-select, multi-select
+- ✅ **Smart Questionnaire Loading**: JSON/YAML from chat, files, or URLs
+- ✅ **Conditional Logic**: Advanced dependent question workflows
+- 🚀 **Natural Language Parsing** (NEW): Understand conversational responses
+  - "Absolutely!" → "Yes" for yes/no questions
+  - "I'd prefer email" → maps to email option in single-select
+  - "Both AWS and Azure" → maps to multiple selections
+  - "We have about 4 people" → maps to "3-5 people" range
+- ✅ **Graceful Fallback**: Standard exact matching when NLP is disabled
+- ✅ **Session Persistence**: Remember answers across conversation (~1 hour)
+- ✅ **API Submission**: Configurable endpoint with collection status tracking
+
+**Configuration:**
+```yaml
+# Enable natural language understanding (requires LLM)
+gather:
+  enable_natural_language_parsing: true  # Default: false
+  
+# Or via environment variable:
+# export AMBIVO_AGENTS_GATHER_ENABLE_NATURAL_LANGUAGE_PARSING=true
+```
 
 Usage
 ```bash
@@ -821,49 +843,144 @@ async def download_youtube():
 
 ### Database Operations
 
+#### DatabaseAgent - Basic Queries & Exploration
+
 ```python
 from ambivo_agents import DatabaseAgent
 
-async def database_demo():
-    agent, context = DatabaseAgent.create(user_id="db_user")
+async def database_exploration_demo():
+    """DatabaseAgent - Perfect for database connections and basic queries"""
+    agent = DatabaseAgent.create_simple(user_id="db_user")
     
-    # Connect to MySQL database
-    response = await agent.chat("Connect to MySQL database at localhost:3306, database: mydb, username: user, password: pass")
-    print(f"Connection: {response}")
+    # Connect to databases
+    await agent.chat("Connect to MySQL database at localhost:3306, database: mydb, username: user, password: pass")
+    # OR: await agent.chat("Connect to MongoDB using URI mongodb://localhost:27017/myapp")
+    # OR: await agent.chat("Connect to PostgreSQL at localhost:5432 database mydb user postgres password secret")
     
-    # Explore database schema
+    # Schema discovery and exploration
     schema = await agent.chat("show me the database schema")
-    print(f"Schema: {schema}")
+    tables = await agent.chat("list all tables and collections")
+    structure = await agent.chat("describe the users table structure")
     
-    # Natural language queries
-    result = await agent.chat("show me all users from the users table")
-    print(f"Users: {result}")
+    # Simple natural language queries (safety-limited)
+    users = await agent.chat("show me all users")  # → SELECT * FROM users LIMIT 10
+    count = await agent.chat("count total orders")  # → SELECT COUNT(*) FROM orders
+    recent = await agent.chat("show recent sales")  # → SELECT * FROM sales ORDER BY date DESC LIMIT 10
     
-    # Query with analytics handoff
-    analytics_result = await agent.chat("get sales data and create visualizations")
-    print(f"Analytics: {analytics_result}")
+    # File ingestion into database
+    await agent.chat("ingest users.csv into users table")
+    await agent.chat("load sales.json into MongoDB sales collection")
+    
+    # Export data for complex analysis
+    await agent.chat("export sales data for analytics")  # → Hands off to AnalyticsAgent
     
     await agent.cleanup_session()
+```
 
-# Database to Analytics Workflow
-async def database_analytics_workflow():
+#### AnalyticsAgent - Advanced SQL & Complex Analysis
+
+```python
+from ambivo_agents import AnalyticsAgent
+
+async def advanced_analytics_demo():
+    """AnalyticsAgent - Advanced SQL operations and complex analysis"""
+    agent = AnalyticsAgent.create_simple(user_id="analyst")
+    
+    # Load multiple datasets for complex analysis
+    await agent.chat("load data from sales.csv, customers.csv, and products.xlsx")
+    
+    # Complex JOINs and multi-table analysis
+    result = await agent.chat("""
+    Find top customers by revenue with their order history:
+    JOIN sales with customers and calculate total revenue per customer
+    """)
+    # → Generates: SELECT c.name, c.email, SUM(s.amount) as total_revenue, COUNT(s.id) as order_count
+    #              FROM customers c JOIN sales s ON c.id = s.customer_id 
+    #              GROUP BY c.id, c.name, c.email ORDER BY total_revenue DESC LIMIT 10
+    
+    # Window functions for advanced analytics
+    trends = await agent.chat("""
+    Calculate monthly sales trends with running totals and growth rates
+    """)
+    # → Generates: SELECT month, sales, 
+    #              SUM(sales) OVER (ORDER BY month) as running_total,
+    #              LAG(sales) OVER (ORDER BY month) as prev_month,
+    #              (sales - LAG(sales) OVER (ORDER BY month)) / LAG(sales) OVER (ORDER BY month) * 100 as growth_rate
+    #              FROM monthly_sales ORDER BY month
+    
+    # Common Table Expressions (CTEs) for complex logic
+    cohort = await agent.chat("""
+    Analyze customer cohort retention using CTEs to track repeat purchases
+    """)
+    # → Generates complex CTE-based cohort analysis
+    
+    # Statistical analysis and correlations
+    stats = await agent.chat("find correlations between price, quantity, and customer satisfaction")
+    outliers = await agent.chat("identify outliers in sales data using statistical methods")
+    seasonality = await agent.chat("analyze seasonal patterns in sales with time series functions")
+    
+    # Advanced aggregations with HAVING clauses
+    segments = await agent.chat("""
+    Group customers by purchase behavior and find high-value segments
+    """)
+    # → Generates: SELECT segment, COUNT(*) as customers, AVG(total_spent) as avg_spent
+    #              FROM customer_segments GROUP BY segment HAVING AVG(total_spent) > 1000
+    
+    # UNION operations for combining datasets
+    combined = await agent.chat("combine Q1 and Q2 sales data and analyze trends")
+    
+    await agent.cleanup_session()
+```
+
+#### Database to Analytics Workflow - Best of Both Worlds
+
+```python
+async def complete_data_workflow():
+    """Combining DatabaseAgent exploration with AnalyticsAgent advanced analysis"""
     from ambivo_agents import ModeratorAgent
     
     # Use ModeratorAgent for automatic routing
-    moderator, context = ModeratorAgent.create(
+    moderator = ModeratorAgent.create_simple(
         user_id="workflow_user",
         enabled_agents=["database_agent", "analytics", "assistant"]
     )
     
-    # Connect and query database
-    await moderator.chat("Connect to MySQL localhost:3306 database mydb user admin password secret")
+    # Step 1: DatabaseAgent - Connect and explore (automatic routing)
+    await moderator.chat("Connect to MySQL localhost:3306 database ecommerce user admin password secret")
+    schema = await moderator.chat("show me the database schema and table relationships")
     
-    # Query data with automatic analytics handoff
-    response = await moderator.chat("Get sales data from orders table and create charts showing trends")
-    print(response)
+    # Step 2: DatabaseAgent - Export data for complex analysis  
+    await moderator.chat("export sales data joined with customer data for advanced analytics")
+    
+    # Step 3: AnalyticsAgent - Advanced analysis (automatic routing)
+    analysis = await moderator.chat("""
+    Analyze the exported sales data:
+    1. Calculate customer lifetime value using window functions
+    2. Identify seasonal trends with time series analysis  
+    3. Find correlations between customer demographics and purchase behavior
+    4. Create customer segmentation using statistical clustering
+    """)
+    
+    # Step 4: AnalyticsAgent - Generate insights and recommendations
+    insights = await moderator.chat("create executive summary with key insights and recommendations")
     
     await moderator.cleanup_session()
 ```
+
+#### Feature Comparison Summary
+
+| **Capability** | **DatabaseAgent** | **AnalyticsAgent** |
+|----------------|------------------|-------------------|
+| **Database Connections** | ✅ MySQL, PostgreSQL, MongoDB | ❌ File-based only |
+| **Schema Discovery** | ✅ Full database exploration | ✅ File schema analysis |
+| **Simple Queries** | ✅ Basic SELECT, COUNT, etc. | ✅ All SQL operations |
+| **Complex JOINs** | ❌ Safety-limited | ✅ Full JOIN support |
+| **Window Functions** | ❌ Not supported | ✅ Complete support |
+| **CTEs & Subqueries** | ❌ Not supported | ✅ Advanced SQL |
+| **Statistical Analysis** | ❌ Basic only | ✅ Advanced statistics |
+| **Multi-File Analysis** | ❌ Single connection | ✅ Load multiple files |
+| **File Ingestion** | ✅ Direct to database | ✅ In-memory processing |
+| **Best Use Case** | Database exploration & connection | Complex analysis & business intelligence |
 
 ### File Reading and Database Ingestion
 

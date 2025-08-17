@@ -122,23 +122,43 @@ async def main():
         action="store_true",
         help="Perform a real HTTP submission using configured endpoint instead of simulating",
     )
+    parser.add_argument(
+        "--natural-language",
+        action="store_true",
+        help="Enable natural language parsing - understand conversational responses like 'absolutely!' or 'I prefer email'",
+    )
     args = parser.parse_args()
 
-    # Create agent (no external memory/LLM required for the deterministic prompts)
-    agent = GatherAgent.create_advanced(
-        agent_id="gather_cli",
-        memory_manager=LocalMemory(),
-        llm_service=None,
-        config={
-            "gather": {
-                # Provide a placeholder endpoint; real submission requires --real-submit
-                "submission_endpoint": "http://localhost/void",
-                "submission_method": "POST",
-                "submission_headers": {"Content-Type": "application/json"},
-                "memory_ttl_seconds": 3600,
-            }
-        },
-    )
+    # Configure based on natural language flag
+    config = {
+        "gather": {
+            # Provide a placeholder endpoint; real submission requires --real-submit
+            "submission_endpoint": "http://localhost/void",
+            "submission_method": "POST",
+            "submission_headers": {"Content-Type": "application/json"},
+            "memory_ttl_seconds": 3600,
+            "enable_natural_language_parsing": args.natural_language,  # Enable NLP if flag set
+        }
+    }
+    
+    # Create agent with optional LLM service for natural language parsing
+    if args.natural_language:
+        print("\n✨ Natural Language Mode ENABLED - I'll understand conversational responses!")
+        print("   Examples: 'Yeah absolutely!', 'I'd prefer email', 'Both AWS and Azure please'")
+        # Use create_simple which auto-configures LLM from config
+        agent = GatherAgent.create_simple(
+            user_id="gather_cli_user",
+            config=config
+        )
+    else:
+        print("\n📋 Strict Mode - Please provide exact answers as shown in options")
+        # Create without LLM for deterministic prompts
+        agent = GatherAgent.create_advanced(
+            agent_id="gather_cli",
+            memory_manager=LocalMemory(),
+            llm_service=None,
+            config=config,
+        )
 
     # Simulate submission unless --real-submit is provided
     if not args.real_submit:
@@ -160,7 +180,14 @@ async def main():
     print("\n=== GatherAgent Interactive Demo ===")
     print("Type your answers after each prompt.")
     print("Commands: 'finish' to submit, 'cancel' to abort.")
-    print("For multi-select, enter comma-separated values, e.g., 'AWS, Azure'\n")
+    
+    if args.natural_language:
+        print("\n🎯 Natural Language Examples You Can Try:")
+        print("  Yes/No: 'Absolutely!', 'Not really', 'Yeah we do'")
+        print("  Single-select: 'I'd go with the first one', 'The small company option'")
+        print("  Multi-select: 'Both AWS and GCP', 'All except Azure', 'The first two'\n")
+    else:
+        print("For multi-select, enter comma-separated values, e.g., 'AWS, Azure'\n")
 
     # Start by sending the questionnaire JSON
     first_prompt = await agent.chat(json.dumps(questionnaire))
