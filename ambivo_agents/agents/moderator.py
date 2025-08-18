@@ -2013,6 +2013,46 @@ Please write and execute the code to solve this task, explaining each step clear
                         f"🧠 Moderator retrieved {len(conversation_history)} messages for analysis"
                     )
 
+            # 🆕 Check if assigned skills should handle this request BEFORE agent routing
+            skill_result = await self._should_use_assigned_skills(user_message)
+            
+            if skill_result.get('should_use_skills'):
+                self.logger.info(f"🔧 ModeratorAgent using assigned skill: {skill_result['used_skill']}")
+                
+                # Translate technical response to natural language
+                execution_result = skill_result['execution_result']
+                if execution_result.get('success'):
+                    natural_response = await self._translate_technical_response(execution_result, user_message)
+                    
+                    # Create response with skill metadata
+                    response = self.create_response(
+                        content=natural_response,
+                        recipient_id=message.sender_id,
+                        session_id=message.session_id,
+                        conversation_id=message.conversation_id,
+                        metadata={
+                            "used_assigned_skill": True,
+                            "skill_type": skill_result['intent']['skill_type'],
+                            "skill_name": skill_result['intent']['skill_name'],
+                            "skill_confidence": skill_result['intent']['confidence'],
+                            "agent_type": "moderator_with_skills",
+                            "underlying_agent": execution_result.get('agent_type'),
+                            "processing_timestamp": datetime.now().isoformat(),
+                            "routing_bypassed": True,
+                        },
+                    )
+                    
+                    # Store response
+                    if self.memory:
+                        self.memory.store_message(response)
+                    
+                    self.logger.info(f"✅ ModeratorAgent skill response completed successfully")
+                    return response
+                else:
+                    # Skill execution failed, continue with normal routing but add context
+                    self.logger.warning(f"Assigned skill failed: {execution_result.get('error')}, falling back to agent routing")
+                    # Don't modify user_message here - let normal routing handle it
+
                 except Exception as e:
                     self.logger.warning(f"Could not get conversation history: {e}")
 

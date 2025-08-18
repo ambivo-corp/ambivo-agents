@@ -153,11 +153,16 @@ await agent.cleanup_session()
 ## Available Agents
 
 ### ModeratorAgent 
+**Enhanced with Skill Assignment System**
 - Intelligent orchestrator that routes to specialized agents
 - Context-aware multi-turn conversations
 - Automatic agent selection based on query analysis
 - Session management and cleanup
 - Workflow execution and coordination
+- ✨ **NEW: Skill Assignment** - Assign external capabilities that take priority over agent routing
+- ✨ **Smart Skill Routing** - Assigned skills are checked first, then falls back to normal agent routing
+- ✨ **Unified Interface** - Single agent that can handle both assigned skills and general orchestration
+- 🎯 **Use Cases**: Custom integrations with existing agent orchestration, priority skill handling
 
 ### Database Agent (Optional)
 **Best for: Database connections, data exploration, and basic queries**
@@ -190,10 +195,15 @@ await agent.cleanup_session()
 - **AnalyticsAgent**: Complex analysis, joins, statistical operations, advanced SQL
 
 ### Assistant Agent
-- General purpose conversational AI
-- Context-aware responses
-- Multi-turn conversations
+**Enhanced with Skill Assignment System**
+- General purpose conversational AI with intelligent skill routing
+- Context-aware responses and multi-turn conversations
 - Customizable system messages
+- ✨ **NEW: Skill Assignment** - Assign external capabilities like API specs, databases, and knowledge bases
+- ✨ **Smart Intent Detection** - Automatically detects when to use assigned skills vs normal conversation
+- ✨ **Dynamic Agent Spawning** - Internally creates specialized agents (APIAgent, DatabaseAgent, etc.) on-demand
+- ✨ **Natural Language Translation** - Converts technical responses to conversational language
+- 🎯 **Use Cases**: Custom API integration, database access, document search, while maintaining conversational interface
 
 ### Code Executor Agent
 - Secure Python and Bash execution in Docker
@@ -772,6 +782,127 @@ ambivo_agents/
 ├── services/        # Service layer
 ├── __init__.py      # Package initialization
 └── cli.py          # Command line interface
+```
+
+## Skill Assignment System
+
+### Overview
+The **Skill Assignment System** allows AssistantAgent and ModeratorAgent to be "assigned" external capabilities like API specifications, database connections, and knowledge bases. The agents then intelligently detect when to use these skills and internally spawn specialized agents on-demand.
+
+### Key Features
+- 🎯 **Intelligent Intent Detection** - Automatically detects when user requests should use assigned skills
+- 🚀 **Dynamic Agent Spawning** - Creates APIAgent, DatabaseAgent, KnowledgeBaseAgent internally as needed
+- 🌟 **Natural Language Translation** - Converts technical responses to conversational language
+- 🔄 **Graceful Fallback** - Falls back to normal agent behavior when no skills match
+- 🎛️ **Priority System** - Assigned skills take precedence over normal agent routing
+
+### API Skill Assignment
+```python
+from ambivo_agents import AssistantAgent
+
+async def api_skill_example():
+    # Create agent
+    assistant = AssistantAgent.create_simple(user_id="developer")
+    
+    # Assign API skill from OpenAPI spec
+    result = await assistant.assign_api_skill(
+        api_spec_path="/path/to/openapi.yaml",
+        base_url="https://api.example.com/v1",
+        api_token="your-api-token",
+        skill_name="my_api"
+    )
+    
+    # Now natural language API requests work automatically!
+    response = await assistant.chat("create a lead for John Doe")
+    # Agent automatically:
+    # 1. Detects API intent
+    # 2. Spawns APIAgent internally  
+    # 3. Makes the API call
+    # 4. Returns natural language response
+    
+    await assistant.cleanup_session()
+```
+
+### Database Skill Assignment
+```python
+async def database_skill_example():
+    assistant = AssistantAgent.create_simple(user_id="analyst")
+    
+    # Assign database skill
+    await assistant.assign_database_skill(
+        connection_string="postgresql://user:pass@localhost:5432/sales_db",
+        skill_name="sales_database",
+        description="Sales and customer data"
+    )
+    
+    # Natural language database queries
+    response = await assistant.chat("show me recent sales data")
+    # Internally creates DatabaseAgent and executes query
+    
+    await assistant.cleanup_session()
+```
+
+### Knowledge Base Skill Assignment
+```python
+async def kb_skill_example():
+    assistant = AssistantAgent.create_simple(user_id="support")
+    
+    # Assign knowledge base skill
+    await assistant.assign_kb_skill(
+        documents_path="/path/to/company/docs/",
+        collection_name="company_knowledge",
+        skill_name="company_docs"
+    )
+    
+    # Document search requests
+    response = await assistant.chat("what do our docs say about pricing?")
+    # Internally creates KnowledgeBaseAgent and searches documents
+    
+    await assistant.cleanup_session()
+```
+
+### Multiple Skills with ModeratorAgent
+```python
+async def multiple_skills_example():
+    moderator = ModeratorAgent.create_simple(
+        user_id="power_user",
+        enabled_agents=["assistant", "api_agent", "database_agent"]
+    )
+    
+    # Assign multiple skills
+    await moderator.assign_api_skill("/path/to/api_spec.yaml", "https://api.example.com")
+    await moderator.assign_database_skill("postgresql://localhost/db", "main_db")
+    await moderator.assign_kb_skill("/docs/", skill_name="knowledge")
+    
+    # Skills take priority over agent routing
+    response1 = await moderator.chat("create a lead")           # → Uses API skill
+    response2 = await moderator.chat("query the database")     # → Uses DB skill  
+    response3 = await moderator.chat("search documentation")   # → Uses KB skill
+    response4 = await moderator.chat("what's the weather?")    # → Normal routing
+    
+    await moderator.cleanup_session()
+```
+
+### Skill Management
+```python
+async def skill_management():
+    assistant = AssistantAgent.create_simple(user_id="user")
+    
+    # Assign skills
+    await assistant.assign_api_skill("/api/spec.yaml", skill_name="api1")
+    await assistant.assign_database_skill("mysql://localhost/db", "db1")
+    
+    # Check assigned skills
+    skills = assistant.list_assigned_skills()
+    print(f"Assigned skills: {skills}")
+    # Output: {'api_skills': ['api1'], 'database_skills': ['db1'], 'kb_skills': [], 'total_skills': 2}
+    
+    # Agent status includes skill information
+    status = assistant.get_agent_status()
+    print(f"Capabilities: {status['capabilities']}")
+    print(f"Assigned skills: {status['assigned_skills']}")
+    
+    await assistant.cleanup_session()
 ```
 
 ## Usage Examples
