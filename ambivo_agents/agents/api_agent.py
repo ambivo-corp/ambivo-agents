@@ -59,7 +59,7 @@ class AuthType(Enum):
 class OutputConfig:
     """
     Configuration for handling large API responses
-    
+
     File Output Settings:
     - auto_save_large_responses: Automatically save responses exceeding size threshold
     - size_threshold_kb: Response size threshold in KB to trigger file saving
@@ -68,7 +68,7 @@ class OutputConfig:
     - detect_content_type: Automatically detect JSON/XML/HTML and choose appropriate extension
     - max_inline_size_kb: Maximum size to display inline before truncating
     """
-    
+
     auto_save_large_responses: bool = True
     size_threshold_kb: int = 50  # 50KB threshold
     output_directory: str = "./api_responses"
@@ -83,18 +83,20 @@ class OutputConfig:
 class SecurityConfig:
     """
     Security configuration for API calls
-    
+
     Domain Security:
     - allowed_domains=None (default): Allow ALL domains except those in blocked_domains
     - allowed_domains=[list]: Restrict to ONLY the specified domains (more secure)
     - blocked_domains: Always blocked, regardless of allowed_domains setting
-    
+
     Default behavior allows all external APIs while blocking local network access.
     For production environments, consider setting specific allowed_domains.
     """
 
     allowed_domains: Optional[List[str]] = None  # None = allow all (except blocked)
-    blocked_domains: Optional[List[str]] = field(default_factory=lambda: ["localhost", "127.0.0.1", "0.0.0.0"])
+    blocked_domains: Optional[List[str]] = field(
+        default_factory=lambda: ["localhost", "127.0.0.1", "0.0.0.0"]
+    )
     allowed_methods: Optional[List[HTTPMethod]] = None
     blocked_methods: Optional[List[HTTPMethod]] = None
     max_redirects: int = 5
@@ -239,7 +241,9 @@ class APIAgent(BaseAgent, WebAgentHistoryMixin):
             # Initialize security config from configuration
             if security_config is None:
                 security_config = SecurityConfig(
-                    allowed_domains=api_config.get("allowed_domains"),  # None = allow all domains (except blocked)
+                    allowed_domains=api_config.get(
+                        "allowed_domains"
+                    ),  # None = allow all domains (except blocked)
                     blocked_domains=api_config.get(
                         "blocked_domains", ["localhost", "127.0.0.1", "0.0.0.0"]
                     ),
@@ -276,7 +280,9 @@ class APIAgent(BaseAgent, WebAgentHistoryMixin):
                     auto_save_large_responses=api_config.get("auto_save_large_responses", True),
                     size_threshold_kb=api_config.get("size_threshold_kb", 10),
                     output_directory=api_config.get("output_directory", "./api_responses"),
-                    filename_template=api_config.get("filename_template", "response_{timestamp}_{domain}_{method}"),
+                    filename_template=api_config.get(
+                        "filename_template", "response_{timestamp}_{domain}_{method}"
+                    ),
                     detect_content_type=api_config.get("detect_content_type", True),
                     max_inline_size_kb=api_config.get("max_inline_size_kb", 5),
                     create_summary=api_config.get("create_summary", True),
@@ -377,7 +383,7 @@ Always prioritize security and follow the configured restrictions. Use your inte
     def _detect_content_type(self, content: str, headers: Dict[str, str]) -> str:
         """Detect content type for appropriate file extension"""
         content_type = headers.get("content-type", "").lower()
-        
+
         # Check explicit content-type header first
         if "application/json" in content_type:
             return "json"
@@ -389,7 +395,7 @@ Always prioritize security and follow the configured restrictions. Use your inte
             return "csv"
         elif "text/plain" in content_type:
             return "txt"
-        
+
         # Fallback: analyze content structure
         content_stripped = content.strip()
         if content_stripped.startswith(("{", "[")):
@@ -398,30 +404,28 @@ Always prioritize security and follow the configured restrictions. Use your inte
                 return "json"
             except:
                 pass
-        
+
         if content_stripped.startswith("<?xml") or content_stripped.startswith("<"):
             return "xml" if "<?xml" in content_stripped else "html"
-        
+
         return "txt"
 
     def _generate_filename(self, url: str, method: str, content_type: str) -> str:
         """Generate filename for saved response"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+
         # Extract domain from URL
         try:
             parsed_url = urllib.parse.urlparse(url)
             domain = parsed_url.netloc.replace(".", "_")
         except:
             domain = "unknown"
-        
+
         # Use template from config
         filename = self.output_config.filename_template.format(
-            timestamp=timestamp,
-            domain=domain,
-            method=method.lower()
+            timestamp=timestamp, domain=domain, method=method.lower()
         )
-        
+
         # Add appropriate extension
         extension = content_type if content_type in ["json", "xml", "html", "csv", "txt"] else "txt"
         return f"{filename}.{extension}"
@@ -430,22 +434,24 @@ Always prioritize security and follow the configured restrictions. Use your inte
         """Determine if response should be saved to file"""
         if not self.output_config.auto_save_large_responses:
             return False
-        
-        content_size_kb = len(content.encode('utf-8')) / 1024
+
+        content_size_kb = len(content.encode("utf-8")) / 1024
         return content_size_kb > self.output_config.size_threshold_kb
 
-    async def _save_response_to_file(self, content: str, url: str, method: str, headers: Dict[str, str]) -> Tuple[str, str]:
+    async def _save_response_to_file(
+        self, content: str, url: str, method: str, headers: Dict[str, str]
+    ) -> Tuple[str, str]:
         """Save large response to file and return file path and summary"""
         try:
             # Ensure output directory exists
             output_dir = Path(self.output_config.output_directory)
             output_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Detect content type and generate filename
             content_type = self._detect_content_type(content, headers)
             filename = self._generate_filename(url, method, content_type)
             file_path = output_dir / filename
-            
+
             # Format content based on type
             if content_type == "json" and not self.output_config.compress_json:
                 try:
@@ -456,30 +462,30 @@ Always prioritize security and follow the configured restrictions. Use your inte
                     formatted_content = content
             else:
                 formatted_content = content
-            
+
             # Save to file
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(formatted_content)
-            
+
             # Create summary
-            content_size_kb = len(content.encode('utf-8')) / 1024
+            content_size_kb = len(content.encode("utf-8")) / 1024
             summary = f"""📁 Response saved to file: {file_path}
 📊 Size: {content_size_kb:.1f} KB
 🌐 URL: {url}
 🔧 Method: {method}
 📄 Type: {content_type.upper()}
 ⏰ Timestamp: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}"""
-            
+
             if self.output_config.create_summary:
                 # Save summary file too
                 summary_path = output_dir / f"{filename}.summary.txt"
-                with open(summary_path, 'w', encoding='utf-8') as f:
+                with open(summary_path, "w", encoding="utf-8") as f:
                     f.write(summary)
                     f.write(f"\n\n=== Content Preview (first 500 chars) ===\n")
                     f.write(content[:500] + "..." if len(content) > 500 else content)
-            
+
             return str(file_path), summary
-            
+
         except Exception as e:
             self.logger.error(f"Failed to save response to file: {e}")
             return "", f"❌ Failed to save response to file: {str(e)}"
@@ -487,21 +493,21 @@ Always prioritize security and follow the configured restrictions. Use your inte
     def _get_inline_content_preview(self, content: str, content_type: str) -> str:
         """Get truncated content for inline display"""
         max_size_bytes = self.output_config.max_inline_size_kb * 1024
-        
-        if len(content.encode('utf-8')) <= max_size_bytes:
+
+        if len(content.encode("utf-8")) <= max_size_bytes:
             return content
-        
+
         # Truncate content but try to keep it valid
         truncated = content[:max_size_bytes]
-        
+
         if content_type == "json":
             # Try to truncate at a reasonable JSON boundary
-            last_brace = truncated.rfind('}')
-            last_bracket = truncated.rfind(']')
+            last_brace = truncated.rfind("}")
+            last_bracket = truncated.rfind("]")
             if last_brace > 0 or last_bracket > 0:
                 cut_point = max(last_brace, last_bracket) + 1
                 truncated = truncated[:cut_point]
-        
+
         return truncated + f"\n\n... (truncated {len(content) - len(truncated)} characters)"
 
     async def cleanup_session(self):
@@ -1750,19 +1756,15 @@ except Exception as e:
         method = HTTPMethod(method_match.group(1).upper()) if method_match else HTTPMethod.GET
 
         # Add https:// protocol if missing
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
 
         # Extract Bearer token
         auth_config = None
         bearer_match = re.search(patterns["bearer_token"], message, re.IGNORECASE)
         if bearer_match:
             token = bearer_match.group(1)
-            auth_config = AuthConfig(
-                auth_type=AuthType.BEARER,
-                token=token,
-                token_prefix="Bearer"
-            )
+            auth_config = AuthConfig(auth_type=AuthType.BEARER, token=token, token_prefix="Bearer")
 
         # Extract other components
         headers = None
@@ -1788,13 +1790,13 @@ except Exception as e:
             pass
 
         return APIRequest(
-            url=url, 
-            method=method, 
-            headers=headers, 
-            json_data=json_data, 
+            url=url,
+            method=method,
+            headers=headers,
+            json_data=json_data,
             params=params,
             auth_config=auth_config,
-            timeout=8  # Use safe timeout by default
+            timeout=8,  # Use safe timeout by default
         )
 
     async def process_message(
@@ -1837,33 +1839,46 @@ except Exception as e:
                     # Handle response content with file output support
                     if response.json_data:
                         json_content = json.dumps(response.json_data, indent=2)
-                        
+
                         if self._should_save_to_file(json_content):
                             file_path, file_summary = await self._save_response_to_file(
-                                json_content, response.url, "GET", response.headers  # Default to GET for non-streaming
+                                json_content,
+                                response.url,
+                                "GET",
+                                response.headers,  # Default to GET for non-streaming
                             )
-                            
+
                             if file_path:
                                 content += f"\n{file_summary}\n\n"
-                                preview_content = self._get_inline_content_preview(json_content, "json")
-                                content += f"JSON Response Preview:\n```json\n{preview_content}\n```"
+                                preview_content = self._get_inline_content_preview(
+                                    json_content, "json"
+                                )
+                                content += (
+                                    f"JSON Response Preview:\n```json\n{preview_content}\n```"
+                                )
                             else:
                                 content += f"JSON Response:\n```json\n{json_content}\n```"
                         else:
                             content += f"JSON Response:\n```json\n{json_content}\n```"
                     else:
                         response_content = response.content
-                        
+
                         if self._should_save_to_file(response_content):
                             file_path, file_summary = await self._save_response_to_file(
                                 response_content, response.url, "GET", response.headers
                             )
-                            
+
                             if file_path:
                                 content += f"\n{file_summary}\n\n"
-                                content_type = self._detect_content_type(response_content, response.headers)
-                                preview_content = self._get_inline_content_preview(response_content, content_type)
-                                content += f"Content Preview:\n```{content_type}\n{preview_content}\n```"
+                                content_type = self._detect_content_type(
+                                    response_content, response.headers
+                                )
+                                preview_content = self._get_inline_content_preview(
+                                    response_content, content_type
+                                )
+                                content += (
+                                    f"Content Preview:\n```{content_type}\n{preview_content}\n```"
+                                )
                             else:
                                 content += f"Content: {response_content[:1000]}{'...' if len(response_content) > 1000 else ''}"
                         else:
@@ -2269,7 +2284,10 @@ except Exception as e:
                 yield StreamChunk(
                     text=f"❌ API Request Failed: {response.error}",
                     sub_type=StreamSubType.ERROR,
-                    metadata={"error": response.error, "endpoint": f"{endpoint.method.value} {endpoint.path}"},
+                    metadata={
+                        "error": response.error,
+                        "endpoint": f"{endpoint.method.value} {endpoint.path}",
+                    },
                 )
                 yield StreamChunk(
                     text=f"📋 Attempted: {endpoint.method.value} {api_request.url}",
@@ -2312,27 +2330,35 @@ except Exception as e:
                 if response.json_data:
                     # Convert JSON data to string for file operations
                     json_content = json.dumps(response.json_data, indent=2)
-                    
+
                     # Check if we should save to file
                     if self._should_save_to_file(json_content):
                         file_path, file_summary = await self._save_response_to_file(
                             json_content, response.url, endpoint.method.value, response.headers
                         )
-                        
+
                         if file_path:
                             # Provide file saved notification
                             yield StreamChunk(
                                 text=file_summary,
                                 sub_type=StreamSubType.STATUS,
-                                metadata={"file_saved": True, "file_path": file_path, "content_type": "json"},
+                                metadata={
+                                    "file_saved": True,
+                                    "file_path": file_path,
+                                    "content_type": "json",
+                                },
                             )
-                            
+
                             # Show truncated preview
                             preview_content = self._get_inline_content_preview(json_content, "json")
                             yield StreamChunk(
                                 text=f"📦 **JSON Response Preview**:\n```json\n{preview_content}\n```",
                                 sub_type=StreamSubType.CONTENT,
-                                metadata={"content_type": "json", "truncated": True, "file_path": file_path},
+                                metadata={
+                                    "content_type": "json",
+                                    "truncated": True,
+                                    "file_path": file_path,
+                                },
                             )
                         else:
                             # Fallback to full content if file save failed
@@ -2351,28 +2377,38 @@ except Exception as e:
                 else:
                     # Handle non-JSON content
                     content = response.content
-                    
+
                     # Check if we should save to file
                     if self._should_save_to_file(content):
                         file_path, file_summary = await self._save_response_to_file(
                             content, response.url, endpoint.method.value, response.headers
                         )
-                        
+
                         if file_path:
                             # Provide file saved notification
                             yield StreamChunk(
                                 text=file_summary,
                                 sub_type=StreamSubType.STATUS,
-                                metadata={"file_saved": True, "file_path": file_path, "content_type": "text"},
+                                metadata={
+                                    "file_saved": True,
+                                    "file_path": file_path,
+                                    "content_type": "text",
+                                },
                             )
-                            
+
                             # Show truncated preview
                             content_type = self._detect_content_type(content, response.headers)
-                            preview_content = self._get_inline_content_preview(content, content_type)
+                            preview_content = self._get_inline_content_preview(
+                                content, content_type
+                            )
                             yield StreamChunk(
                                 text=f"📄 **Content Preview**:\n```{content_type}\n{preview_content}\n```",
                                 sub_type=StreamSubType.CONTENT,
-                                metadata={"content_type": content_type, "truncated": True, "file_path": file_path},
+                                metadata={
+                                    "content_type": content_type,
+                                    "truncated": True,
+                                    "file_path": file_path,
+                                },
                             )
                         else:
                             # Fallback to truncated content if file save failed
@@ -2450,7 +2486,7 @@ except Exception as e:
         ]
 
         try:
-            if hasattr(self.llm_service, 'generate_response_stream'):
+            if hasattr(self.llm_service, "generate_response_stream"):
                 async for chunk in self.llm_service.generate_response_stream(messages):
                     yield StreamChunk(text=chunk, sub_type=StreamSubType.CONTENT)
             else:

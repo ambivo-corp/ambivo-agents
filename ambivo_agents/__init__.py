@@ -15,6 +15,7 @@ from .agents.code_executor import CodeExecutorAgent
 # Database agent - optional import
 try:
     from .agents.database_agent import DatabaseAgent
+
     _DATABASE_AGENT_AVAILABLE = True
 except ImportError:
     _DATABASE_AGENT_AVAILABLE = False

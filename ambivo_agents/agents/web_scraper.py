@@ -79,21 +79,21 @@ class SimpleDockerExecutor:
         self.config = config or {}
         self.docker_image = self.config.get("docker_image", "sgosain/amb-ubuntu-python-public-pod")
         self.timeout = self.config.get("timeout", 60)
-        
+
         # Initialize Docker shared manager
         self.shared_manager = get_shared_manager()
         self.shared_manager.setup_directories()
-        
+
         # Get agent-specific subdirectory names from config
         self.output_subdir = self.config.get("output_subdir", "scraper")
         self.temp_subdir = self.config.get("temp_subdir", "scraper")
         self.handoff_subdir = self.config.get("handoff_subdir", "scraper")
-        
+
         # Set up proper directories using DockerSharedManager
         self.output_dir = self.shared_manager.get_host_path(self.output_subdir, "output")
         self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
         self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
-        
+
         # Ensure all directories exist
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
@@ -197,42 +197,39 @@ asyncio.run(scrape_url())
             # Parse result
             output = container.decode("utf-8") if isinstance(container, bytes) else str(container)
             result = json.loads(output.strip().split("\n")[-1])
-            
+
             # Save result to shared output directory
             if result.get("success"):
                 self._save_scraping_result(task, result)
-            
+
             return result
 
         except Exception as e:
             return {"success": False, "error": str(e), "url": task.url, "execution_mode": "docker"}
-    
+
     def _save_scraping_result(self, task: ScrapingTask, result: Dict[str, Any]) -> None:
         """Save scraping result to shared output directory"""
         try:
             import hashlib
             import time
-            
+
             # Create filename based on URL and timestamp
             url_hash = hashlib.md5(task.url.encode()).hexdigest()[:8]
             timestamp = int(time.time())
             filename = f"scraping_result_{url_hash}_{timestamp}.json"
-            
+
             # Save to shared output directory
             output_file = self.output_dir / filename
-            with open(output_file, 'w', encoding='utf-8') as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
-            
+
             # Also save to handoff directory for analytics workflow
             handoff_file = self.handoff_dir / filename
-            with open(handoff_file, 'w', encoding='utf-8') as f:
+            with open(handoff_file, "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
-            
-            result["saved_files"] = {
-                "output": str(output_file),
-                "handoff": str(handoff_file)
-            }
-            
+
+            result["saved_files"] = {"output": str(output_file), "handoff": str(handoff_file)}
+
         except Exception as e:
             logging.warning(f"Failed to save scraping result: {e}")
 
@@ -437,9 +434,12 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             )
 
             # Extract kwargs from message metadata (passed from chat interface)
-            chat_kwargs = {k: v for k, v in message.metadata.items() 
-                          if k not in ['chat_interface', 'simplified_call']}
-            
+            chat_kwargs = {
+                k: v
+                for k, v in message.metadata.items()
+                if k not in ["chat_interface", "simplified_call"]
+            }
+
             # Route request based on LLM analysis with context
             response_content = await self._route_scraping_with_llm_analysis_with_context(
                 intent_analysis, user_message, context, llm_context, chat_kwargs
@@ -544,13 +544,17 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
         # Route based on intent
         chat_kwargs = chat_kwargs or {}
-        
+
         if primary_intent == "help_request":
             return await self._handle_scraping_help_request_with_context(user_message, llm_context)
         elif primary_intent == "scrape_single":
-            return await self._handle_single_scrape(urls, extraction_prefs, user_message, **chat_kwargs)
+            return await self._handle_single_scrape(
+                urls, extraction_prefs, user_message, **chat_kwargs
+            )
         elif primary_intent == "scrape_batch":
-            return await self._handle_batch_scrape(urls, extraction_prefs, user_message, **chat_kwargs)
+            return await self._handle_batch_scrape(
+                urls, extraction_prefs, user_message, **chat_kwargs
+            )
         elif primary_intent == "check_accessibility":
             return await self._handle_accessibility_check(urls, user_message)
         else:
@@ -683,7 +687,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 extract_links=extraction_prefs.get("extract_links", True),
                 extract_images=extraction_prefs.get("extract_images", True),
                 take_screenshot=extraction_prefs.get("take_screenshot", False),
-                **kwargs  # Pass through topic, external_handoff_dir, etc.
+                **kwargs,  # Pass through topic, external_handoff_dir, etc.
             )
 
             if result["success"]:
@@ -968,65 +972,72 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             )
         )
 
-    def _save_scraped_content_to_file(self, scraped_data: Dict[str, Any], topic: str = "web_scraping", external_handoff_dir: str = None) -> str:
+    def _save_scraped_content_to_file(
+        self,
+        scraped_data: Dict[str, Any],
+        topic: str = "web_scraping",
+        external_handoff_dir: str = None,
+    ) -> str:
         """Save scraped content to shared file for handoff"""
         import os
         from datetime import datetime
-        
+
         # Use external handoff directory if provided (for topic isolation)
         if external_handoff_dir:
             handoff_dir = external_handoff_dir
             os.makedirs(handoff_dir, exist_ok=True)
         else:
-            # Create handoff directory if it doesn't exist  
+            # Create handoff directory if it doesn't exist
             try:
                 shared_manager = get_shared_manager()
-                base_path = getattr(shared_manager, 'base_path', None) or getattr(shared_manager, 'shared_path', './docker_shared')
+                base_path = getattr(shared_manager, "base_path", None) or getattr(
+                    shared_manager, "shared_path", "./docker_shared"
+                )
             except:
-                base_path = './docker_shared'
-            
+                base_path = "./docker_shared"
+
             # Create session-based topic-specific subdirectory for content isolation
             # This ensures all scrapes for the same session/topic go to the same directory
-            topic_clean = topic.replace(' ', '_').replace('-', '_')[:50]
-            
+            topic_clean = topic.replace(" ", "_").replace("-", "_")[:50]
+
             # Use session_id if available, otherwise create session-based identifier
-            if hasattr(self, 'session_id') and self.session_id:
+            if hasattr(self, "session_id") and self.session_id:
                 session_identifier = self.session_id[:8]  # First 8 chars of session ID
-            elif hasattr(self, 'user_id') and self.user_id:
+            elif hasattr(self, "user_id") and self.user_id:
                 session_identifier = f"{self.user_id}_{datetime.now().strftime('%Y%m%d_%H%M')}"
             else:
                 session_identifier = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
+
             topic_subdir = f"scraper_{topic_clean}_{session_identifier}"
-            
+
             handoff_dir = os.path.join(base_path, "handoff", "scraper", topic_subdir)
             os.makedirs(handoff_dir, exist_ok=True)
-        
+
         # Create filename with timestamp
         file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        url_hash = str(hash(scraped_data.get('url', 'unknown')))[-6:]
+        url_hash = str(hash(scraped_data.get("url", "unknown")))[-6:]
         filename = f"scraped_{topic.replace(' ', '_')}_{url_hash}_{file_timestamp}.json"
         filepath = os.path.join(handoff_dir, filename)
-        
+
         # Extract meaningful content for the file
         content_summary = {
-            'url': scraped_data.get('url', 'N/A'),
-            'title': scraped_data.get('title', 'N/A'),
-            'success': scraped_data.get('success', False),
-            'scraped_at': datetime.now().isoformat(),
-            'topic': topic,
-            'content_length': len(str(scraped_data.get('content', ''))),
-            'raw_content': scraped_data.get('content', ''),
-            'status_code': scraped_data.get('status_code', 0),
-            'method': scraped_data.get('method', 'unknown'),
-            'links': scraped_data.get('links', [])[:10],  # First 10 links
-            'images': scraped_data.get('images', [])[:5],  # First 5 images
+            "url": scraped_data.get("url", "N/A"),
+            "title": scraped_data.get("title", "N/A"),
+            "success": scraped_data.get("success", False),
+            "scraped_at": datetime.now().isoformat(),
+            "topic": topic,
+            "content_length": len(str(scraped_data.get("content", ""))),
+            "raw_content": scraped_data.get("content", ""),
+            "status_code": scraped_data.get("status_code", 0),
+            "method": scraped_data.get("method", "unknown"),
+            "links": scraped_data.get("links", [])[:10],  # First 10 links
+            "images": scraped_data.get("images", [])[:5],  # First 5 images
         }
-        
+
         # Save to JSON file
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(content_summary, f, indent=2, ensure_ascii=False)
-        
+
         return filepath
 
     async def _scrape_url(self, url: str, method: str = "auto", **kwargs) -> Dict[str, Any]:
@@ -1043,18 +1054,20 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 result = await self._scrape_with_proxy(url, method, **kwargs)
             else:
                 result = await self._scrape_locally(url, method, **kwargs)
-            
+
             # Save successful scrapes to file for handoff
-            if result.get('success') and result.get('content'):
-                topic = kwargs.get('topic', 'web_scraping')
-                external_handoff_dir = kwargs.get('external_handoff_dir', None)
+            if result.get("success") and result.get("content"):
+                topic = kwargs.get("topic", "web_scraping")
+                external_handoff_dir = kwargs.get("external_handoff_dir", None)
                 try:
-                    filepath = self._save_scraped_content_to_file(result, topic, external_handoff_dir)
-                    result['saved_to_file'] = filepath
+                    filepath = self._save_scraped_content_to_file(
+                        result, topic, external_handoff_dir
+                    )
+                    result["saved_to_file"] = filepath
                     self.logger.info(f"Scraped content saved to: {filepath}")
                 except Exception as save_error:
                     self.logger.warning(f"Failed to save scraped content: {save_error}")
-            
+
             return result
 
         except Exception as e:
@@ -1362,7 +1375,9 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             "execution_mode": "local",
         }
 
-    async def _batch_scrape(self, urls: List[str], method: str = "auto", **kwargs) -> Dict[str, Any]:
+    async def _batch_scrape(
+        self, urls: List[str], method: str = "auto", **kwargs
+    ) -> Dict[str, Any]:
         """Batch scraping with rate limiting from config"""
         results = []
         rate_limit = self.scraper_config.get("rate_limit_seconds", 1.0)
@@ -1617,7 +1632,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 yield f"• **Time:** {result['response_time']:.2f}s\n\n"
 
                 # Show content preview
-                preview_length = self.scraper_config.get('max_content_length', 75000)
+                preview_length = self.scraper_config.get("max_content_length", 75000)
                 content_preview = result.get("content", "")[:preview_length]
                 if content_preview:
                     yield f"📄 **Content Preview:**\n{content_preview}{'...' if len(result.get('content', '')) > preview_length else ''}\n"

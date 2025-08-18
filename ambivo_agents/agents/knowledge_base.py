@@ -92,9 +92,9 @@ class QdrantServiceAdapter:
             if not documents and doc_path:
                 # Use enhanced file processor service
                 from ..services.file_processor import FileProcessorService
-                
+
                 file_processor = FileProcessorService()
-                
+
                 # Check if file is supported by enhanced processor
                 if file_processor.is_supported_file(doc_path):
                     print(f"Using enhanced file processor for {doc_path}")
@@ -340,8 +340,35 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         )
 
         # Simple topic extraction: keywords longer than 3 chars, minus stopwords
-        stop = {"the","and","for","with","this","that","into","what","how","where","why","when","from","about","please","can","you","me","to","in","on","of","a","an","is","are"}
-        topics = [w.strip(".,:;!?()[]{}\"\'") for w in user_message.lower().split()]
+        stop = {
+            "the",
+            "and",
+            "for",
+            "with",
+            "this",
+            "that",
+            "into",
+            "what",
+            "how",
+            "where",
+            "why",
+            "when",
+            "from",
+            "about",
+            "please",
+            "can",
+            "you",
+            "me",
+            "to",
+            "in",
+            "on",
+            "of",
+            "a",
+            "an",
+            "is",
+            "are",
+        }
+        topics = [w.strip(".,:;!?()[]{}\"'") for w in user_message.lower().split()]
         topics = [w for w in topics if len(w) > 3 and w not in stop]
         topics = list(dict.fromkeys(topics))[:10]
 
@@ -379,9 +406,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 recipient_id=self.agent_id,
                 content=user_message,
                 message_type=MessageType.USER_INPUT,
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
-        
+
         self.memory.store_message(original_message)
 
         try:
@@ -635,9 +662,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 recipient_id=self.agent_id,
                 content=user_message,
                 message_type=MessageType.USER_INPUT,
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
-        
+
         self.memory.store_message(original_message)
 
         try:
@@ -1062,7 +1089,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         """
 
         op = operation_details or {}
-        provided_kbs = self._normalize_kb_names_input(op.get("kb_names")) if op.get("kb_names") else []
+        provided_kbs = (
+            self._normalize_kb_names_input(op.get("kb_names")) if op.get("kb_names") else []
+        )
         topics = op.get("topics") or []
         inferred_intent = op.get("primary_intent_inferred")
 
@@ -1072,20 +1101,25 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 return "What question would you like to ask across the provided knowledge bases?"
             # Score and select top candidates (top 2 by score; fallback to first 2)
             scored = [
-                (kb, self._score_kb_for_query(kb, query_content or "", topics)) for kb in provided_kbs
+                (kb, self._score_kb_for_query(kb, query_content or "", topics))
+                for kb in provided_kbs
             ]
             scored.sort(key=lambda x: x[1], reverse=True)
             top = [kb for kb, sc in scored if sc > 0][:2]
             if not top:
                 top = provided_kbs[:2]
-            answer, metadata = await self._multi_kb_query_and_consolidate(top, query_content, question_type=op.get("query_type", "free-text"))
+            answer, metadata = await self._multi_kb_query_and_consolidate(
+                top, query_content, question_type=op.get("query_type", "free-text")
+            )
             # add intent/topics to metadata
-            metadata.update({
-                "intent_topics": {
-                    "primary_intent": inferred_intent,
-                    "topics": topics,
+            metadata.update(
+                {
+                    "intent_topics": {
+                        "primary_intent": inferred_intent,
+                        "topics": topics,
+                    }
                 }
-            })
+            )
             return answer, metadata
 
         # If exactly one KB provided, use it directly
@@ -1095,10 +1129,17 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 return f"I'll search the **{target_kb}** knowledge base. What would you like me to find?"
             try:
                 query_type = op.get("query_type", "free-text")
-                result = await self._query_knowledge_base(target_kb, query_content, question_type=query_type)
+                result = await self._query_knowledge_base(
+                    target_kb, query_content, question_type=query_type
+                )
                 if result.get("success"):
                     metadata = {
-                        "used_kbs": [{"kb_name": target_kb, "description": provided_kbs[0].get("description")}],
+                        "used_kbs": [
+                            {
+                                "kb_name": target_kb,
+                                "description": provided_kbs[0].get("description"),
+                            }
+                        ],
                         "primary_kb": target_kb,
                         "sources_dict": result.get("source_details", {}),
                         "intent_topics": {
@@ -1295,8 +1336,35 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             intent = "help_request"
 
         # Simple topics from user_message as fallback
-        stop = {"the","and","for","with","this","that","into","what","how","where","why","when","from","about","please","can","you","me","to","in","on","of","a","an","is","are"}
-        topics = [w.strip(".,:;!?()[]{}\"\'") for w in user_message.lower().split()]
+        stop = {
+            "the",
+            "and",
+            "for",
+            "with",
+            "this",
+            "that",
+            "into",
+            "what",
+            "how",
+            "where",
+            "why",
+            "when",
+            "from",
+            "about",
+            "please",
+            "can",
+            "you",
+            "me",
+            "to",
+            "in",
+            "on",
+            "of",
+            "a",
+            "an",
+            "is",
+            "are",
+        }
+        topics = [w.strip(".,:;!?()[]{}\"'") for w in user_message.lower().split()]
         topics = [w for w in topics if len(w) > 3 and w not in stop]
         topics = list(dict.fromkeys(topics))[:10]
 
@@ -1348,14 +1416,43 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         except Exception:
             return []
 
-    def _score_kb_for_query(self, kb_entry: Dict[str, Any], user_message: str, topics: List[str]) -> float:
+    def _score_kb_for_query(
+        self, kb_entry: Dict[str, Any], user_message: str, topics: List[str]
+    ) -> float:
         """Score a KB using keyword overlap between topics/user_message and kb name/description."""
         name = (kb_entry.get("kb_name") or "").lower()
         desc = (kb_entry.get("description") or "").lower()
         haystack = f"{name} {desc}"
         # Build candidate keywords
-        stop = {"the","and","for","with","this","that","into","what","how","where","why","when","from","about","please","can","you","me","to","in","on","of","a","an","is","are"}
-        msg_tokens = [w.strip(".,:;!?()[]{}\"\'") for w in user_message.lower().split()]
+        stop = {
+            "the",
+            "and",
+            "for",
+            "with",
+            "this",
+            "that",
+            "into",
+            "what",
+            "how",
+            "where",
+            "why",
+            "when",
+            "from",
+            "about",
+            "please",
+            "can",
+            "you",
+            "me",
+            "to",
+            "in",
+            "on",
+            "of",
+            "a",
+            "an",
+            "is",
+            "are",
+        }
+        msg_tokens = [w.strip(".,:;!?()[]{}\"'") for w in user_message.lower().split()]
         msg_tokens = [w for w in msg_tokens if len(w) > 3 and w not in stop]
         keywords = set(topics or []) | set(msg_tokens)
         score = 0.0
@@ -1365,13 +1462,19 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             if kw in haystack:
                 score += 1.0
         # bonus if description mentions domain-like hints
-        if "legal" in haystack and any(kw in {"law","legal","contract","policy","regulation"} for kw in keywords):
+        if "legal" in haystack and any(
+            kw in {"law", "legal", "contract", "policy", "regulation"} for kw in keywords
+        ):
             score += 1.5
-        if "finance" in haystack and any(kw in {"finance","budget","revenue","cost","profit"} for kw in keywords):
+        if "finance" in haystack and any(
+            kw in {"finance", "budget", "revenue", "cost", "profit"} for kw in keywords
+        ):
             score += 1.0
         return score
 
-    async def _multi_kb_query_and_consolidate(self, selected_kbs: List[Dict[str, Any]], query: str, question_type: str = "free-text") -> tuple[str, Dict[str, Any]]:
+    async def _multi_kb_query_and_consolidate(
+        self, selected_kbs: List[Dict[str, Any]], query: str, question_type: str = "free-text"
+    ) -> tuple[str, Dict[str, Any]]:
         """Query multiple KBs and consolidate result. Returns (answer, metadata)."""
         per_kb_results: Dict[str, Any] = {}
         sources_dict: Dict[str, Any] = {}
@@ -1392,12 +1495,21 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     best_kb = name
         # Fallback: if no success, return error string
         if best_answer is None:
-            return ("No relevant information found in the provided knowledge bases.", {
-                "used_kbs": [{"kb_name": kb["kb_name"], "description": kb.get("description")} for kb in selected_kbs],
-                "sources_dict": sources_dict,
-            })
+            return (
+                "No relevant information found in the provided knowledge bases.",
+                {
+                    "used_kbs": [
+                        {"kb_name": kb["kb_name"], "description": kb.get("description")}
+                        for kb in selected_kbs
+                    ],
+                    "sources_dict": sources_dict,
+                },
+            )
         metadata = {
-            "used_kbs": [{"kb_name": kb["kb_name"], "description": kb.get("description")} for kb in selected_kbs],
+            "used_kbs": [
+                {"kb_name": kb["kb_name"], "description": kb.get("description")}
+                for kb in selected_kbs
+            ],
             "primary_kb": best_kb,
             "sources_dict": sources_dict,
         }
@@ -1538,7 +1650,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             resolved_path = self._resolve_file_path(doc_path)
             if not resolved_path or not resolved_path.exists():
                 return {"success": False, "error": f"File not found: {doc_path}"}
-            
+
             # Use the resolved path
             doc_path = str(resolved_path)
 

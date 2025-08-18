@@ -65,41 +65,41 @@ class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
 
         # Initialize history mixin
         self.setup_history_mixin()
-        
+
         # Load configuration
         self.config = self._load_analytics_config() if auto_configure else {}
-        
+
         # Analytics agent specific settings
         self.docker_image = self.config.get("docker_image", "sgosain/amb-ubuntu-python-public-pod")
-        
+
         # Initialize Docker shared manager with configured base directory and legacy fallbacks
         docker_config = get_config_section("docker") if auto_configure else {}
         shared_base_dir = docker_config.get("shared_base_dir", "./docker_shared")
         legacy_fallback_dirs = docker_config.get("legacy_fallback_dirs", ["examples"])
         self.shared_manager = get_shared_manager(shared_base_dir, legacy_fallback_dirs)
         self.shared_manager.setup_directories()
-        
+
         # Get agent-specific subdirectory names from config
         self.input_subdir = self.config.get("input_subdir", "analytics")
         self.output_subdir = self.config.get("output_subdir", "analytics")
         self.temp_subdir = self.config.get("temp_subdir", "analytics")
         self.handoff_subdir = self.config.get("handoff_subdir", "analytics")
-        
+
         # Set up proper directories using DockerSharedManager
         self.input_dir = self.shared_manager.get_host_path(self.input_subdir, "input")
         self.output_dir = self.shared_manager.get_host_path(self.output_subdir, "output")
         self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
         self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
-        
+
         # Ensure Docker shared directories exist
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.handoff_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.current_dataset = None
         self.current_schema = None
-        
+
         # Logging
         self.logger = logging.getLogger(f"AnalyticsAgent-{agent_id[:8]}")
         self.logger.info(f"Analytics Agent initialized with input_dir: {self.input_dir}")
@@ -107,10 +107,10 @@ class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
     def resolve_input_file(self, filename: str) -> Optional[Path]:
         """
         Resolve input file path by checking multiple locations in order of priority
-        
+
         Args:
             filename: File name or path to resolve
-            
+
         Returns:
             Path object if file exists, None otherwise
         """
@@ -118,7 +118,7 @@ class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
         resolved_path = self.resolve_file_path(filename, agent_type="analytics")
         if resolved_path:
             return resolved_path
-            
+
         # Fallback to shared manager's file resolution for compatibility
         return self.shared_manager.resolve_input_file(filename, self.input_subdir)
 
@@ -195,11 +195,13 @@ class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
 
 Always provide clear, actionable insights and explain your analysis process. Use text-based visualizations that work well in chat interfaces."""
 
-    async def process_message(self, message: Union[str, AgentMessage], context: ExecutionContext = None, **kwargs) -> AgentMessage:
+    async def process_message(
+        self, message: Union[str, AgentMessage], context: ExecutionContext = None, **kwargs
+    ) -> AgentMessage:
         """Process analytics requests and return response"""
         try:
             # Handle both string and AgentMessage inputs
-            if hasattr(message, 'content'):
+            if hasattr(message, "content"):
                 message_text = message.content
                 original_message = message
             else:
@@ -211,12 +213,14 @@ Always provide clear, actionable insights and explain your analysis process. Use
                     content=message_text,
                     message_type=MessageType.USER_INPUT,
                     session_id=context.session_id if context else self.context.session_id,
-                    conversation_id=context.conversation_id if context else self.context.conversation_id
+                    conversation_id=(
+                        context.conversation_id if context else self.context.conversation_id
+                    ),
                 )
-            
+
             # Detect request type
             request_info = self._detect_request_type(message_text)
-            
+
             # Route to appropriate handler
             response_content = ""
             if request_info["type"] == "data_loading":
@@ -226,12 +230,14 @@ Always provide clear, actionable insights and explain your analysis process. Use
             elif request_info["type"] == "sql_query":
                 response_content = await self._handle_sql_query(request_info["query"])
             elif request_info["type"] == "visualization":
-                response_content = await self._handle_visualization(message, request_info["chart_type"])
+                response_content = await self._handle_visualization(
+                    message, request_info["chart_type"]
+                )
             elif request_info["type"] == "natural_language_query":
                 response_content = await self._handle_natural_language_query(request_info["query"])
             else:
                 response_content = "Please specify what you'd like to analyze. I can load data files, explore schemas, run SQL queries, or create visualizations."
-            
+
             # Return AgentMessage object
             return AgentMessage(
                 id=str(uuid.uuid4()),
@@ -244,14 +250,14 @@ Always provide clear, actionable insights and explain your analysis process. Use
                 metadata={
                     "agent_type": "analytics",
                     "request_type": request_info["type"],
-                    "processing_time": time.time()
-                }
+                    "processing_time": time.time(),
+                },
             )
-                
+
         except Exception as e:
             self.logger.error(f"Error processing message: {e}")
             error_content = f"❌ Analytics error: {str(e)}"
-            
+
             # Return error as AgentMessage
             return AgentMessage(
                 id=str(uuid.uuid4()),
@@ -260,31 +266,31 @@ Always provide clear, actionable insights and explain your analysis process. Use
                 content=error_content,
                 message_type=MessageType.ERROR,
                 session_id=context.session_id if context else self.context.session_id,
-                conversation_id=context.conversation_id if context else self.context.conversation_id,
-                metadata={
-                    "agent_type": "analytics",
-                    "error": True,
-                    "error_message": str(e)
-                }
+                conversation_id=(
+                    context.conversation_id if context else self.context.conversation_id
+                ),
+                metadata={"agent_type": "analytics", "error": True, "error_message": str(e)},
             )
 
-    async def process_message_stream(self, message: str, context: ExecutionContext = None, **kwargs) -> AsyncIterator[StreamChunk]:
+    async def process_message_stream(
+        self, message: str, context: ExecutionContext = None, **kwargs
+    ) -> AsyncIterator[StreamChunk]:
         """Process analytics requests with streaming response"""
         try:
             # Handle both string and AgentMessage inputs
-            if hasattr(message, 'content'):
+            if hasattr(message, "content"):
                 message_text = message.content
             else:
                 message_text = str(message)
-            
+
             # Detect request type
             request_info = self._detect_request_type(message_text)
-            
+
             yield StreamChunk(
                 text=f"🔍 **Analyzing request**: {request_info['type'].replace('_', ' ').title()}",
-                sub_type=StreamSubType.STATUS
+                sub_type=StreamSubType.STATUS,
             )
-            
+
             # Route to appropriate handler
             if request_info["type"] == "data_loading":
                 async for chunk in self._handle_data_loading_stream(request_info, message):
@@ -296,84 +302,105 @@ Always provide clear, actionable insights and explain your analysis process. Use
                 async for chunk in self._handle_sql_query_stream(request_info["query"]):
                     yield chunk
             elif request_info["type"] == "visualization":
-                async for chunk in self._handle_visualization_stream(message, request_info["chart_type"]):
+                async for chunk in self._handle_visualization_stream(
+                    message, request_info["chart_type"]
+                ):
                     yield chunk
             elif request_info["type"] == "natural_language_query":
-                async for chunk in self._handle_natural_language_query_stream(request_info["query"]):
+                async for chunk in self._handle_natural_language_query_stream(
+                    request_info["query"]
+                ):
                     yield chunk
             else:
                 yield StreamChunk(
                     text="Please specify what you'd like to analyze. I can load data files, explore schemas, run SQL queries, or create visualizations.",
-                    sub_type=StreamSubType.CONTENT
+                    sub_type=StreamSubType.CONTENT,
                 )
-                
+
         except Exception as e:
             self.logger.error(f"Error processing message: {e}")
-            yield StreamChunk(
-                text=f"❌ Analytics error: {str(e)}",
-                sub_type=StreamSubType.ERROR
-            )
+            yield StreamChunk(text=f"❌ Analytics error: {str(e)}", sub_type=StreamSubType.ERROR)
 
     def _detect_request_type(self, message: str) -> dict:
         """Detect the type of analytics request"""
         message_lower = message.lower().strip()
-        
+
         # Data loading requests (check first to avoid conflicts with other patterns)
-        if any(pattern in message_lower for pattern in [
-            "load", "import", "read", "ingest", "upload", "analyze file", "process file"
-        ]):
+        if any(
+            pattern in message_lower
+            for pattern in [
+                "load",
+                "import",
+                "read",
+                "ingest",
+                "upload",
+                "analyze file",
+                "process file",
+            ]
+        ):
             # Extract file path
             file_path = self._extract_file_path(message)
             return {
                 "type": "data_loading",
                 "file_path": file_path,
-                "confidence": 0.9 if file_path else 0.7
+                "confidence": 0.9 if file_path else 0.7,
             }
-        
+
         # Schema exploration requests
-        if any(pattern in message_lower for pattern in [
-            "schema", "structure", "columns", "show schema", "data types", "describe"
-        ]):
-            return {
-                "type": "schema_exploration",
-                "confidence": 0.9
-            }
-        
+        if any(
+            pattern in message_lower
+            for pattern in [
+                "schema",
+                "structure",
+                "columns",
+                "show schema",
+                "data types",
+                "describe",
+            ]
+        ):
+            return {"type": "schema_exploration", "confidence": 0.9}
+
         # SQL or analytical queries
-        if any(pattern in message_lower for pattern in [
-            "top", "sales", "records", "query", "select", "where", "group by", 
-            "count", "sum", "average", "maximum", "minimum", "what are"
-        ]):
-            return {
-                "type": "natural_language_query", 
-                "query": message,
-                "confidence": 0.8
-            }
-        
+        if any(
+            pattern in message_lower
+            for pattern in [
+                "top",
+                "sales",
+                "records",
+                "query",
+                "select",
+                "where",
+                "group by",
+                "count",
+                "sum",
+                "average",
+                "maximum",
+                "minimum",
+                "what are",
+            ]
+        ):
+            return {"type": "natural_language_query", "query": message, "confidence": 0.8}
+
         # Default to data loading for now
-        return {
-            "type": "data_loading",
-            "file_path": None,
-            "confidence": 0.5
-        }
-    
+        return {"type": "data_loading", "file_path": None, "confidence": 0.5}
+
     def _extract_file_path(self, message: str) -> str:
         """Extract file path from message"""
         import re
         import os
-        
+
         patterns = [
-            r'([^\s]+\.csv)',
-            r'([^\s]+\.xlsx?)',
-            r'from\s+([^\s]+)',
-            r'load\s+([^\s]+)',
+            r"([^\s]+\.csv)",
+            r"([^\s]+\.xlsx?)",
+            r"from\s+([^\s]+)",
+            r"load\s+([^\s]+)",
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 file_path = match.group(1)
-                
+
                 # Use the resolve_input_file method for consistent file resolution
                 resolved_path = self.resolve_input_file(file_path)
                 if resolved_path:
@@ -382,32 +409,32 @@ Always provide clear, actionable insights and explain your analysis process. Use
                     # Absolute path - check if it exists
                     if os.path.exists(file_path):
                         return file_path
-                
+
                 # Return the path even if it doesn't exist (let the error handling deal with it)
                 return file_path
-        
+
         return ""
-    
+
     async def _handle_data_loading(self, request_info: dict, message: str) -> str:
         """Handle data loading requests with actual data analysis"""
         import os
-        
+
         file_path = request_info.get("file_path")
-        
+
         if not file_path:
             # List available files in input directory to help user
             try:
                 # List available files from shared input directory
                 available_files = []
-                
+
                 if self.input_dir.exists():
                     for f in self.input_dir.iterdir():
-                        if f.is_file() and f.suffix.lower() in ['.csv', '.xlsx', '.xls']:
+                        if f.is_file() and f.suffix.lower() in [".csv", ".xlsx", ".xls"]:
                             available_files.append(f.name)
-                
+
                 available_files = list(set(available_files))  # Remove duplicates
                 if available_files:
-                    files_list = '\n'.join([f"  - {f}" for f in available_files])
+                    files_list = "\n".join([f"  - {f}" for f in available_files])
                     return f"❌ No file path found. Available files in input directories:\n{files_list}\n\nPlease specify: `load data from filename.csv`"
                 else:
                     return f"❌ No file path found and no data files in input directories. Please specify a CSV or XLS file path."
@@ -417,21 +444,20 @@ Always provide clear, actionable insights and explain your analysis process. Use
         # Check if file exists
         if not os.path.exists(file_path):
             return f"❌ File not found: `{file_path}`\n\nPlease check the file path and try again."
-        
+
         try:
             # Load and analyze the data
             analysis_result = await self._load_and_analyze_data(file_path)
-            
-            if analysis_result['success']:
-                self.current_dataset = analysis_result['data']
-                self.current_schema = analysis_result['schema']
-                
+
+            if analysis_result["success"]:
+                self.current_dataset = analysis_result["data"]
+                self.current_schema = analysis_result["schema"]
+
                 # Generate widget recommendations
                 recommendations = self._generate_widget_recommendations(
-                    analysis_result['field_info'], 
-                    analysis_result['data']
+                    analysis_result["field_info"], analysis_result["data"]
                 )
-                
+
                 return f"""✅ **Data Loaded and Analyzed Successfully**
 
 **File**: `{file_path}`
@@ -452,10 +478,10 @@ Ask me to:
 - `create bar chart of sales by region` - Generate specific visualizations
 
 Ready for analysis! 🚀"""
-                
+
             else:
                 return f"❌ Error loading data: {analysis_result['error']}"
-                
+
         except Exception as e:
             self.logger.error(f"Error in data loading: {e}")
             return f"❌ Error analyzing data: {str(e)}"
@@ -471,68 +497,81 @@ Ready for analysis! 🚀"""
 Then I can show you detailed schema information."""
 
         schema_lines = ["📋 **Dataset Schema Analysis**\n"]
-        
+
         for col_name, col_info in self.current_schema.items():
-            field_type = col_info.get('type', 'unknown')
-            semantic_type = col_info.get('semantic_type', 'general')
-            unique_ratio = col_info.get('unique_ratio', 0)
-            non_null_count = col_info.get('non_null_count', 0) 
-            total_count = col_info.get('total_count', 0)
-            
+            field_type = col_info.get("type", "unknown")
+            semantic_type = col_info.get("semantic_type", "general")
+            unique_ratio = col_info.get("unique_ratio", 0)
+            non_null_count = col_info.get("non_null_count", 0)
+            total_count = col_info.get("total_count", 0)
+
             # Add type emojis
             type_emoji = {
-                'integer': '🔢', 'float': '📊', 'string': '📝', 
-                'boolean': '✅', 'datetime': '📅'
-            }.get(field_type, '❓')
-            
+                "integer": "🔢",
+                "float": "📊",
+                "string": "📝",
+                "boolean": "✅",
+                "datetime": "📅",
+            }.get(field_type, "❓")
+
             # Data quality indicator
             completeness = (non_null_count / total_count * 100) if total_count > 0 else 0
             quality_emoji = "🟢" if completeness >= 90 else "🟡" if completeness >= 70 else "🔴"
-            
+
             # Semantic type indicator
             semantic_emoji = {
-                'price': '💰', 'datetime': '🕐', 'identifier': '🆔', 
-                'latitude': '🌍', 'longitude': '🌍', 'address': '📍'
-            }.get(semantic_type, '')
-            
-            schema_lines.append(
-                f"**{col_name}** {type_emoji} {semantic_emoji}"
-            )
+                "price": "💰",
+                "datetime": "🕐",
+                "identifier": "🆔",
+                "latitude": "🌍",
+                "longitude": "🌍",
+                "address": "📍",
+            }.get(semantic_type, "")
+
+            schema_lines.append(f"**{col_name}** {type_emoji} {semantic_emoji}")
             schema_lines.append(
                 f"  Type: {field_type} | Completeness: {completeness:.1f}% {quality_emoji}"
             )
             schema_lines.append(
                 f"  Unique Values: {col_info.get('unique_count', 0)} ({unique_ratio:.1%})"
             )
-            
-            if semantic_type != 'general':
+
+            if semantic_type != "general":
                 schema_lines.append(f"  Semantic: {semantic_type}")
-            
+
             schema_lines.append("")  # Blank line between columns
-        
+
         # Add summary insights
         schema_lines.append("🎯 **Key Insights**:")
-        
+
         # Count meaningful metrics
-        meaningful_metrics = [col for col in self.current_schema.keys() 
-                            if self._is_meaningful_metric(col, self.current_schema)]
+        meaningful_metrics = [
+            col
+            for col in self.current_schema.keys()
+            if self._is_meaningful_metric(col, self.current_schema)
+        ]
         if meaningful_metrics:
             schema_lines.append(f"• **Measurable Fields**: {', '.join(meaningful_metrics)}")
-        
+
         # Count good categoricals
-        good_categoricals = [col for col, info in self.current_schema.items() 
-                           if info.get('type') in ['string', 'boolean'] 
-                           and info.get('unique_ratio', 1.0) < 0.5]
+        good_categoricals = [
+            col
+            for col, info in self.current_schema.items()
+            if info.get("type") in ["string", "boolean"] and info.get("unique_ratio", 1.0) < 0.5
+        ]
         if good_categoricals:
             schema_lines.append(f"• **Grouping Fields**: {', '.join(good_categoricals)}")
-        
+
         # Date fields
-        date_fields = [col for col, info in self.current_schema.items() 
-                      if info.get('semantic_type') == 'datetime' or 'date' in col.lower()]
+        date_fields = [
+            col
+            for col, info in self.current_schema.items()
+            if info.get("semantic_type") == "datetime" or "date" in col.lower()
+        ]
         if date_fields:
             schema_lines.append(f"• **Time Fields**: {', '.join(date_fields)}")
-        
-        return '\n'.join(schema_lines)
+
+        return "\n".join(schema_lines)
 
     async def _handle_natural_language_query(self, query: str) -> str:
         """Handle natural language analytical queries"""
@@ -547,40 +586,48 @@ Then I can process your query: "{query}" """
         try:
             # Simple query processing for common patterns
             query_lower = query.lower()
-            
+
             # Handle "top N" queries
-            if 'top' in query_lower and any(field in query_lower for field in ['sales', 'revenue', 'salary', 'price', 'cost']):
+            if "top" in query_lower and any(
+                field in query_lower for field in ["sales", "revenue", "salary", "price", "cost"]
+            ):
                 return self._handle_top_query(query)
-            
+
             # Handle count queries
-            elif 'count' in query_lower or 'how many' in query_lower:
+            elif "count" in query_lower or "how many" in query_lower:
                 return self._handle_count_query(query)
-            
+
             # Handle average queries
-            elif 'average' in query_lower or 'mean' in query_lower:
+            elif "average" in query_lower or "mean" in query_lower:
                 return self._handle_average_query(query)
-            
+
             # Handle summary statistics
-            elif 'summary' in query_lower or 'statistics' in query_lower:
+            elif "summary" in query_lower or "statistics" in query_lower:
                 return self._handle_summary_query(query)
-            
+
             else:
                 # Generic response with helpful suggestions
-                meaningful_metrics = [col for col in self.current_schema.keys() 
-                                    if self._is_meaningful_metric(col, self.current_schema)]
-                
+                meaningful_metrics = [
+                    col
+                    for col in self.current_schema.keys()
+                    if self._is_meaningful_metric(col, self.current_schema)
+                ]
+
                 suggestions = []
                 if meaningful_metrics:
                     suggestions.append(f"• `top 10 {meaningful_metrics[0]}` - Find highest values")
                     suggestions.append(f"• `average {meaningful_metrics[0]}` - Calculate mean")
-                
-                categorical_fields = [col for col, info in self.current_schema.items() 
-                                    if info.get('type') in ['string', 'boolean'] 
-                                    and info.get('unique_ratio', 1.0) < 0.5]
-                
+
+                categorical_fields = [
+                    col
+                    for col, info in self.current_schema.items()
+                    if info.get("type") in ["string", "boolean"]
+                    and info.get("unique_ratio", 1.0) < 0.5
+                ]
+
                 if categorical_fields:
                     suggestions.append(f"• `count by {categorical_fields[0]}` - Group counts")
-                
+
                 return f"""📊 **Query Processing**
 
 **Your query**: "{query}"
@@ -591,7 +638,7 @@ I understand you want to analyze the data, but I need a more specific query patt
 {chr(10).join(suggestions) if suggestions else "• Load data first to see available query examples"}
 
 **Available columns**: {', '.join(list(self.current_schema.keys())[:6])}{"..." if len(self.current_schema) > 6 else ""}"""
-        
+
         except Exception as e:
             return f"""📊 **Query Error**
 
@@ -599,7 +646,9 @@ I understand you want to analyze the data, but I need a more specific query patt
 
 Please try a simpler query pattern or load data first."""
 
-    async def _execute_query_in_docker(self, query_type: str, query: str, params: dict = None) -> str:
+    async def _execute_query_in_docker(
+        self, query_type: str, query: str, params: dict = None
+    ) -> str:
         """Execute analytical queries in Docker container"""
         try:
             # Generate query code based on type
@@ -613,24 +662,22 @@ Please try a simpler query pattern or load data first."""
                 code = self._generate_summary_query_code(query, params)
             else:
                 return "❌ Unknown query type"
-            
+
             # Execute in Docker
             from ..executors.docker_executor import DockerCodeExecutor
+
             executor = DockerCodeExecutor()
-            
+
             # Prepare data for Docker
-            data_json = json.dumps({
-                "data": self.current_dataset,
-                "schema": self.current_schema
-            })
-            
+            data_json = json.dumps({"data": self.current_dataset, "schema": self.current_schema})
+
             files = {"data.json": data_json}
             result = executor.execute_code(code, language="python", files=files)
-            
+
             if result.get("success"):
                 # Extract JSON from output
                 output = result["output"]
-                json_start = output.find('{')
+                json_start = output.find("{")
                 if json_start != -1:
                     json_output = output[json_start:]
                     query_result = json.loads(json_output)
@@ -640,7 +687,7 @@ Please try a simpler query pattern or load data first."""
                     return output.strip()
             else:
                 return f"❌ Docker execution error: {result.get('error', 'Unknown error')}"
-                
+
         except Exception as e:
             return f"❌ Error executing query in Docker: {str(e)}"
 
@@ -658,24 +705,22 @@ Please try a simpler query pattern or load data first."""
                 code = self._generate_summary_query_code(query, params)
             else:
                 return "❌ Unknown query type"
-            
+
             # Execute in Docker
             from ..executors.docker_executor import DockerCodeExecutor
+
             executor = DockerCodeExecutor()
-            
+
             # Prepare data for Docker
-            data_json = json.dumps({
-                "data": self.current_dataset,
-                "schema": self.current_schema
-            })
-            
+            data_json = json.dumps({"data": self.current_dataset, "schema": self.current_schema})
+
             files = {"data.json": data_json}
             result = executor.execute_code(code, language="python", files=files)
-            
+
             if result.get("success"):
                 # Extract JSON from output
                 output = result["output"]
-                json_start = output.find('{')
+                json_start = output.find("{")
                 if json_start != -1:
                     json_output = output[json_start:]
                     query_result = json.loads(json_output)
@@ -685,7 +730,7 @@ Please try a simpler query pattern or load data first."""
                     return output.strip()
             else:
                 return f"❌ Docker execution error: {result.get('error', 'Unknown error')}"
-                
+
         except Exception as e:
             return f"❌ Error executing query in Docker: {str(e)}"
 
@@ -693,28 +738,29 @@ Please try a simpler query pattern or load data first."""
         """Handle top N queries using Docker execution"""
         try:
             # Find numeric fields that could be sorted
-            meaningful_metrics = [col for col in self.current_schema.keys() 
-                                if self._is_meaningful_metric(col, self.current_schema)]
-            
+            meaningful_metrics = [
+                col
+                for col in self.current_schema.keys()
+                if self._is_meaningful_metric(col, self.current_schema)
+            ]
+
             if not meaningful_metrics:
                 return "❌ No sortable numeric fields found in the dataset."
-            
+
             # Use the first meaningful metric
             sort_field = meaningful_metrics[0]
-            
+
             # Extract top N (default to 5)
             import re
-            match = re.search(r'top\s+(\d+)', query.lower())
+
+            match = re.search(r"top\s+(\d+)", query.lower())
             n = int(match.group(1)) if match else 5
-            
+
             # Execute synchronously for now to avoid async issues
-            result = self._execute_query_sync("top", query, {
-                "sort_field": sort_field,
-                "n": n
-            })
-            
+            result = self._execute_query_sync("top", query, {"sort_field": sort_field, "n": n})
+
             return result
-            
+
         except Exception as e:
             return f"❌ Error processing top query: {str(e)}"
 
@@ -723,7 +769,7 @@ Please try a simpler query pattern or load data first."""
         try:
             result = self._execute_query_sync("count", query, {})
             return result
-            
+
         except Exception as e:
             return f"❌ Error processing count query: {str(e)}"
 
@@ -732,7 +778,7 @@ Please try a simpler query pattern or load data first."""
         try:
             result = self._execute_query_sync("average", query, {})
             return result
-            
+
         except Exception as e:
             return f"❌ Error processing average query: {str(e)}"
 
@@ -741,7 +787,7 @@ Please try a simpler query pattern or load data first."""
         try:
             result = self._execute_query_sync("summary", query, {})
             return result
-            
+
         except Exception as e:
             return f"❌ Error processing summary query: {str(e)}"
 
@@ -775,43 +821,44 @@ Please try a simpler query pattern or load data first."""
         try:
             # Read the file into memory and pass as file content
             import os
-            
+
             # Read file as binary for XLS/XLSX files
-            if file_path.endswith(('.xlsx', '.xls')):
+            if file_path.endswith((".xlsx", ".xls")):
                 # For Excel files, we need to copy them to Docker workspace
                 filename = os.path.basename(file_path)
                 analysis_code = self._generate_analysis_code_for_binary_file(filename)
-                
+
                 # Read the file as binary content
-                with open(file_path, 'rb') as f:
+                with open(file_path, "rb") as f:
                     file_content = f.read()
-                
+
                 # Use DockerCodeExecutor with binary file support
                 from ..executors.docker_executor import DockerCodeExecutor
                 import tempfile
                 import shutil
-                
+
                 # Create temp directory and copy file
                 with tempfile.TemporaryDirectory() as temp_dir:
                     # Copy the Excel file to temp directory
                     temp_file_path = os.path.join(temp_dir, filename)
                     shutil.copy2(file_path, temp_file_path)
-                    
+
                     # Write analysis code to temp directory
                     code_path = os.path.join(temp_dir, "analysis.py")
-                    with open(code_path, 'w') as f:
+                    with open(code_path, "w") as f:
                         f.write(analysis_code)
-                    
+
                     # Execute using Docker with volume mounting
                     executor = DockerCodeExecutor()
-                    
+
                     try:
                         import docker
+
                         client = executor.docker_client
-                        
+
                         # Mount the temp directory containing both code and data file
                         volumes = {temp_dir: {"bind": "/workspace", "mode": "rw"}}
-                        
+
                         container = client.containers.run(
                             image=executor.default_image,
                             command=["python", "/workspace/analysis.py"],
@@ -823,37 +870,42 @@ Please try a simpler query pattern or load data first."""
                             stdout=True,
                             stderr=True,
                         )
-                        
-                        output = container.decode("utf-8") if isinstance(container, bytes) else str(container)
+
+                        output = (
+                            container.decode("utf-8")
+                            if isinstance(container, bytes)
+                            else str(container)
+                        )
                         result = {"success": True, "output": output}
-                        
+
                     except Exception as e:
                         self.logger.error(f"Docker execution error: {e}")
                         result = {"success": False, "error": str(e)}
-                        
+
             else:
                 # For CSV files, use the existing text-based approach
                 analysis_code = self._generate_analysis_code_for_text_file(file_path)
-                
+
                 from ..executors.docker_executor import DockerCodeExecutor
+
                 executor = DockerCodeExecutor()
-                
+
                 # Read file content as text
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     file_content = f.read()
-                
+
                 filename = os.path.basename(file_path)
                 files = {filename: file_content}
-                
+
                 result = executor.execute_code(analysis_code, language="python", files=files)
-            
+
             if result.get("success"):
                 try:
                     # Extract JSON from Docker output (may have jemalloc warnings)
                     output = result["output"]
-                    
+
                     # Find the JSON part (starts with '{')
-                    json_start = output.find('{')
+                    json_start = output.find("{")
                     if json_start != -1:
                         json_output = output[json_start:]
                         analysis_result = json.loads(json_output)
@@ -861,19 +913,25 @@ Please try a simpler query pattern or load data first."""
                         # The Docker execution succeeded, but the analysis inside might have failed
                         return analysis_result
                     else:
-                        return {"success": False, "error": f"No JSON found in Docker output: {output[:500]}"}
-                        
+                        return {
+                            "success": False,
+                            "error": f"No JSON found in Docker output: {output[:500]}",
+                        }
+
                 except json.JSONDecodeError as e:
-                    return {"success": False, "error": f"Failed to parse Docker output as JSON: {e}. Output was: {result['output'][:500]}"}
+                    return {
+                        "success": False,
+                        "error": f"Failed to parse Docker output as JSON: {e}. Output was: {result['output'][:500]}",
+                    }
             else:
                 return {"success": False, "error": result.get("error", "Docker execution failed")}
-            
+
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     def _generate_analysis_code_for_binary_file(self, filename: str) -> str:
         """Generate Python code for Excel file analysis with mounted volume"""
-        return f'''
+        return f"""
 import pandas as pd
 import json
 import os
@@ -989,12 +1047,12 @@ try:
     
 except Exception as e:
     print(json.dumps({{"error": str(e), "success": False}}, indent=2))
-'''
+"""
 
     def _generate_analysis_code_for_text_file(self, file_path: str) -> str:
         """Generate Python code for CSV file analysis"""
         filename = os.path.basename(file_path)
-        return f'''
+        return f"""
 import pandas as pd
 import json
 import warnings
@@ -1092,13 +1150,13 @@ try:
     
 except Exception as e:
     print(json.dumps({{"error": str(e), "success": False}}, indent=2))
-'''
+"""
 
     def _generate_analysis_code_with_mount(self, file_path: str) -> str:
         """Generate Python code for data analysis with mounted volume (deprecated)"""
         filename = os.path.basename(file_path)
-        
-        return f'''
+
+        return f"""
 import pandas as pd
 import json
 import os
@@ -1208,14 +1266,14 @@ try:
 except Exception as e:
     error_result = {{"error": str(e)}}
     print(json.dumps(error_result))
-'''
+"""
 
     def _generate_top_query_code(self, query: str, params: dict) -> str:
         """Generate code for top N queries"""
-        sort_field = params.get('sort_field', 'value')
-        n = params.get('n', 5)
-        
-        return f'''
+        sort_field = params.get("sort_field", "value")
+        n = params.get("n", 5)
+
+        return f"""
 import pandas as pd
 import json
 
@@ -1244,11 +1302,11 @@ else:
     result = "❌ Field '{sort_field}' not found in data"
 
 print(json.dumps({{"result": result}}))
-'''
+"""
 
     def _generate_count_query_code(self, query: str, params: dict) -> str:
         """Generate code for count queries"""
-        return '''
+        return """
 import pandas as pd
 import json
 
@@ -1282,11 +1340,11 @@ else:
     result = '\\n'.join(result_lines)
 
 print(json.dumps({"result": result}))
-'''
+"""
 
     def _generate_average_query_code(self, query: str, params: dict) -> str:
         """Generate code for average queries"""
-        return '''
+        return """
 import pandas as pd
 import json
 
@@ -1320,11 +1378,11 @@ else:
     result = '\\n'.join(result_lines)
 
 print(json.dumps({"result": result}))
-'''
+"""
 
     def _generate_summary_query_code(self, query: str, params: dict) -> str:
         """Generate code for summary statistics"""
-        return '''
+        return """
 import pandas as pd
 import json
 
@@ -1363,30 +1421,37 @@ else:
     result = '\\n'.join(result_lines)
 
 print(json.dumps({"result": result}))
-'''
-
+"""
 
     def _is_meaningful_metric(self, column_name: str, field_info: dict) -> bool:
         """Simplified version of the meaningful metric detection"""
         if column_name not in field_info:
             return False
-            
+
         field_type = field_info[column_name].get("type", "").lower()
         if field_type not in ("integer", "float", "double", "decimal", "numeric"):
             return False
-        
+
         column_lower = column_name.lower()
-        
+
         # Check for meaningful patterns
         meaningful_patterns = [
-            r".*price.*", r".*cost.*", r".*amount.*", r".*revenue.*", r".*sales.*", 
-            r".*total.*", r".*quantity.*", r".*score.*", r".*rating.*", r".*salary.*"
+            r".*price.*",
+            r".*cost.*",
+            r".*amount.*",
+            r".*revenue.*",
+            r".*sales.*",
+            r".*total.*",
+            r".*quantity.*",
+            r".*score.*",
+            r".*rating.*",
+            r".*salary.*",
         ]
-        
+
         for pattern in meaningful_patterns:
             if re.search(pattern, column_lower):
                 return True
-        
+
         # Check uniqueness - high uniqueness might indicate identifier
         unique_ratio = field_info[column_name].get("unique_ratio", 0)
         return unique_ratio < 0.8
@@ -1394,99 +1459,119 @@ print(json.dumps({"result": result}))
     def _generate_widget_recommendations(self, field_info: dict, data: list) -> list:
         """Generate widget recommendations based on data analysis"""
         recommendations = []
-        
+
         # Get meaningful columns
-        numeric_fields = [col for col in field_info.keys() 
-                         if self._is_meaningful_metric(col, field_info)]
-        
-        categorical_fields = [col for col, info in field_info.items() 
-                            if info.get('type') in ['string', 'boolean'] 
-                            and info.get('unique_ratio', 1.0) < 0.5]
-        
-        date_fields = [col for col, info in field_info.items() 
-                      if info.get('semantic_type') == 'datetime' or 'date' in col.lower()]
-        
+        numeric_fields = [
+            col for col in field_info.keys() if self._is_meaningful_metric(col, field_info)
+        ]
+
+        categorical_fields = [
+            col
+            for col, info in field_info.items()
+            if info.get("type") in ["string", "boolean"] and info.get("unique_ratio", 1.0) < 0.5
+        ]
+
+        date_fields = [
+            col
+            for col, info in field_info.items()
+            if info.get("semantic_type") == "datetime" or "date" in col.lower()
+        ]
+
         # 1. Table view (always first)
-        recommendations.append({
-            "type": "table",
-            "title": "📋 Data Table View",
-            "description": "View raw data in tabular format",
-            "confidence": 1.0
-        })
-        
+        recommendations.append(
+            {
+                "type": "table",
+                "title": "📋 Data Table View",
+                "description": "View raw data in tabular format",
+                "confidence": 1.0,
+            }
+        )
+
         # 2. Time series charts
         if date_fields and numeric_fields:
             for date_field in date_fields[:1]:
                 for metric in numeric_fields[:2]:
-                    recommendations.append({
-                        "type": "line_chart",
-                        "title": f"📈 {metric} over {date_field}",
-                        "description": f"Track {metric} trends over time",
-                        "confidence": 0.9
-                    })
-        
+                    recommendations.append(
+                        {
+                            "type": "line_chart",
+                            "title": f"📈 {metric} over {date_field}",
+                            "description": f"Track {metric} trends over time",
+                            "confidence": 0.9,
+                        }
+                    )
+
         # 3. Bar charts for categorical analysis
         if categorical_fields and numeric_fields:
             for category in categorical_fields[:2]:
                 for metric in numeric_fields[:2]:
                     # Check if reasonable number of categories
-                    unique_count = field_info[category].get('unique_count', 0)
+                    unique_count = field_info[category].get("unique_count", 0)
                     if unique_count <= 20:
-                        recommendations.append({
-                            "type": "bar_chart", 
-                            "title": f"📊 {metric} by {category}",
-                            "description": f"Compare {metric} across {category} categories",
-                            "confidence": 0.85
-                        })
-        
+                        recommendations.append(
+                            {
+                                "type": "bar_chart",
+                                "title": f"📊 {metric} by {category}",
+                                "description": f"Compare {metric} across {category} categories",
+                                "confidence": 0.85,
+                            }
+                        )
+
         # 4. Pie charts for low-cardinality categoricals
         if categorical_fields:
             for category in categorical_fields[:2]:
-                unique_count = field_info[category].get('unique_count', 0)
+                unique_count = field_info[category].get("unique_count", 0)
                 if 2 <= unique_count <= 8:
-                    recommendations.append({
-                        "type": "pie_chart",
-                        "title": f"🥧 Distribution by {category}",
-                        "description": f"See percentage breakdown of {category}",
-                        "confidence": 0.8
-                    })
-        
+                    recommendations.append(
+                        {
+                            "type": "pie_chart",
+                            "title": f"🥧 Distribution by {category}",
+                            "description": f"See percentage breakdown of {category}",
+                            "confidence": 0.8,
+                        }
+                    )
+
         # 5. Scatter plots for numeric relationships
         if len(numeric_fields) >= 2:
-            recommendations.append({
-                "type": "scatter_plot",
-                "title": f"🔗 {numeric_fields[0]} vs {numeric_fields[1]}",
-                "description": f"Explore relationship between {numeric_fields[0]} and {numeric_fields[1]}",
-                "confidence": 0.75
-            })
-        
+            recommendations.append(
+                {
+                    "type": "scatter_plot",
+                    "title": f"🔗 {numeric_fields[0]} vs {numeric_fields[1]}",
+                    "description": f"Explore relationship between {numeric_fields[0]} and {numeric_fields[1]}",
+                    "confidence": 0.75,
+                }
+            )
+
         # 6. Correlation analysis
         if len(numeric_fields) >= 3:
-            recommendations.append({
-                "type": "correlation_matrix",
-                "title": "🔍 Correlation Analysis",
-                "description": "Discover relationships between numeric variables",
-                "confidence": 0.7
-            })
-        
-        return sorted(recommendations, key=lambda x: x['confidence'], reverse=True)
+            recommendations.append(
+                {
+                    "type": "correlation_matrix",
+                    "title": "🔍 Correlation Analysis",
+                    "description": "Discover relationships between numeric variables",
+                    "confidence": 0.7,
+                }
+            )
+
+        return sorted(recommendations, key=lambda x: x["confidence"], reverse=True)
 
     def _format_recommendations(self, recommendations: list) -> str:
         """Format recommendations for display"""
         if not recommendations:
             return "No specific recommendations available."
-        
+
         formatted = []
         for i, rec in enumerate(recommendations, 1):
-            confidence_emoji = "🟢" if rec['confidence'] >= 0.8 else "🟡" if rec['confidence'] >= 0.6 else "🔴"
+            confidence_emoji = (
+                "🟢" if rec["confidence"] >= 0.8 else "🟡" if rec["confidence"] >= 0.6 else "🔴"
+            )
             formatted.append(f"{i}. {rec['title']} {confidence_emoji}")
             formatted.append(f"   {rec['description']}")
-            
-        return '\n'.join(formatted)
+
+        return "\n".join(formatted)
 
     def _generate_data_loading_code(self, file_path: str) -> str:
         """Generate Python code to load data in Docker"""
-        return f'''
+        return f"""
 import duckdb
 import pandas as pd
 import json
@@ -1519,88 +1604,72 @@ try:
     
 except Exception as e:
     print(f"Error: {{str(e)}}")
-'''
+"""
 
-    async def _handle_data_loading_stream(self, request_info: dict, message: str) -> AsyncIterator[StreamChunk]:
+    async def _handle_data_loading_stream(
+        self, request_info: dict, message: str
+    ) -> AsyncIterator[StreamChunk]:
         """Handle data loading requests with streaming"""
         yield StreamChunk(
             text="📊 **Data Loading**\n\n",
             sub_type=StreamSubType.STATUS,
-            metadata={"phase": "data_loading"}
+            metadata={"phase": "data_loading"},
         )
-        
+
         # Use the existing _handle_data_loading method
         result = await self._handle_data_loading(request_info, message)
-        
-        yield StreamChunk(
-            text=result,
-            sub_type=StreamSubType.CONTENT,
-            metadata={"completed": True}
-        )
+
+        yield StreamChunk(text=result, sub_type=StreamSubType.CONTENT, metadata={"completed": True})
 
     async def _handle_schema_exploration_stream(self, message: str) -> AsyncIterator[StreamChunk]:
         """Handle schema exploration with streaming"""
         yield StreamChunk(
             text="🔍 **Schema Analysis**\n\n",
             sub_type=StreamSubType.STATUS,
-            metadata={"phase": "schema_analysis"}
+            metadata={"phase": "schema_analysis"},
         )
-        
+
         result = await self._handle_schema_exploration(message)
-        
-        yield StreamChunk(
-            text=result,
-            sub_type=StreamSubType.CONTENT,
-            metadata={"completed": True}
-        )
+
+        yield StreamChunk(text=result, sub_type=StreamSubType.CONTENT, metadata={"completed": True})
 
     async def _handle_sql_query_stream(self, query: str) -> AsyncIterator[StreamChunk]:
         """Handle SQL queries with streaming"""
         yield StreamChunk(
             text=f"💾 **Executing Query**: `{query}`\n\n",
             sub_type=StreamSubType.STATUS,
-            metadata={"phase": "sql_execution"}
-        )
-        
-        result = await self._handle_sql_query(query)
-        
-        yield StreamChunk(
-            text=result,
-            sub_type=StreamSubType.CONTENT,
-            metadata={"completed": True}
+            metadata={"phase": "sql_execution"},
         )
 
-    async def _handle_visualization_stream(self, message: str, chart_type: str) -> AsyncIterator[StreamChunk]:
+        result = await self._handle_sql_query(query)
+
+        yield StreamChunk(text=result, sub_type=StreamSubType.CONTENT, metadata={"completed": True})
+
+    async def _handle_visualization_stream(
+        self, message: str, chart_type: str
+    ) -> AsyncIterator[StreamChunk]:
         """Handle visualization requests with streaming"""
         yield StreamChunk(
             text=f"📈 **Creating {chart_type}**\n\n",
             sub_type=StreamSubType.STATUS,
-            metadata={"phase": "visualization", "chart_type": chart_type}
+            metadata={"phase": "visualization", "chart_type": chart_type},
         )
-        
+
         result = await self._handle_visualization(message, chart_type)
-        
-        yield StreamChunk(
-            text=result,
-            sub_type=StreamSubType.CONTENT,
-            metadata={"completed": True}
-        )
+
+        yield StreamChunk(text=result, sub_type=StreamSubType.CONTENT, metadata={"completed": True})
 
     async def _handle_natural_language_query_stream(self, query: str) -> AsyncIterator[StreamChunk]:
         """Handle natural language queries with streaming"""
         yield StreamChunk(
             text=f"🧠 **Processing Query**: {query}\n\n",
             sub_type=StreamSubType.STATUS,
-            metadata={"phase": "nlq_processing"}
+            metadata={"phase": "nlq_processing"},
         )
-        
+
         result = await self._handle_natural_language_query(query)
-        
-        yield StreamChunk(
-            text=result,
-            sub_type=StreamSubType.CONTENT,
-            metadata={"completed": True}
-        )
+
+        yield StreamChunk(text=result, sub_type=StreamSubType.CONTENT, metadata={"completed": True})
 
     async def cleanup_session(self):
         """Clean up Analytics Agent resources"""

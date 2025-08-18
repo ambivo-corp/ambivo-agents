@@ -153,19 +153,33 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         # Determine intent
         if any(word in content_lower for word in ["extract audio", "get audio", "audio from"]):
             intent = "extract_audio"
-        elif any(word in content_lower for word in ["convert", "change format", "transform"]) and any(word in content_lower for word in ["video", "mp4", "avi", "mov"]):
+        elif any(
+            word in content_lower for word in ["convert", "change format", "transform"]
+        ) and any(word in content_lower for word in ["video", "mp4", "avi", "mov"]):
             intent = "convert_video"
-        elif any(word in content_lower for word in ["convert", "change format", "transform"]) and any(word in content_lower for word in ["image", "picture", "photo", "png", "jpg", "jpeg", "gif", "bmp"]):
+        elif any(
+            word in content_lower for word in ["convert", "change format", "transform"]
+        ) and any(
+            word in content_lower
+            for word in ["image", "picture", "photo", "png", "jpg", "jpeg", "gif", "bmp"]
+        ):
             intent = "convert_image"
-        elif any(word in content_lower for word in ["resize", "scale", "dimensions"]) and any(word in content_lower for word in ["video", "mp4", "avi"]):
+        elif any(word in content_lower for word in ["resize", "scale", "dimensions"]) and any(
+            word in content_lower for word in ["video", "mp4", "avi"]
+        ):
             intent = "resize_video"
-        elif any(word in content_lower for word in ["resize", "scale", "dimensions"]) and any(word in content_lower for word in ["image", "picture", "photo", "png", "jpg"]):
+        elif any(word in content_lower for word in ["resize", "scale", "dimensions"]) and any(
+            word in content_lower for word in ["image", "picture", "photo", "png", "jpg"]
+        ):
             intent = "resize_image"
         elif any(word in content_lower for word in ["crop", "cropping", "cut out"]):
             intent = "crop_image"
         elif any(word in content_lower for word in ["rotate", "rotation", "turn", "flip"]):
             intent = "rotate_image"
-        elif any(word in content_lower for word in ["grayscale", "grey", "gray", "black and white", "monochrome"]):
+        elif any(
+            word in content_lower
+            for word in ["grayscale", "grey", "gray", "black and white", "monochrome"]
+        ):
             intent = "grayscale_image"
         elif any(word in content_lower for word in ["brightness", "contrast", "adjust", "enhance"]):
             intent = "adjust_image"
@@ -173,15 +187,27 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             intent = "blur_image"
         elif any(word in content_lower for word in ["batch", "multiple", "all images", "folder"]):
             intent = "batch_process_images"
-        elif any(word in content_lower for word in ["watermark", "logo", "overlay"]) and any(word in content_lower for word in ["image", "picture", "photo"]):
+        elif any(word in content_lower for word in ["watermark", "logo", "overlay"]) and any(
+            word in content_lower for word in ["image", "picture", "photo"]
+        ):
             intent = "apply_watermark"
-        elif any(word in content_lower for word in ["watermark", "logo", "overlay"]) and any(word in content_lower for word in ["text", "title", "caption"]):
+        elif any(word in content_lower for word in ["watermark", "logo", "overlay"]) and any(
+            word in content_lower for word in ["text", "title", "caption"]
+        ):
             intent = "apply_text_watermark"
-        elif any(word in content_lower for word in ["transparent", "remove background", "background removal", "chromakey"]):
+        elif any(
+            word in content_lower
+            for word in ["transparent", "remove background", "background removal", "chromakey"]
+        ):
             intent = "remove_background"
-        elif any(word in content_lower for word in ["transparent canvas", "blank transparent", "empty transparent"]):
+        elif any(
+            word in content_lower
+            for word in ["transparent canvas", "blank transparent", "empty transparent"]
+        ):
             intent = "create_transparent_canvas"
-        elif any(word in content_lower for word in ["alpha mask", "transparency mask", "apply mask"]):
+        elif any(
+            word in content_lower for word in ["alpha mask", "transparency mask", "apply mask"]
+        ):
             intent = "apply_alpha_mask"
         elif any(word in content_lower for word in ["trim", "cut", "clip"]):
             intent = "trim_media"
@@ -234,7 +260,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, message: Union[str, AgentMessage], context: ExecutionContext = None
     ) -> AgentMessage:
         """Process message with LLM-based media intent detection - FIXED: Context preserved across provider switches"""
-        
+
         # Handle both string and AgentMessage inputs
         if isinstance(message, AgentMessage):
             user_message = message.content
@@ -247,9 +273,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 recipient_id=self.agent_id,
                 content=user_message,
                 message_type=MessageType.USER_INPUT,
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
-        
+
         self.memory.store_message(original_message)
 
         try:
@@ -421,18 +447,26 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         elif primary_intent == "blur_image":
             return await self._handle_image_blur(media_files, output_prefs, user_message)
         elif primary_intent == "batch_process_images":
-            return await self._handle_batch_image_processing(media_files, output_prefs, user_message)
+            return await self._handle_batch_image_processing(
+                media_files, output_prefs, user_message
+            )
         # Watermarking and transparency intents
         elif primary_intent == "apply_watermark":
             return await self._handle_watermark_application(media_files, output_prefs, user_message)
         elif primary_intent == "apply_text_watermark":
-            return await self._handle_text_watermark_application(media_files, output_prefs, user_message)
+            return await self._handle_text_watermark_application(
+                media_files, output_prefs, user_message
+            )
         elif primary_intent == "remove_background":
             return await self._handle_background_removal(media_files, output_prefs, user_message)
         elif primary_intent == "create_transparent_canvas":
-            return await self._handle_transparent_canvas_creation(media_files, output_prefs, user_message)
+            return await self._handle_transparent_canvas_creation(
+                media_files, output_prefs, user_message
+            )
         elif primary_intent == "apply_alpha_mask":
-            return await self._handle_alpha_mask_application(media_files, output_prefs, user_message)
+            return await self._handle_alpha_mask_application(
+                media_files, output_prefs, user_message
+            )
         else:
             return await self._handle_media_help_request_with_context(user_message, llm_context)
 
@@ -580,18 +614,26 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         elif primary_intent == "blur_image":
             return await self._handle_image_blur(media_files, output_prefs, user_message)
         elif primary_intent == "batch_process_images":
-            return await self._handle_batch_image_processing(media_files, output_prefs, user_message)
+            return await self._handle_batch_image_processing(
+                media_files, output_prefs, user_message
+            )
         # Watermarking and transparency intents
         elif primary_intent == "apply_watermark":
             return await self._handle_watermark_application(media_files, output_prefs, user_message)
         elif primary_intent == "apply_text_watermark":
-            return await self._handle_text_watermark_application(media_files, output_prefs, user_message)
+            return await self._handle_text_watermark_application(
+                media_files, output_prefs, user_message
+            )
         elif primary_intent == "remove_background":
             return await self._handle_background_removal(media_files, output_prefs, user_message)
         elif primary_intent == "create_transparent_canvas":
-            return await self._handle_transparent_canvas_creation(media_files, output_prefs, user_message)
+            return await self._handle_transparent_canvas_creation(
+                media_files, output_prefs, user_message
+            )
         elif primary_intent == "apply_alpha_mask":
-            return await self._handle_alpha_mask_application(media_files, output_prefs, user_message)
+            return await self._handle_alpha_mask_application(
+                media_files, output_prefs, user_message
+            )
         else:
             return await self._handle_media_help_request(user_message)
 
@@ -1308,10 +1350,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
     def _resolve_media_file(self, file_path: str) -> str:
         """
         Resolve media file path using universal file resolution system
-        
+
         Args:
             file_path: File name or path to resolve
-            
+
         Returns:
             Resolved path string if found, original path otherwise
         """
@@ -1319,9 +1361,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         resolved_path = self.resolve_file_path(file_path, agent_type="media")
         if resolved_path:
             return str(resolved_path)
-            
+
         # Fallback to executor's file resolution for compatibility
-        if hasattr(self.media_executor, 'resolve_input_file'):
+        if hasattr(self.media_executor, "resolve_input_file"):
             resolved = self.media_executor.resolve_input_file(file_path)
             if resolved:
                 return str(resolved)
@@ -1543,7 +1585,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                         "y": {"type": "integer", "description": "Y offset for crop", "default": 0},
                         "position": {
                             "type": "string",
-                            "enum": ["center", "top-left", "top-right", "bottom-left", "bottom-right"],
+                            "enum": [
+                                "center",
+                                "top-left",
+                                "top-right",
+                                "bottom-left",
+                                "bottom-right",
+                            ],
                             "default": "center",
                         },
                     },
@@ -1634,9 +1682,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                         "adjustments": {
                             "type": "object",
                             "properties": {
-                                "brightness": {"type": "integer", "description": "Brightness adjustment (-100 to 100)"},
-                                "contrast": {"type": "integer", "description": "Contrast adjustment (0 to 300)"},
-                                "saturation": {"type": "integer", "description": "Saturation adjustment (0 to 300)"},
+                                "brightness": {
+                                    "type": "integer",
+                                    "description": "Brightness adjustment (-100 to 100)",
+                                },
+                                "contrast": {
+                                    "type": "integer",
+                                    "description": "Contrast adjustment (0 to 300)",
+                                },
+                                "saturation": {
+                                    "type": "integer",
+                                    "description": "Saturation adjustment (0 to 300)",
+                                },
                             },
                             "description": "Dictionary of adjustments to apply",
                         },
@@ -1682,11 +1739,11 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 },
             )
         )
-        
+
         # ========================
         # WATERMARKING AND TRANSPARENCY TOOLS
         # ========================
-        
+
         # Apply image watermark tool
         self.add_tool(
             AgentTool(
@@ -1706,7 +1763,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                         },
                         "position": {
                             "type": "string",
-                            "enum": ["top-left", "top-right", "bottom-left", "bottom-right", "center"],
+                            "enum": [
+                                "top-left",
+                                "top-right",
+                                "bottom-left",
+                                "bottom-right",
+                                "center",
+                            ],
                             "default": "bottom-right",
                             "description": "Position of watermark on image",
                         },
@@ -1735,7 +1798,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 },
             )
         )
-        
+
         # Apply text watermark tool
         self.add_tool(
             AgentTool(
@@ -1755,7 +1818,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                         },
                         "position": {
                             "type": "string",
-                            "enum": ["top-left", "top-right", "bottom-left", "bottom-right", "center"],
+                            "enum": [
+                                "top-left",
+                                "top-right",
+                                "bottom-left",
+                                "bottom-right",
+                                "center",
+                            ],
                             "default": "bottom-right",
                             "description": "Position of text watermark",
                         },
@@ -1794,7 +1863,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 },
             )
         )
-        
+
         # Remove background tool
         self.add_tool(
             AgentTool(
@@ -1832,7 +1901,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 },
             )
         )
-        
+
         # Create transparent canvas tool
         self.add_tool(
             AgentTool(
@@ -1864,7 +1933,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 },
             )
         )
-        
+
         # Apply alpha mask tool
         self.add_tool(
             AgentTool(
@@ -1939,7 +2008,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             # Resolve the input file path
             resolved_input = self._resolve_media_file(input_video)
             if not Path(resolved_input).exists():
-                return {"success": False, "error": f"Input video file not found: {input_video}. Searched in docker_shared/input/media/ and current directory."}
+                return {
+                    "success": False,
+                    "error": f"Input video file not found: {input_video}. Searched in docker_shared/input/media/ and current directory.",
+                }
 
             # Quality settings - FIXED: Proper bitrate syntax
             quality_settings = {"low": "128k", "medium": "192k", "high": "320k"}
@@ -2143,7 +2215,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         return "Unknown"
 
     # ========================
-    # IMAGE PROCESSING CORE METHODS  
+    # IMAGE PROCESSING CORE METHODS
     # ========================
 
     async def _resize_image(self, input_image: str, width: int, height: int):
@@ -2152,10 +2224,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             # Resolve the input file path
             resolved_input = self._resolve_media_file(input_image)
             if not Path(resolved_input).exists():
-                return {"success": False, "error": f"Input image file not found: {input_image}. Searched in docker_shared/input/media/ and current directory."}
+                return {
+                    "success": False,
+                    "error": f"Input image file not found: {input_image}. Searched in docker_shared/input/media/ and current directory.",
+                }
 
             output_filename = f"resized_image_{int(time.time())}.png"
-            
+
             # Use FFmpeg for image resizing - supports many formats
             ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf scale={width}:{height} ${{OUTPUT}}"
 
@@ -2180,7 +2255,15 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _crop_image(self, input_image: str, width: int, height: int, x: int = 0, y: int = 0, position: str = "center"):
+    async def _crop_image(
+        self,
+        input_image: str,
+        width: int,
+        height: int,
+        x: int = 0,
+        y: int = 0,
+        position: str = "center",
+    ):
         """Crop image using FFmpeg"""
         try:
             resolved_input = self._resolve_media_file(input_image)
@@ -2188,14 +2271,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 return {"success": False, "error": f"Input image file not found: {input_image}"}
 
             output_filename = f"cropped_image_{int(time.time())}.png"
-            
+
             # Calculate crop position if specified as position name
             if position == "center":
                 # We'll let FFmpeg auto-center by using crop filter with just width:height
-                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf crop={width}:{height} ${{OUTPUT}}"
+                ffmpeg_command = (
+                    f"ffmpeg -y -i ${{input_image}} -vf crop={width}:{height} ${{OUTPUT}}"
+                )
             else:
                 # Use specific x,y coordinates
-                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf crop={width}:{height}:{x}:{y} ${{OUTPUT}}"
+                ffmpeg_command = (
+                    f"ffmpeg -y -i ${{input_image}} -vf crop={width}:{height}:{x}:{y} ${{OUTPUT}}"
+                )
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
@@ -2225,13 +2312,15 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 return {"success": False, "error": f"Input image file not found: {input_image}"}
 
             output_filename = f"rotated_image_{int(time.time())}.png"
-            
+
             # Convert angle to FFmpeg rotation filter
             # FFmpeg rotate filter uses radians, but also has shortcuts for common angles
             if angle == 90:
                 ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf transpose=1 ${{OUTPUT}}"
             elif angle == 180:
-                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf transpose=2,transpose=2 ${{OUTPUT}}"
+                ffmpeg_command = (
+                    f"ffmpeg -y -i ${{input_image}} -vf transpose=2,transpose=2 ${{OUTPUT}}"
+                )
             elif angle == 270:
                 ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf transpose=2 ${{OUTPUT}}"
             else:
@@ -2268,13 +2357,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             # Map format names to file extensions
             format_extensions = {
-                "png": "png", "jpeg": "jpg", "jpg": "jpg", "gif": "gif",
-                "bmp": "bmp", "tiff": "tiff", "webp": "webp"
+                "png": "png",
+                "jpeg": "jpg",
+                "jpg": "jpg",
+                "gif": "gif",
+                "bmp": "bmp",
+                "tiff": "tiff",
+                "webp": "webp",
             }
-            
+
             ext = format_extensions.get(target_format.lower(), target_format.lower())
             output_filename = f"converted_image_{int(time.time())}.{ext}"
-            
+
             # FFmpeg automatically handles format conversion based on extension
             ffmpeg_command = f"ffmpeg -y -i ${{input_image}} ${{OUTPUT}}"
 
@@ -2306,7 +2400,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 return {"success": False, "error": f"Input image file not found: {input_image}"}
 
             output_filename = f"grayscale_image_{int(time.time())}.png"
-            
+
             # Apply grayscale filter
             ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf format=gray ${{OUTPUT}}"
 
@@ -2338,28 +2432,30 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 return {"success": False, "error": f"Input image file not found: {input_image}"}
 
             output_filename = f"adjusted_image_{int(time.time())}.png"
-            
+
             # Build FFmpeg filter for adjustments
             filters = []
-            
+
             if "brightness" in adjustments:
                 # FFmpeg eq filter: brightness range -1.0 to 1.0
-                brightness = float(adjustments["brightness"]) / 100.0  # Convert percentage to decimal
+                brightness = (
+                    float(adjustments["brightness"]) / 100.0
+                )  # Convert percentage to decimal
                 filters.append(f"eq=brightness={brightness}")
-                
+
             if "contrast" in adjustments:
                 # FFmpeg eq filter: contrast range 0.0 to 3.0 (1.0 = normal)
                 contrast = float(adjustments["contrast"]) / 100.0
                 filters.append(f"eq=contrast={contrast}")
-                
+
             if "saturation" in adjustments:
                 # FFmpeg eq filter: saturation range 0.0 to 3.0 (1.0 = normal)
                 saturation = float(adjustments["saturation"]) / 100.0
                 filters.append(f"eq=saturation={saturation}")
-            
+
             if not filters:
                 return {"success": False, "error": "No valid adjustments specified"}
-                
+
             filter_string = ",".join(filters)
             ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf {filter_string} ${{OUTPUT}}"
 
@@ -2392,20 +2488,24 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 return {"success": False, "error": f"Input image file not found: {input_image}"}
 
             output_filename = f"effect_image_{int(time.time())}.png"
-            
+
             effect_type = effect_params.get("type", "blur")
             intensity = effect_params.get("intensity", "medium")
-            
+
             # Map intensity to values
             intensity_map = {"slight": 1, "medium": 3, "strong": 5}
             radius = intensity_map.get(intensity, 3)
-            
+
             if effect_type == "blur":
                 # Gaussian blur filter
-                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf gblur=sigma={radius} ${{OUTPUT}}"
+                ffmpeg_command = (
+                    f"ffmpeg -y -i ${{input_image}} -vf gblur=sigma={radius} ${{OUTPUT}}"
+                )
             elif effect_type == "sharpen":
                 # Unsharp mask for sharpening
-                ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf unsharp=5:5:{radius} ${{OUTPUT}}"
+                ffmpeg_command = (
+                    f"ffmpeg -y -i ${{input_image}} -vf unsharp=5:5:{radius} ${{OUTPUT}}"
+                )
             else:
                 return {"success": False, "error": f"Unknown effect type: {effect_type}"}
 
@@ -2433,24 +2533,23 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
     async def _find_batch_images(self, pattern: str):
         """Find images matching a pattern for batch processing"""
         import glob
-        
+
         # Search in multiple locations
         search_paths = [
             str(self.input_dir / pattern),
             str(Path.cwd() / pattern),
         ]
-        
+
         found_images = []
         for search_path in search_paths:
             found_images.extend(glob.glob(search_path))
-            
+
         # Filter for supported image formats
-        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'}
+        image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp"}
         filtered_images = [
-            img for img in found_images 
-            if Path(img).suffix.lower() in image_extensions
+            img for img in found_images if Path(img).suffix.lower() in image_extensions
         ]
-        
+
         return filtered_images
 
     # ========================
@@ -2458,26 +2557,26 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
     # ========================
 
     async def _apply_image_watermark(
-        self, 
-        input_image: str, 
-        watermark_image: str, 
+        self,
+        input_image: str,
+        watermark_image: str,
         position: str = "bottom-right",
         opacity: float = 1.0,
         scale: float = 1.0,
-        margin: int = 10
+        margin: int = 10,
     ):
         """Apply image watermark to an image"""
         try:
             resolved_input = self._resolve_media_file(input_image)
             resolved_watermark = self._resolve_media_file(watermark_image)
-            
+
             if not Path(resolved_input).exists():
                 return {"success": False, "error": f"Input image not found: {input_image}"}
             if not Path(resolved_watermark).exists():
                 return {"success": False, "error": f"Watermark image not found: {watermark_image}"}
 
             output_filename = f"watermarked_{int(time.time())}.png"
-            
+
             # Position calculations
             position_map = {
                 "top-left": f"{margin}:{margin}",
@@ -2486,9 +2585,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 "bottom-right": f"main_w-overlay_w-{margin}:main_h-overlay_h-{margin}",
                 "center": "(main_w-overlay_w)/2:(main_h-overlay_h)/2",
             }
-            
+
             pos = position_map.get(position, position_map["bottom-right"])
-            
+
             # Build filter complex for watermark with scaling and opacity
             if scale != 1.0 or opacity != 1.0:
                 # Scale watermark and adjust opacity
@@ -2536,7 +2635,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         font_color: str = "white",
         background: bool = False,
         background_color: str = "black@0.5",
-        margin: int = 10
+        margin: int = 10,
     ):
         """Apply text watermark to an image"""
         try:
@@ -2545,7 +2644,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 return {"success": False, "error": f"Input image not found: {input_image}"}
 
             output_filename = f"text_watermarked_{int(time.time())}.png"
-            
+
             # Position calculations for text
             position_map = {
                 "top-left": f"x={margin}:y={margin}",
@@ -2554,26 +2653,22 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 "bottom-right": f"x=w-tw-{margin}:y=h-th-{margin}",
                 "center": "x=(w-tw)/2:y=(h-th)/2",
             }
-            
+
             pos = position_map.get(position, position_map["bottom-right"])
-            
+
             # Build drawtext filter
             drawtext_params = [
                 f"text='{text}'",
                 f"fontsize={font_size}",
                 f"fontcolor={font_color}",
-                pos
+                pos,
             ]
-            
+
             if background:
-                drawtext_params.extend([
-                    "box=1",
-                    f"boxcolor={background_color}",
-                    "boxborderw=5"
-                ])
-            
+                drawtext_params.extend(["box=1", f"boxcolor={background_color}", "boxborderw=5"])
+
             drawtext_filter = "drawtext=" + ":".join(drawtext_params)
-            
+
             ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf {drawtext_filter} ${{OUTPUT}}"
 
             result = self.media_executor.execute_ffmpeg_command(
@@ -2600,7 +2695,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _remove_background(self, input_image: str, background_color: str = "white", similarity: float = 0.3, blend: float = 0.1):
+    async def _remove_background(
+        self,
+        input_image: str,
+        background_color: str = "white",
+        similarity: float = 0.3,
+        blend: float = 0.1,
+    ):
         """Remove background color and make it transparent"""
         try:
             resolved_input = self._resolve_media_file(input_image)
@@ -2608,7 +2709,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 return {"success": False, "error": f"Input image file not found: {input_image}"}
 
             output_filename = f"transparent_bg_{int(time.time())}.png"
-            
+
             # Use chromakey filter to remove background
             ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -vf chromakey={background_color}:similarity={similarity}:blend={blend} -pix_fmt rgba ${{OUTPUT}}"
 
@@ -2638,7 +2739,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         """Create a transparent canvas"""
         try:
             output_filename = f"transparent_canvas_{int(time.time())}.png"
-            
+
             # Create transparent canvas
             ffmpeg_command = f"ffmpeg -y -f lavfi -i color=c={color}:size={width}x{height}:d=1 -frames:v 1 -pix_fmt rgba ${{OUTPUT}}"
 
@@ -2667,14 +2768,14 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         try:
             resolved_input = self._resolve_media_file(input_image)
             resolved_mask = self._resolve_media_file(mask_image)
-            
+
             if not Path(resolved_input).exists():
                 return {"success": False, "error": f"Input image not found: {input_image}"}
             if not Path(resolved_mask).exists():
                 return {"success": False, "error": f"Mask image not found: {mask_image}"}
 
             output_filename = f"alpha_masked_{int(time.time())}.png"
-            
+
             # Apply alpha mask
             ffmpeg_command = f"ffmpeg -y -i ${{input_image}} -i ${{mask_image}} -filter_complex [0][1]alphamerge -pix_fmt rgba ${{OUTPUT}}"
 
@@ -2713,36 +2814,36 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     return int(width), int(height)
                 except:
                     pass
-        
+
         # Parse from user message
         import re
-        
+
         # Look for WIDTHxHEIGHT pattern
         dimension_matches = re.findall(r"(\d{1,5})\s*[x×]\s*(\d{1,5})", user_message)
         if dimension_matches:
             width, height = dimension_matches[0]
             return int(width), int(height)
-            
+
         # Look for percentage
         percent_match = re.search(r"(\d+)%", user_message)
         if percent_match:
             # Return special values to indicate percentage scaling
             percent = int(percent_match.group(1))
             return percent, percent  # Will be handled specially by caller
-            
+
         return None, None
 
     def _parse_crop_parameters(self, user_message: str) -> Dict[str, Any]:
         """Parse crop parameters from user message"""
         import re
-        
+
         # Look for dimensions
         dimension_matches = re.findall(r"(\d{1,5})\s*[x×]\s*(\d{1,5})", user_message)
         if not dimension_matches:
             return None
-            
+
         width, height = map(int, dimension_matches[0])
-        
+
         # Look for position
         position = "center"  # default
         if "top" in user_message.lower() and "left" in user_message.lower():
@@ -2755,18 +2856,20 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             position = "bottom-right"
         elif "center" in user_message.lower():
             position = "center"
-            
+
         return {"width": width, "height": height, "position": position}
 
     def _parse_rotation_angle(self, user_message: str) -> Optional[float]:
         """Parse rotation angle from user message"""
         import re
-        
+
         # Look for degree values
-        degree_matches = re.findall(r"(\d+(?:\.\d+)?)\s*(?:degrees?|°)", user_message, re.IGNORECASE)
+        degree_matches = re.findall(
+            r"(\d+(?:\.\d+)?)\s*(?:degrees?|°)", user_message, re.IGNORECASE
+        )
         if degree_matches:
             return float(degree_matches[0])
-            
+
         # Look for common rotation terms
         message_lower = user_message.lower()
         if "90" in message_lower or "quarter" in message_lower:
@@ -2781,27 +2884,27 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             return 90
         elif "counter" in message_lower:
             return 270
-            
+
         return None
 
     def _parse_image_format(self, user_message: str) -> Optional[str]:
         """Parse target image format from user message"""
         message_lower = user_message.lower()
-        
+
         formats = ["png", "jpeg", "jpg", "gif", "bmp", "tiff", "webp"]
         for fmt in formats:
             if fmt in message_lower:
                 return fmt
-                
+
         return None
 
     def _parse_image_adjustments(self, user_message: str) -> Dict[str, Any]:
         """Parse image adjustment parameters from user message"""
         import re
-        
+
         adjustments = {}
         message_lower = user_message.lower()
-        
+
         # Parse brightness
         brightness_match = re.search(r"brightness.*?([+-]?\d+)%?", message_lower)
         if brightness_match:
@@ -2810,7 +2913,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             adjustments["brightness"] = 30
         elif "darker" in message_lower:
             adjustments["brightness"] = -30
-            
+
         # Parse contrast
         contrast_match = re.search(r"contrast.*?(\d+)%?", message_lower)
         if contrast_match:
@@ -2819,7 +2922,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             adjustments["contrast"] = 150
         elif "less contrast" in message_lower:
             adjustments["contrast"] = 70
-            
+
         # Parse saturation
         saturation_match = re.search(r"saturat.*?(\d+)%?", message_lower)
         if saturation_match:
@@ -2828,13 +2931,13 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             adjustments["saturation"] = 150
         elif "less saturated" in message_lower:
             adjustments["saturation"] = 70
-            
+
         return adjustments
 
     def _parse_blur_parameters(self, user_message: str) -> Dict[str, Any]:
         """Parse blur/sharpen parameters from user message"""
         message_lower = user_message.lower()
-        
+
         # Determine effect type
         if "sharpen" in message_lower:
             effect_type = "sharpen"
@@ -2842,7 +2945,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             effect_type = "blur"
         else:
             return None
-            
+
         # Determine intensity
         intensity = "medium"  # default
         if "slight" in message_lower or "light" in message_lower:
@@ -2851,15 +2954,15 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             intensity = "strong"
         elif "medium" in message_lower:
             intensity = "medium"
-            
+
         return {"type": effect_type, "intensity": intensity}
 
     def _parse_batch_operation(self, user_message: str) -> Dict[str, Any]:
         """Parse batch operation from user message"""
         import re
-        
+
         message_lower = user_message.lower()
-        
+
         # Determine operation type
         operation = None
         if "resize" in message_lower:
@@ -2870,44 +2973,46 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             operation = "grayscale"
         else:
             return None
-            
+
         result = {"operation": operation}
-        
+
         # Parse file pattern
         if "*.png" in user_message or "png files" in message_lower:
             result["pattern"] = "*.png"
-        elif "*.jpg" in user_message or "jpeg files" in message_lower or "jpg files" in message_lower:
+        elif (
+            "*.jpg" in user_message or "jpeg files" in message_lower or "jpg files" in message_lower
+        ):
             result["pattern"] = "*.jpg"
         elif "*.gif" in user_message or "gif files" in message_lower:
             result["pattern"] = "*.gif"
         else:
             result["pattern"] = "*.*"  # All files
-            
+
         # Parse operation-specific parameters
         if operation == "resize":
             dimension_matches = re.findall(r"(\d{1,5})\s*[x×]\s*(\d{1,5})", user_message)
             if dimension_matches:
                 result["width"], result["height"] = map(int, dimension_matches[0])
-                
+
         elif operation == "convert":
             target_format = self._parse_image_format(user_message)
             if target_format:
                 result["format"] = target_format
-                
+
         return result
 
     def _parse_watermark_parameters(self, user_message: str) -> Dict[str, Any]:
         """Parse watermark parameters from user message"""
         import re
-        
+
         params = {}
         message_lower = user_message.lower()
-        
+
         # Parse position
         if "top" in message_lower and "left" in message_lower:
             params["position"] = "top-left"
         elif "top" in message_lower and "right" in message_lower:
-            params["position"] = "top-right" 
+            params["position"] = "top-right"
         elif "bottom" in message_lower and "left" in message_lower:
             params["position"] = "bottom-left"
         elif "bottom" in message_lower and "right" in message_lower:
@@ -2916,47 +3021,47 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             params["position"] = "center"
         else:
             params["position"] = "bottom-right"  # default
-        
+
         # Parse opacity
         opacity_match = re.search(r"opacity[:\s]*(\d+)%?", message_lower)
         if opacity_match:
             opacity = int(opacity_match.group(1))
             params["opacity"] = opacity / 100.0 if opacity > 1 else opacity
-        
+
         # Parse scale/size
         scale_match = re.search(r"(?:scale|size)[:\s]*(\d+)%?", message_lower)
         if scale_match:
             scale = int(scale_match.group(1))
             params["scale"] = scale / 100.0 if scale > 1 else scale
-        
+
         # Parse text content (look for quoted text)
         text_match = re.search(r"['\"]([^'\"]+)['\"]", user_message)
         if text_match:
             params["text"] = text_match.group(1)
-        
+
         # Parse font size
         size_match = re.search(r"(?:font[:\s]*)?size[:\s]*(\d+)", message_lower)
         if size_match:
             params["font_size"] = int(size_match.group(1))
-        
+
         # Parse color
         color_match = re.search(r"color[:\s]*(\w+)", message_lower)
         if color_match:
             params["font_color"] = color_match.group(1)
-        
+
         # Check for background box
         if "background" in message_lower or "box" in message_lower:
             params["background"] = True
-        
+
         return params
 
     def _parse_transparency_parameters(self, user_message: str) -> Dict[str, Any]:
         """Parse transparency/background removal parameters from user message"""
         import re
-        
+
         params = {}
         message_lower = user_message.lower()
-        
+
         # Parse background color
         if "white" in message_lower:
             params["background_color"] = "white"
@@ -2970,74 +3075,79 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             params["background_color"] = "black"
         else:
             params["background_color"] = "white"  # default
-        
+
         # Parse similarity tolerance
-        similarity_match = re.search(r"(?:similarity|tolerance)[:\s]*(\d+(?:\.\d+)?)%?", message_lower)
+        similarity_match = re.search(
+            r"(?:similarity|tolerance)[:\s]*(\d+(?:\.\d+)?)%?", message_lower
+        )
         if similarity_match:
             similarity = float(similarity_match.group(1))
             params["similarity"] = similarity / 100.0 if similarity > 1 else similarity
-        
+
         # Parse blend amount
         blend_match = re.search(r"blend[:\s]*(\d+(?:\.\d+)?)%?", message_lower)
         if blend_match:
             blend = float(blend_match.group(1))
             params["blend"] = blend / 100.0 if blend > 1 else blend
-        
+
         return params
 
     def _extract_watermark_text(self, user_message: str) -> str:
         """Extract watermark text from user message"""
         import re
-        
+
         # Look for quoted text
         quoted_match = re.search(r'["\']([^"\']+)["\']', user_message)
         if quoted_match:
             return quoted_match.group(1)
-        
+
         # Look for common watermark phrases
-        copyright_match = re.search(r'©\s*\d{4}.*?(?:\s|$)', user_message)
+        copyright_match = re.search(r"©\s*\d{4}.*?(?:\s|$)", user_message)
         if copyright_match:
             return copyright_match.group(0).strip()
-        
+
         # Look for "text:" pattern
-        text_match = re.search(r'text:\s*([^,\n]+)', user_message, re.IGNORECASE)
+        text_match = re.search(r"text:\s*([^,\n]+)", user_message, re.IGNORECASE)
         if text_match:
             return text_match.group(1).strip()
-        
+
         # Look for common watermark words
         watermark_words = ["copyright", "confidential", "draft", "sample", "watermark"]
         for word in watermark_words:
             if word in user_message.lower():
                 return word.upper()
-        
+
         return None
 
-    def _identify_watermark_files(self, user_message: str, media_files: List[str]) -> Dict[str, str]:
+    def _identify_watermark_files(
+        self, user_message: str, media_files: List[str]
+    ) -> Dict[str, str]:
         """Identify which file is the main image and which is the watermark"""
         result = {"main_image": None, "watermark_image": None}
-        
+
         if len(media_files) >= 2:
             # Assume first file is main image, second is watermark
             result["main_image"] = media_files[0]
             result["watermark_image"] = media_files[1]
         elif len(media_files) == 1:
             result["main_image"] = media_files[0]
-            
+
             # Look for watermark file mentions
             message_lower = user_message.lower()
             watermark_indicators = ["watermark", "logo", "stamp", "mark"]
-            
+
             for indicator in watermark_indicators:
                 if indicator in message_lower:
                     # Try to extract watermark filename
                     import re
+
                     # Look for filename patterns near watermark indicators
                     pattern = rf"{indicator}\s*[:\s]*([a-zA-Z0-9_.-]+\.(png|jpg|jpeg|gif|bmp))"
                     match = re.search(pattern, message_lower)
                     if match:
                         result["watermark_image"] = match.group(1)
                         break
-        
+
         return result
 
     # == end==
@@ -3237,7 +3347,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, message: Union[str, AgentMessage], context: ExecutionContext = None
     ) -> AsyncIterator[StreamChunk]:
         """Stream processing for MediaEditorAgent - COMPLETE IMPLEMENTATION"""
-        
+
         # Handle both string and AgentMessage inputs
         if isinstance(message, AgentMessage):
             user_message = message.content
@@ -3250,9 +3360,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 recipient_id=self.agent_id,
                 content=user_message,
                 message_type=MessageType.USER_INPUT,
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
-        
+
         self.memory.store_message(original_message)
 
         try:
@@ -3480,7 +3590,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
     ) -> str:
         """Handle image resizing with FFmpeg"""
-        
+
         if not image_files:
             recent_file = self.get_recent_media_file()
             if recent_file:
@@ -3498,10 +3608,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         input_file = image_files[0]
         dimensions = output_prefs.get("dimensions")
-        
+
         # Parse dimensions from user message or preferences
         width, height = self._parse_image_dimensions(dimensions, user_message)
-        
+
         if not width or not height:
             return (
                 f"I need specific dimensions to resize **{input_file}**.\n\n"
@@ -3513,7 +3623,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         try:
             result = await self._resize_image(input_file, width, height)
-            
+
             if result["success"]:
                 return (
                     f"✅ **Image Resize Completed**\n\n"
@@ -3526,7 +3636,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
             else:
                 return f"❌ **Image resize failed:** {result.get('error', 'Unknown error')}"
-                
+
         except Exception as e:
             return f"❌ **Error during image resize:** {str(e)}"
 
@@ -3534,7 +3644,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
     ) -> str:
         """Handle image cropping"""
-        
+
         if not image_files:
             recent_file = self.get_recent_media_file()
             if recent_file:
@@ -3551,10 +3661,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
 
         input_file = image_files[0]
-        
+
         # Parse crop parameters from user message
         crop_params = self._parse_crop_parameters(user_message)
-        
+
         if not crop_params:
             return (
                 f"I need crop specifications for **{input_file}**.\n\n"
@@ -3566,7 +3676,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         try:
             result = await self._crop_image(input_file, **crop_params)
-            
+
             if result["success"]:
                 return (
                     f"✅ **Image Crop Completed**\n\n"
@@ -3579,7 +3689,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
             else:
                 return f"❌ **Image crop failed:** {result.get('error', 'Unknown error')}"
-                
+
         except Exception as e:
             return f"❌ **Error during image crop:** {str(e)}"
 
@@ -3587,7 +3697,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
     ) -> str:
         """Handle image rotation"""
-        
+
         if not image_files:
             recent_file = self.get_recent_media_file()
             if recent_file:
@@ -3604,10 +3714,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
 
         input_file = image_files[0]
-        
+
         # Parse rotation angle from user message
         angle = self._parse_rotation_angle(user_message)
-        
+
         if angle is None:
             return (
                 f"I need a rotation angle for **{input_file}**.\n\n"
@@ -3619,7 +3729,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         try:
             result = await self._rotate_image(input_file, angle)
-            
+
             if result["success"]:
                 return (
                     f"✅ **Image Rotation Completed**\n\n"
@@ -3631,7 +3741,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
             else:
                 return f"❌ **Image rotation failed:** {result.get('error', 'Unknown error')}"
-                
+
         except Exception as e:
             return f"❌ **Error during image rotation:** {str(e)}"
 
@@ -3639,7 +3749,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
     ) -> str:
         """Handle image format conversion"""
-        
+
         if not image_files:
             recent_file = self.get_recent_media_file()
             if recent_file:
@@ -3656,10 +3766,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
 
         input_file = image_files[0]
-        
+
         # Parse target format from user message or preferences
         target_format = output_prefs.get("format") or self._parse_image_format(user_message)
-        
+
         if not target_format:
             return (
                 f"I need a target format to convert **{input_file}**.\n\n"
@@ -3674,7 +3784,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         try:
             result = await self._convert_image_format(input_file, target_format)
-            
+
             if result["success"]:
                 return (
                     f"✅ **Image Format Conversion Completed**\n\n"
@@ -3686,8 +3796,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f"Your converted image is ready! 🎉"
                 )
             else:
-                return f"❌ **Image format conversion failed:** {result.get('error', 'Unknown error')}"
-                
+                return (
+                    f"❌ **Image format conversion failed:** {result.get('error', 'Unknown error')}"
+                )
+
         except Exception as e:
             return f"❌ **Error during image format conversion:** {str(e)}"
 
@@ -3695,7 +3807,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
     ) -> str:
         """Handle grayscale conversion"""
-        
+
         if not image_files:
             recent_file = self.get_recent_media_file()
             if recent_file:
@@ -3710,7 +3822,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         try:
             result = await self._apply_grayscale(input_file)
-            
+
             if result["success"]:
                 return (
                     f"✅ **Grayscale Conversion Completed**\n\n"
@@ -3722,7 +3834,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
             else:
                 return f"❌ **Grayscale conversion failed:** {result.get('error', 'Unknown error')}"
-                
+
         except Exception as e:
             return f"❌ **Error during grayscale conversion:** {str(e)}"
 
@@ -3730,7 +3842,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
     ) -> str:
         """Handle image adjustments (brightness, contrast, saturation)"""
-        
+
         if not image_files:
             recent_file = self.get_recent_media_file()
             if recent_file:
@@ -3747,10 +3859,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
 
         input_file = image_files[0]
-        
+
         # Parse adjustment parameters from user message
         adjustments = self._parse_image_adjustments(user_message)
-        
+
         if not adjustments:
             return (
                 f"I need adjustment specifications for **{input_file}**.\n\n"
@@ -3763,7 +3875,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         try:
             result = await self._adjust_image_properties(input_file, adjustments)
-            
+
             if result["success"]:
                 adj_desc = ", ".join([f"{k}: {v}" for k, v in adjustments.items()])
                 return (
@@ -3776,7 +3888,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
             else:
                 return f"❌ **Image adjustment failed:** {result.get('error', 'Unknown error')}"
-                
+
         except Exception as e:
             return f"❌ **Error during image adjustment:** {str(e)}"
 
@@ -3784,7 +3896,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
     ) -> str:
         """Handle image blur/sharpen effects"""
-        
+
         if not image_files:
             recent_file = self.get_recent_media_file()
             if recent_file:
@@ -3801,10 +3913,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
 
         input_file = image_files[0]
-        
+
         # Parse blur/sharpen parameters from user message
         effect_params = self._parse_blur_parameters(user_message)
-        
+
         if not effect_params:
             return (
                 f"I need effect specifications for **{input_file}**.\n\n"
@@ -3817,7 +3929,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         try:
             result = await self._apply_blur_effect(input_file, effect_params)
-            
+
             if result["success"]:
                 effect_desc = f"{effect_params.get('type', 'blur')} (intensity: {effect_params.get('intensity', 'medium')})"
                 return (
@@ -3830,7 +3942,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
             else:
                 return f"❌ **Image effect failed:** {result.get('error', 'Unknown error')}"
-                
+
         except Exception as e:
             return f"❌ **Error during image effect processing:** {str(e)}"
 
@@ -3838,10 +3950,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
     ) -> str:
         """Handle batch processing of multiple images"""
-        
+
         # Parse batch operation from user message
         batch_operation = self._parse_batch_operation(user_message)
-        
+
         if not batch_operation:
             return (
                 "I can batch process multiple images! Please specify:\n\n"
@@ -3856,8 +3968,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         try:
             # Find images to process
-            images_to_process = await self._find_batch_images(batch_operation.get("pattern", "*.png"))
-            
+            images_to_process = await self._find_batch_images(
+                batch_operation.get("pattern", "*.png")
+            )
+
             if not images_to_process:
                 return (
                     f"❌ **No images found** matching pattern: {batch_operation.get('pattern', 'N/A')}\n\n"
@@ -3870,39 +3984,44 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             # Process each image
             results = []
             failed_count = 0
-            
+
             for i, image_file in enumerate(images_to_process):
                 try:
                     if batch_operation["operation"] == "resize":
-                        result = await self._resize_image(image_file, batch_operation["width"], batch_operation["height"])
+                        result = await self._resize_image(
+                            image_file, batch_operation["width"], batch_operation["height"]
+                        )
                     elif batch_operation["operation"] == "convert":
-                        result = await self._convert_image_format(image_file, batch_operation["format"])
+                        result = await self._convert_image_format(
+                            image_file, batch_operation["format"]
+                        )
                     elif batch_operation["operation"] == "grayscale":
                         result = await self._apply_grayscale(image_file)
                     else:
                         continue
-                        
+
                     if result["success"]:
                         results.append(f"✅ {Path(image_file).name}")
                     else:
                         results.append(f"❌ {Path(image_file).name}")
                         failed_count += 1
-                        
+
                 except Exception:
                     results.append(f"❌ {Path(image_file).name}")
                     failed_count += 1
 
             success_count = len(images_to_process) - failed_count
-            
+
             return (
                 f"✅ **Batch Processing Completed**\n\n"
                 f"📊 **Results:** {success_count}/{len(images_to_process)} successful\n"
                 f"⚙️ **Operation:** {batch_operation['operation']}\n"
-                f"📁 **Processed files:**\n" + "\n".join(results[:10]) +
-                (f"\n... and {len(results) - 10} more" if len(results) > 10 else "") +
-                f"\n\n🎉 Batch processing complete!"
+                f"📁 **Processed files:**\n"
+                + "\n".join(results[:10])
+                + (f"\n... and {len(results) - 10} more" if len(results) > 10 else "")
+                + f"\n\n🎉 Batch processing complete!"
             )
-                
+
         except Exception as e:
             return f"❌ **Error during batch processing:** {str(e)}"
 
@@ -3980,18 +4099,21 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 "streaming_responses",
             ],
         }
+
+
 # ========================
 # WATERMARKING AND TRANSPARENCY HANDLERS
 # ========================
+
 
 async def _handle_watermark_application(
     self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
 ) -> str:
     """Handle image watermarking requests"""
-    
+
     # Parse watermark parameters from user message
     watermark_params = self._parse_watermark_parameters(user_message)
-    
+
     if not watermark_params:
         return (
             "I can apply image watermarks! Please specify:\n\n"
@@ -4003,7 +4125,7 @@ async def _handle_watermark_application(
             "• 'Apply watermark.png to image.jpg with 70% opacity'\n"
             "• 'Watermark photo.jpg with logo.png at top-left corner'"
         )
-        
+
     try:
         # Get input image
         if not image_files:
@@ -4014,12 +4136,12 @@ async def _handle_watermark_application(
                 return "❌ **No image specified.** Please provide an image file to watermark."
         else:
             input_image = image_files[0]
-        
+
         # Get watermark image from parameters
         watermark_image = watermark_params.get("watermark_file")
         if not watermark_image:
             return "❌ **No watermark image specified.** Please provide a watermark image file."
-        
+
         # Apply image watermark
         result = await self._apply_image_watermark(
             input_image=input_image,
@@ -4027,9 +4149,9 @@ async def _handle_watermark_application(
             position=watermark_params.get("position", "bottom-right"),
             opacity=watermark_params.get("opacity", 1.0),
             scale=watermark_params.get("scale", 1.0),
-            margin=watermark_params.get("margin", 10)
+            margin=watermark_params.get("margin", 10),
         )
-        
+
         if result["success"]:
             return (
                 f"✅ **Watermark Applied Successfully!**\n\n"
@@ -4044,19 +4166,20 @@ async def _handle_watermark_application(
             )
         else:
             return f"❌ **Watermark application failed:** {result.get('error', 'Unknown error')}"
-            
+
     except Exception as e:
         return f"❌ **Error during watermark application:** {str(e)}"
+
 
 async def _handle_text_watermark_application(
     self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
 ) -> str:
     """Handle text watermarking requests"""
-    
+
     # Parse text watermark parameters from user message
     watermark_text = self._extract_watermark_text(user_message)
     watermark_params = self._parse_watermark_parameters(user_message)
-    
+
     if not watermark_text:
         return (
             "I can add text watermarks! Please specify:\n\n"
@@ -4068,7 +4191,7 @@ async def _handle_text_watermark_application(
             "• 'Apply \"DRAFT\" text watermark at top-left of image.png'\n"
             "• 'Watermark photo.jpg with text \"My Company\" at bottom center'"
         )
-        
+
     try:
         # Get input image
         if not image_files:
@@ -4079,7 +4202,7 @@ async def _handle_text_watermark_application(
                 return "❌ **No image specified.** Please provide an image file to watermark."
         else:
             input_image = image_files[0]
-        
+
         # Apply text watermark
         result = await self._apply_text_watermark(
             input_image=input_image,
@@ -4089,9 +4212,9 @@ async def _handle_text_watermark_application(
             font_color=watermark_params.get("font_color", "white"),
             font_family=watermark_params.get("font_family", "Arial"),
             opacity=watermark_params.get("opacity", 1.0),
-            margin=watermark_params.get("margin", 10)
+            margin=watermark_params.get("margin", 10),
         )
-        
+
         if result["success"]:
             return (
                 f"✅ **Text Watermark Applied Successfully!**\n\n"
@@ -4105,19 +4228,22 @@ async def _handle_text_watermark_application(
                 f"Your text watermarked image is ready! 🎉"
             )
         else:
-            return f"❌ **Text watermark application failed:** {result.get('error', 'Unknown error')}"
-            
+            return (
+                f"❌ **Text watermark application failed:** {result.get('error', 'Unknown error')}"
+            )
+
     except Exception as e:
         return f"❌ **Error during text watermark application:** {str(e)}"
+
 
 async def _handle_background_removal(
     self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
 ) -> str:
     """Handle background removal requests"""
-    
+
     # Parse transparency parameters from user message
     transparency_params = self._parse_transparency_parameters(user_message)
-    
+
     try:
         # Get input image
         if not image_files:
@@ -4128,15 +4254,15 @@ async def _handle_background_removal(
                 return "❌ **No image specified.** Please provide an image file for background removal."
         else:
             input_image = image_files[0]
-        
+
         # Remove background
         result = await self._remove_background(
             input_image=input_image,
             background_color=transparency_params.get("background_color", "white"),
             similarity=transparency_params.get("similarity", 0.3),
-            blend=transparency_params.get("blend", 0.1)
+            blend=transparency_params.get("blend", 0.1),
         )
-        
+
         if result["success"]:
             return (
                 f"✅ **Background Removed Successfully!**\n\n"
@@ -4150,18 +4276,19 @@ async def _handle_background_removal(
             )
         else:
             return f"❌ **Background removal failed:** {result.get('error', 'Unknown error')}"
-            
+
     except Exception as e:
         return f"❌ **Error during background removal:** {str(e)}"
+
 
 async def _handle_transparent_canvas_creation(
     self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
 ) -> str:
     """Handle transparent canvas creation requests"""
-    
+
     # Parse dimensions from user message
     dimensions = self._parse_image_dimensions(output_prefs, user_message)
-    
+
     if not dimensions or not all(dimensions):
         return (
             "I can create transparent canvases! Please specify dimensions:\n\n"
@@ -4170,17 +4297,15 @@ async def _handle_transparent_canvas_creation(
             "• 'Make a blank transparent image 1920x1080'\n"
             "• 'Generate empty transparent canvas 500x500'"
         )
-        
+
     try:
         width, height = dimensions
-        
+
         # Create transparent canvas
         result = await self._create_transparent_canvas(
-            width=width,
-            height=height,
-            color="transparent"
+            width=width, height=height, color="transparent"
         )
-        
+
         if result["success"]:
             return (
                 f"✅ **Transparent Canvas Created Successfully!**\n\n"
@@ -4191,19 +4316,22 @@ async def _handle_transparent_canvas_creation(
                 f"Your transparent canvas is ready! 🎉"
             )
         else:
-            return f"❌ **Transparent canvas creation failed:** {result.get('error', 'Unknown error')}"
-            
+            return (
+                f"❌ **Transparent canvas creation failed:** {result.get('error', 'Unknown error')}"
+            )
+
     except Exception as e:
         return f"❌ **Error during transparent canvas creation:** {str(e)}"
+
 
 async def _handle_alpha_mask_application(
     self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
 ) -> str:
     """Handle alpha mask application requests"""
-    
+
     # Parse mask parameters from user message
     mask_files = self._identify_watermark_files(user_message, file_type="mask")
-    
+
     if not mask_files:
         return (
             "I can apply alpha masks! Please specify:\n\n"
@@ -4214,7 +4342,7 @@ async def _handle_alpha_mask_application(
             "• 'Use alpha_mask.png on image.jpg'\n"
             "• 'Apply transparency mask shape.png to picture.jpg'"
         )
-        
+
     try:
         # Get input image
         if not image_files:
@@ -4225,16 +4353,13 @@ async def _handle_alpha_mask_application(
                 return "❌ **No image specified.** Please provide an image file for alpha mask application."
         else:
             input_image = image_files[0]
-        
+
         # Get mask image
         mask_image = mask_files[0]
-        
+
         # Apply alpha mask
-        result = await self._apply_alpha_mask(
-            input_image=input_image,
-            mask_image=mask_image
-        )
-        
+        result = await self._apply_alpha_mask(input_image=input_image, mask_image=mask_image)
+
         if result["success"]:
             return (
                 f"✅ **Alpha Mask Applied Successfully!**\n\n"
@@ -4246,6 +4371,6 @@ async def _handle_alpha_mask_application(
             )
         else:
             return f"❌ **Alpha mask application failed:** {result.get('error', 'Unknown error')}"
-            
+
     except Exception as e:
         return f"❌ **Error during alpha mask application:** {str(e)}"

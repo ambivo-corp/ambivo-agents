@@ -186,7 +186,10 @@ class AgentSession:
                 from ..agents.gather_agent import GatherAgent
 
                 self.agents["gather_agent"] = GatherAgent(
-                    agent_id=gather_id, memory_manager=gather_memory, llm_service=self.llm_service, config=self.config
+                    agent_id=gather_id,
+                    memory_manager=gather_memory,
+                    llm_service=self.llm_service,
+                    config=self.config,
                 )
                 self.logger.info("Created GatherAgent")
             except Exception as e:

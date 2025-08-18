@@ -49,20 +49,19 @@ class MediaDockerExecutor:
         shared_base_dir = docker_config.get("shared_base_dir", "./docker_shared")
         self.shared_manager = get_shared_manager(shared_base_dir)
         self.shared_manager.setup_directories()
-        
+
         # Get agent-specific subdirectory names from config
         self.input_subdir = config.get("input_subdir", "media")
         self.output_subdir = config.get("output_subdir", "media")
         self.temp_subdir = config.get("temp_subdir", "media")
         self.handoff_subdir = config.get("handoff_subdir", "media")
-        
+
         # Set up proper directories using DockerSharedManager
         self.input_dir = self.shared_manager.get_host_path(self.input_subdir, "input")
         self.output_dir = self.shared_manager.get_host_path(self.output_subdir, "output")
         self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
         self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
-        
-        
+
         # Ensure all directories exist
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -82,47 +81,43 @@ class MediaDockerExecutor:
     def resolve_input_file(self, filename: str) -> Path:
         """
         Resolve input file path by checking multiple locations
-        
+
         Args:
             filename: File name or path to resolve
-            
+
         Returns:
             Path object if file exists, None otherwise
         """
         # If it's already an absolute path and exists, return it
         if Path(filename).is_absolute() and Path(filename).exists():
             return Path(filename)
-            
+
         # Check various possible locations in order of priority
         search_locations = [
             # 1. Docker shared input directory (highest priority)
             self.input_dir / filename,
             self.input_dir / Path(filename).name,
-            
             # 2. Relative to current directory
             Path(filename),
             Path(filename).resolve(),
-            
             # 4. Other docker shared directories (for workflow handoffs)
             self.handoff_dir / filename,
             self.handoff_dir / Path(filename).name,
-            
             # 5. Cross-agent handoff directories (for workflow integration)
-            self.shared_manager.get_host_path('youtube', 'handoff') / filename,
-            self.shared_manager.get_host_path('youtube', 'handoff') / Path(filename).name,
-            self.shared_manager.get_host_path('youtube', 'output') / filename,
-            self.shared_manager.get_host_path('youtube', 'output') / Path(filename).name,
-            self.shared_manager.get_host_path('analytics', 'handoff') / filename,
-            self.shared_manager.get_host_path('analytics', 'handoff') / Path(filename).name,
-            self.shared_manager.get_host_path('code', 'handoff') / filename,
-            self.shared_manager.get_host_path('code', 'handoff') / Path(filename).name,
-            
+            self.shared_manager.get_host_path("youtube", "handoff") / filename,
+            self.shared_manager.get_host_path("youtube", "handoff") / Path(filename).name,
+            self.shared_manager.get_host_path("youtube", "output") / filename,
+            self.shared_manager.get_host_path("youtube", "output") / Path(filename).name,
+            self.shared_manager.get_host_path("analytics", "handoff") / filename,
+            self.shared_manager.get_host_path("analytics", "handoff") / Path(filename).name,
+            self.shared_manager.get_host_path("code", "handoff") / filename,
+            self.shared_manager.get_host_path("code", "handoff") / Path(filename).name,
         ]
-        
+
         for location in search_locations:
             if location.exists():
                 return location
-                
+
         return None
 
     def execute_ffmpeg_command(
@@ -157,7 +152,7 @@ class MediaDockerExecutor:
                     for container_name, host_path in input_files.items():
                         # Try to resolve the file path using our search logic
                         resolved_path = self.resolve_input_file(host_path)
-                        
+
                         if resolved_path and resolved_path.exists():
                             dest_path = container_input / container_name
                             shutil.copy2(resolved_path, dest_path)
@@ -167,13 +162,13 @@ class MediaDockerExecutor:
                             search_dirs = [
                                 str(self.input_dir),
                                 str(self.handoff_dir),
-                                "Current directory"
+                                "Current directory",
                             ]
                             return {
                                 "success": False,
                                 "error": f"Input file not found: {host_path}\nSearched in: {', '.join(search_dirs)}",
                                 "command": ffmpeg_command,
-                                "searched_locations": search_dirs
+                                "searched_locations": search_dirs,
                             }
 
                 # Copy additional work files

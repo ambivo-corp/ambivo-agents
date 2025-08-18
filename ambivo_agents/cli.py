@@ -42,10 +42,12 @@ from ambivo_agents import (
 # Import DatabaseAgent with error handling for optional dependency
 try:
     from ambivo_agents import DatabaseAgent
+
     DATABASE_AGENT_AVAILABLE = True
 except ImportError:
     try:
         from ambivo_agents.agents.database_agent import DatabaseAgent
+
         DATABASE_AGENT_AVAILABLE = True
     except ImportError:
         DATABASE_AGENT_AVAILABLE = False
@@ -98,8 +100,9 @@ except ImportError as e:
 # Check Docker availability for agents that require it
 try:
     import docker
+
     DOCKER_AVAILABLE = True
-    
+
     # Test Docker connection
     try:
         client = docker.from_env()
@@ -620,12 +623,12 @@ class AmbivoAgentsCLI:
     def _detect_api_request(self, message: str) -> bool:
         """
         Enhanced detection for API requests and documentation parsing
-        
+
         Called by: _route_with_builtin_logic()
         Returns: True if message indicates API request intent
         """
         message_lower = message.lower()
-        
+
         # Strong API indicators with regex
         strong_patterns = [
             r"(?:get|post|put|patch|delete|head|options)\s+https?://",  # HTTP method + URL
@@ -639,27 +642,35 @@ class AmbivoAgentsCLI:
             r"rest.*api",  # REST API
             r"http.*(?:request|call)",  # HTTP request/call
         ]
-        
+
         # Check regex patterns first (strongest indicators)
         import re
-        
+
         for pattern in strong_patterns:
             if re.search(pattern, message_lower):
                 return True
-        
+
         # Check for URLs (moderate indicator)
         url_patterns = [
             r"https?://[^\s]+",  # Any HTTP/HTTPS URL
         ]
-        
+
         has_url = any(re.search(pattern, message_lower) for pattern in url_patterns)
-        
+
         # Check keyword combinations
         has_api = any(word in message_lower for word in ["api", "endpoint", "request", "call"])
-        has_doc = any(word in message_lower for word in ["documentation", "docs", "postman", "swagger", "openapi"])
-        has_http = any(word in message_lower for word in ["get", "post", "put", "patch", "delete", "http", "https"])
-        has_action = any(word in message_lower for word in ["call", "invoke", "use", "fetch", "retrieve"])
-        
+        has_doc = any(
+            word in message_lower
+            for word in ["documentation", "docs", "postman", "swagger", "openapi"]
+        )
+        has_http = any(
+            word in message_lower
+            for word in ["get", "post", "put", "patch", "delete", "http", "https"]
+        )
+        has_action = any(
+            word in message_lower for word in ["call", "invoke", "use", "fetch", "retrieve"]
+        )
+
         # Strong combinations that indicate API intent
         if has_doc and (has_api or has_action):  # Documentation + API/action
             return True
@@ -667,18 +678,18 @@ class AmbivoAgentsCLI:
             return True
         if has_api and has_action:  # API + action word
             return True
-        
+
         return False
 
     def _detect_analytics_request(self, message: str) -> bool:
         """
         Enhanced detection for analytics and data analysis requests
-        
+
         Called by: _route_with_builtin_logic()
         Returns: True if message indicates analytics/data analysis intent
         """
         message_lower = message.lower()
-        
+
         # Strong analytics indicators with regex
         strong_patterns = [
             r"(?:load|import|read|analyze|process).*(?:csv|excel|xls|xlsx|data|dataset)",  # Data loading
@@ -689,60 +700,107 @@ class AmbivoAgentsCLI:
             r"(?:statistics|stats|summary).*(?:data|dataset)",  # Statistical analysis
             r"duckdb.*(?:query|analyze|load)",  # DuckDB specific
         ]
-        
+
         # Check regex patterns first (strongest indicators)
         import re
-        
+
         for pattern in strong_patterns:
             if re.search(pattern, message_lower):
                 return True
-        
+
         # Check for file extensions in message
         file_extensions = [".csv", ".xlsx", ".xls"]
         has_data_file = any(ext in message_lower for ext in file_extensions)
-        
-        # Check keyword combinations  
-        has_data = any(word in message_lower for word in ["data", "dataset", "csv", "excel", "spreadsheet"])
-        has_analysis = any(word in message_lower for word in ["analyze", "analysis", "chart", "graph", "plot", "visualize", "statistics", "summary"])
-        has_sql = any(word in message_lower for word in ["sql", "query", "select", "from", "where", "group by"])
-        has_schema = any(word in message_lower for word in ["schema", "structure", "columns", "fields", "describe"])
-        
+
+        # Check keyword combinations
+        has_data = any(
+            word in message_lower for word in ["data", "dataset", "csv", "excel", "spreadsheet"]
+        )
+        has_analysis = any(
+            word in message_lower
+            for word in [
+                "analyze",
+                "analysis",
+                "chart",
+                "graph",
+                "plot",
+                "visualize",
+                "statistics",
+                "summary",
+            ]
+        )
+        has_sql = any(
+            word in message_lower
+            for word in ["sql", "query", "select", "from", "where", "group by"]
+        )
+        has_schema = any(
+            word in message_lower
+            for word in ["schema", "structure", "columns", "fields", "describe"]
+        )
+
         # Check for explicit database context to avoid false positives
-        has_database_context = any(db_word in message_lower for db_word in ["mongodb", "mysql", "postgresql", "database", "db.", "connect to", "collection", "table"])
-        
+        has_database_context = any(
+            db_word in message_lower
+            for db_word in [
+                "mongodb",
+                "mysql",
+                "postgresql",
+                "database",
+                "db.",
+                "connect to",
+                "collection",
+                "table",
+            ]
+        )
+
         # Strong combinations that indicate analytics intent (but avoid database operations)
         if has_database_context:  # If it's clearly a database operation, don't route to analytics
             return False
-            
+
         if has_data_file:  # File extension found
             return True
         if has_data and has_analysis:  # Data + analysis keywords
             return True
-        if has_data and has_sql:  # Data + SQL keywords (now safe since we checked database context above)
+        if (
+            has_data and has_sql
+        ):  # Data + SQL keywords (now safe since we checked database context above)
             return True
         if has_data and has_schema:  # Data + schema keywords
             return True
-        if any(word in message_lower for word in ["duckdb", "analytics", "dataframe", "pandas"]):  # Direct analytics tools
+        if any(
+            word in message_lower for word in ["duckdb", "analytics", "dataframe", "pandas"]
+        ):  # Direct analytics tools
             return True
-        
+
         return False
 
     def _detect_database_request(self, message: str) -> bool:
         """Enhanced database operation detection with comprehensive keyword matching"""
         import re
-        
+
         message_lower = message.lower()
-        
+
         # Database connection keywords
         db_connection_keywords = [
-            "database", "db", "sql", "mongodb", "mysql", "postgresql", "connect",
-            "connection", "schema", "table", "query", "select", "count"
+            "database",
+            "db",
+            "sql",
+            "mongodb",
+            "mysql",
+            "postgresql",
+            "connect",
+            "connection",
+            "schema",
+            "table",
+            "query",
+            "select",
+            "count",
         ]
-        
+
         # Check for explicit database keywords
         if any(keyword in message_lower for keyword in db_connection_keywords):
             return True
-        
+
         # Check for SQL-like patterns
         sql_patterns = [
             r"select\s+.*\s+from",
@@ -753,10 +811,10 @@ class AmbivoAgentsCLI:
             r"connect\s+to\s+database",
             r"(?:mongodb|mysql|postgresql)\s+(?:connection|query)",
         ]
-        
+
         if any(re.search(pattern, message_lower) for pattern in sql_patterns):
             return True
-        
+
         return False
 
     async def _route_with_builtin_logic(self, message: str, session_id: str) -> str:
@@ -766,7 +824,9 @@ class AmbivoAgentsCLI:
 
         # CodeExecutorAgent - enabled by default when Docker is available unless explicitly disabled
         if self._detect_code_execution_request(message):
-            code_executor_enabled = self.config.get("agents.code_executor.enabled", DOCKER_AVAILABLE)
+            code_executor_enabled = self.config.get(
+                "agents.code_executor.enabled", DOCKER_AVAILABLE
+            )
             if code_executor_enabled:
                 # ✅ ROUTE TO CODE EXECUTOR AGENT
                 agent, context = await self.get_or_create_agent(
@@ -910,9 +970,12 @@ class AmbivoAgentsCLI:
 
                     if urls:
                         url = urls[0]
-                        default_audio_only = self.config.get("agents.youtube.default_audio_only", True)
+                        default_audio_only = self.config.get(
+                            "agents.youtube.default_audio_only", True
+                        )
                         wants_video = any(
-                            keyword in message_lower for keyword in ["video", "mp4", "watch", "visual"]
+                            keyword in message_lower
+                            for keyword in ["video", "mp4", "watch", "visual"]
                         )
                         audio_only = default_audio_only if not wants_video else False
 
@@ -1633,67 +1696,68 @@ def shell():
 def api(request: str, token: str, timeout: int, stream: bool):
     """
     Make API requests with intelligent documentation parsing
-    
+
     Examples:
     - ambivo-agents api "GET https://jsonplaceholder.typicode.com/posts/1"
     - ambivo-agents api "Read docs at https://api.example.com/docs and get users" --token abc123
     - ambivo-agents api "POST https://api.example.com/users" --stream
     """
     import asyncio
-    
+
     async def run_api_request():
         try:
             if not cli_instance:
                 initialize_cli()
-            
+
             # Get or create API agent
             session_id = cli_instance.get_current_session()
             agent, context = await cli_instance.get_or_create_agent(
                 APIAgent, session_id, {"operation": "cli_api_request"}
             )
-            
+
             # Add token to request if provided
             if token:
                 request_with_token = f"{request} with token {token}"
             else:
                 request_with_token = request
-            
+
             # Add timeout if different from default
             if timeout != 30:
                 request_with_token += f" with timeout {timeout} seconds"
-            
+
             if stream:
                 # Streaming response
                 click.echo("🌐 API Agent - Streaming Response:")
                 click.echo("=" * 50)
-                
+
                 async for chunk in agent.chat_stream(request_with_token):
-                    chunk_type = chunk.sub_type.value if hasattr(chunk, 'sub_type') else 'content'
-                    chunk_text = chunk.text if hasattr(chunk, 'text') else str(chunk)
-                    
-                    if chunk_type == 'status':
+                    chunk_type = chunk.sub_type.value if hasattr(chunk, "sub_type") else "content"
+                    chunk_text = chunk.text if hasattr(chunk, "text") else str(chunk)
+
+                    if chunk_type == "status":
                         click.echo(f"🔄 {chunk_text}")
-                    elif chunk_type == 'error':
+                    elif chunk_type == "error":
                         click.echo(f"❌ {chunk_text}")
                     else:
                         click.echo(chunk_text)
-                        
+
             else:
                 # Non-streaming response
                 click.echo("🌐 API Agent Response:")
                 click.echo("=" * 30)
-                
+
                 response = await agent.chat(request_with_token)
                 click.echo(response)
-            
+
             click.echo(f"\n📋 Session: {context.session_id}")
-            
+
         except Exception as e:
             click.echo(f"❌ API request failed: {str(e)}")
             if cli_instance.config.get("cli.verbose", False):
                 import traceback
+
                 traceback.print_exc()
-    
+
     asyncio.run(run_api_request())
 
 

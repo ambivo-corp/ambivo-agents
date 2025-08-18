@@ -12,42 +12,49 @@ from pathlib import Path
 
 try:
     import pypdf
+
     PYPDF_AVAILABLE = True
 except ImportError:
     PYPDF_AVAILABLE = False
 
 try:
     import pandas as pd
+
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
 
 try:
     from docx import Document as DocxDocument
+
     DOCX_AVAILABLE = True
 except ImportError:
     DOCX_AVAILABLE = False
 
 try:
     from pptx import Presentation
+
     PPTX_AVAILABLE = True
 except ImportError:
     PPTX_AVAILABLE = False
 
 try:
     from PIL import Image
+
     PILLOW_AVAILABLE = True
 except ImportError:
     PILLOW_AVAILABLE = False
 
 try:
     import pytesseract
+
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
 
 try:
     from bs4 import BeautifulSoup
+
     BS4_AVAILABLE = True
 except ImportError:
     BS4_AVAILABLE = False
@@ -65,17 +72,43 @@ class FileProcessorService:
         self.logger = logging.getLogger(f"FileProcessorService")
         self.supported_extensions = {
             # Spreadsheets
-            'xlsx', 'xls',
+            "xlsx",
+            "xls",
             # Documents
-            'doc', 'docx', 'pdf', 'txt', 'md', 'rtf',
+            "doc",
+            "docx",
+            "pdf",
+            "txt",
+            "md",
+            "rtf",
             # Presentations
-            'ppt', 'pptx',
+            "ppt",
+            "pptx",
             # Data formats
-            'csv', 'json', 'jsonl', 'xml',
+            "csv",
+            "json",
+            "jsonl",
+            "xml",
             # Images
-            'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp',
+            "png",
+            "jpg",
+            "jpeg",
+            "gif",
+            "bmp",
+            "tiff",
+            "webp",
             # Code files
-            'py', 'js', 'html', 'css', 'java', 'cpp', 'c', 'php', 'rb', 'go', 'rs'
+            "py",
+            "js",
+            "html",
+            "css",
+            "java",
+            "cpp",
+            "c",
+            "php",
+            "rb",
+            "go",
+            "rs",
         }
 
         # Log available dependencies
@@ -84,18 +117,18 @@ class FileProcessorService:
     def _log_dependencies(self):
         """Log which optional dependencies are available"""
         deps = {
-            'pandas': PANDAS_AVAILABLE,
-            'python-docx': DOCX_AVAILABLE,
-            'python-pptx': PPTX_AVAILABLE,
-            'Pillow': PILLOW_AVAILABLE,
-            'pytesseract': TESSERACT_AVAILABLE,
-            'beautifulsoup4': BS4_AVAILABLE,
-            'pypdf': PYPDF_AVAILABLE
+            "pandas": PANDAS_AVAILABLE,
+            "python-docx": DOCX_AVAILABLE,
+            "python-pptx": PPTX_AVAILABLE,
+            "Pillow": PILLOW_AVAILABLE,
+            "pytesseract": TESSERACT_AVAILABLE,
+            "beautifulsoup4": BS4_AVAILABLE,
+            "pypdf": PYPDF_AVAILABLE,
         }
-        
+
         available = [name for name, avail in deps.items() if avail]
         missing = [name for name, avail in deps.items() if not avail]
-        
+
         self.logger.info(f"Available dependencies: {', '.join(available)}")
         if missing:
             self.logger.warning(f"Missing optional dependencies: {', '.join(missing)}")
@@ -103,7 +136,7 @@ class FileProcessorService:
     def get_file_extension(self, file_path: str) -> str:
         """Extract file extension from file path"""
         try:
-            return os.path.splitext(file_path)[1].lstrip('.').lower()
+            return os.path.splitext(file_path)[1].lstrip(".").lower()
         except:
             return ""
 
@@ -132,23 +165,37 @@ class FileProcessorService:
 
         try:
             # Route to appropriate processor based on file type
-            if extension in ['xlsx', 'xls']:
+            if extension in ["xlsx", "xls"]:
                 documents = self._process_excel_file(file_path)
-            elif extension == 'csv':
+            elif extension == "csv":
                 documents = self._process_csv_file(file_path)
-            elif extension in ['doc', 'docx']:
+            elif extension in ["doc", "docx"]:
                 documents = self._process_word_file(file_path)
-            elif extension in ['ppt', 'pptx']:
+            elif extension in ["ppt", "pptx"]:
                 documents = self._process_powerpoint_file(file_path)
-            elif extension in ['json', 'jsonl']:
+            elif extension in ["json", "jsonl"]:
                 documents = self._process_json_file(file_path)
-            elif extension in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp']:
+            elif extension in ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp"]:
                 documents = self._process_image_file(file_path)
-            elif extension == 'xml':
+            elif extension == "xml":
                 documents = self._process_xml_file(file_path)
-            elif extension in ['txt', 'md', 'py', 'js', 'html', 'css', 'java', 'cpp', 'c', 'php', 'rb', 'go', 'rs']:
+            elif extension in [
+                "txt",
+                "md",
+                "py",
+                "js",
+                "html",
+                "css",
+                "java",
+                "cpp",
+                "c",
+                "php",
+                "rb",
+                "go",
+                "rs",
+            ]:
                 documents = self._process_text_file(file_path)
-            elif extension == 'pdf':
+            elif extension == "pdf":
                 documents = self._process_pdf_file(file_path)
             else:
                 # Fallback to SimpleDirectoryReader
@@ -157,18 +204,20 @@ class FileProcessorService:
             # Add custom metadata to all documents
             if documents and custom_meta:
                 for doc in documents:
-                    if hasattr(doc, 'extra_info') and doc.extra_info is not None:
+                    if hasattr(doc, "extra_info") and doc.extra_info is not None:
                         doc.extra_info.update(custom_meta)
-                    elif hasattr(doc, 'metadata') and doc.metadata is not None:
+                    elif hasattr(doc, "metadata") and doc.metadata is not None:
                         doc.metadata.update(custom_meta)
                     else:
                         # Initialize metadata if it doesn't exist
-                        if hasattr(doc, 'extra_info'):
+                        if hasattr(doc, "extra_info"):
                             doc.extra_info = custom_meta.copy()
-                        elif hasattr(doc, 'metadata'):
+                        elif hasattr(doc, "metadata"):
                             doc.metadata = custom_meta.copy()
 
-            self.logger.info(f"Successfully processed {file_path}: {len(documents)} documents extracted")
+            self.logger.info(
+                f"Successfully processed {file_path}: {len(documents)} documents extracted"
+            )
             return documents
 
         except Exception as ex:
@@ -177,7 +226,9 @@ class FileProcessorService:
             try:
                 return self._process_generic_file(file_path)
             except Exception as fallback_ex:
-                self.logger.error(f"Fallback processing also failed for {file_path}: {str(fallback_ex)}")
+                self.logger.error(
+                    f"Fallback processing also failed for {file_path}: {str(fallback_ex)}"
+                )
                 return []
 
     def _process_csv_file(self, file_path: str) -> List[LIDoc]:
@@ -187,7 +238,7 @@ class FileProcessorService:
 
         try:
             # Try different encodings
-            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+            encodings = ["utf-8", "latin-1", "iso-8859-1", "cp1252"]
             df = None
             used_encoding = None
 
@@ -211,7 +262,7 @@ class FileProcessorService:
             if len(df) > 1000:
                 chunk_size = 500
                 for i in range(0, len(df), chunk_size):
-                    chunk_df = df.iloc[i:i + chunk_size]
+                    chunk_df = df.iloc[i : i + chunk_size]
                     chunk_text = f"CSV Data Chunk {i // chunk_size + 1} (rows {i + 1}-{min(i + chunk_size, len(df))}):\n\n"
                     chunk_text += chunk_df.to_string(index=False)
                     documents.append(LIDoc(text=csv_text + "\n\n" + chunk_text))
@@ -229,11 +280,11 @@ class FileProcessorService:
         try:
             import csv
 
-            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+            encodings = ["utf-8", "latin-1", "iso-8859-1", "cp1252"]
 
             for encoding in encodings:
                 try:
-                    with open(file_path, 'r', encoding=encoding, newline='') as csvfile:
+                    with open(file_path, "r", encoding=encoding, newline="") as csvfile:
                         # Detect delimiter
                         sample = csvfile.read(1024)
                         csvfile.seek(0)
@@ -283,7 +334,7 @@ class FileProcessorService:
             analysis += f"  Non-null values: {df[col].count()}/{len(df)}\n"
             analysis += f"  Null values: {df[col].isnull().sum()}\n"
 
-            if df[col].dtype in ['object', 'string']:
+            if df[col].dtype in ["object", "string"]:
                 unique_count = df[col].nunique()
                 analysis += f"  Unique values: {unique_count}\n"
                 if unique_count <= 20:
@@ -307,12 +358,12 @@ class FileProcessorService:
     def _process_json_file(self, file_path: str) -> List[LIDoc]:
         """Process JSON files with structure analysis"""
         try:
-            encodings = ['utf-8', 'latin-1', 'iso-8859-1']
+            encodings = ["utf-8", "latin-1", "iso-8859-1"]
 
             for encoding in encodings:
                 try:
-                    with open(file_path, 'r', encoding=encoding) as f:
-                        if file_path.endswith('.jsonl'):
+                    with open(file_path, "r", encoding=encoding) as f:
+                        if file_path.endswith(".jsonl"):
                             # Process JSON Lines format
                             return self._process_jsonl_file(f)
                         else:
@@ -330,49 +381,49 @@ class FileProcessorService:
         """Process JSON data structure and convert to searchable documents"""
         try:
             documents = []
-            
+
             if isinstance(data, list):
                 # Handle array of objects (like your sales data)
                 if data and isinstance(data[0], dict):
                     # Create summary document
                     summary_text = f"JSON Dataset: {os.path.basename(file_path)}\n\n"
                     summary_text += f"Type: Array of {len(data)} objects\n"
-                    
+
                     # Analyze structure
                     if data:
                         sample_keys = list(data[0].keys())
                         summary_text += f"Object structure: {', '.join(sample_keys)}\n\n"
-                        
+
                         # Create aggregated insights
                         summary_text += "Dataset Insights:\n"
                         summary_text += self._analyze_json_array(data)
-                    
+
                     documents.append(LIDoc(text=summary_text))
-                    
+
                     # Create individual record documents for semantic search
                     for i, item in enumerate(data):
                         record_text = f"Record {i+1} from {os.path.basename(file_path)}:\n"
                         record_text += self._format_json_record(item)
-                        
+
                         # Add metadata for filtering
                         metadata = {
-                            'source_file': file_path,
-                            'record_index': i,
-                            'record_type': 'json_object'
+                            "source_file": file_path,
+                            "record_index": i,
+                            "record_type": "json_object",
                         }
-                        
+
                         doc = LIDoc(text=record_text)
-                        if hasattr(doc, 'metadata'):
+                        if hasattr(doc, "metadata"):
                             doc.metadata = metadata
-                        
+
                         documents.append(doc)
-            
+
             elif isinstance(data, dict):
                 # Single object
                 json_text = f"JSON Object: {os.path.basename(file_path)}\n\n"
                 json_text += self._format_json_record(data)
                 documents.append(LIDoc(text=json_text))
-            
+
             else:
                 # Primitive value
                 json_text = f"JSON Value: {os.path.basename(file_path)}\n\n"
@@ -389,37 +440,37 @@ class FileProcessorService:
         """Analyze array of JSON objects for insights"""
         if not data:
             return "Empty dataset"
-        
+
         analysis = ""
-        
+
         # Count unique values for categorical fields
         field_analysis = {}
         for item in data:
             for key, value in item.items():
                 if key not in field_analysis:
-                    field_analysis[key] = {'values': set(), 'types': set()}
-                
-                field_analysis[key]['values'].add(str(value))
-                field_analysis[key]['types'].add(type(value).__name__)
-        
+                    field_analysis[key] = {"values": set(), "types": set()}
+
+                field_analysis[key]["values"].add(str(value))
+                field_analysis[key]["types"].add(type(value).__name__)
+
         # Generate insights
         for field, info in field_analysis.items():
             analysis += f"- {field}: {len(info['values'])} unique values, types: {', '.join(info['types'])}\n"
-            
+
             # Show sample values for categorical fields
-            if len(info['values']) <= 20:
-                sample_values = list(info['values'])[:5]
+            if len(info["values"]) <= 20:
+                sample_values = list(info["values"])[:5]
                 analysis += f"  Sample values: {', '.join(sample_values)}\n"
-        
+
         return analysis
 
     def _format_json_record(self, record: Dict) -> str:
         """Format a JSON record as searchable text"""
         if not isinstance(record, dict):
             return str(record)
-        
+
         formatted_parts = []
-        
+
         for key, value in record.items():
             if isinstance(value, (str, int, float)):
                 formatted_parts.append(f"{key}: {value}")
@@ -427,17 +478,17 @@ class FileProcessorService:
                 formatted_parts.append(f"{key}: {json.dumps(value, indent=2)}")
             else:
                 formatted_parts.append(f"{key}: {str(value)}")
-        
+
         return "\n".join(formatted_parts)
 
     def _process_text_file(self, file_path: str) -> List[LIDoc]:
         """Process plain text files with encoding detection"""
         try:
-            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+            encodings = ["utf-8", "latin-1", "iso-8859-1", "cp1252"]
 
             for encoding in encodings:
                 try:
-                    with open(file_path, 'r', encoding=encoding) as f:
+                    with open(file_path, "r", encoding=encoding) as f:
                         content = f.read()
 
                     if content.strip():
@@ -462,18 +513,18 @@ class FileProcessorService:
         try:
             # Try SimpleDirectoryReader first
             documents = SimpleDirectoryReader(input_files=[file_path]).load_data()
-            
+
             # Validate content quality
             valid_docs = []
             for doc in documents:
-                if hasattr(doc, 'text') and doc.text and self._is_text_readable(doc.text):
+                if hasattr(doc, "text") and doc.text and self._is_text_readable(doc.text):
                     valid_docs.append(doc)
-            
+
             if valid_docs:
                 return valid_docs
             else:
                 raise Exception("No readable content from SimpleDirectoryReader")
-        
+
         except Exception:
             # Fallback to PyPDF
             if PYPDF_AVAILABLE:
@@ -483,14 +534,14 @@ class FileProcessorService:
                         return [LIDoc(text=text)]
                 except Exception as ex:
                     self.logger.error(f"PyPDF extraction failed: {ex}")
-        
+
         return []
 
     def _extract_text_with_pypdf(self, pdf_path: str) -> str:
         """Extract text using PyPDF"""
         try:
             text = ""
-            with open(pdf_path, 'rb') as file:
+            with open(pdf_path, "rb") as file:
                 pdf_reader = pypdf.PdfReader(file)
                 for page in pdf_reader.pages:
                     page_text = page.extract_text()

@@ -49,19 +49,19 @@ class YouTubeDockerExecutor:
         shared_base_dir = docker_config.get("shared_base_dir", "./docker_shared")
         self.shared_manager = get_shared_manager(shared_base_dir)
         self.shared_manager.setup_directories()
-        
+
         # Get agent-specific subdirectory names from config
         self.input_subdir = config.get("input_subdir", "youtube")
         self.output_subdir = config.get("output_subdir", "youtube")
         self.temp_subdir = config.get("temp_subdir", "youtube")
         self.handoff_subdir = config.get("handoff_subdir", "youtube")
-        
+
         # Set up proper directories using DockerSharedManager
         self.input_dir = self.shared_manager.get_host_path(self.input_subdir, "input")
         self.output_dir = self.shared_manager.get_host_path(self.output_subdir, "output")
         self.temp_dir = self.shared_manager.get_host_path(self.temp_subdir, "temp")
         self.handoff_dir = self.shared_manager.get_host_path(self.handoff_subdir, "handoff")
-        
+
         self.default_audio_only = config.get("default_audio_only", True)
 
         # Ensure all directories exist
@@ -167,7 +167,6 @@ ls -la /workspace/output/
                         shutil.move(str(downloaded_file), str(shared_output))
                         output_info["final_path"] = str(shared_output)
                         output_info["shared_path"] = str(shared_output)
-                        
 
                         # Try to parse JSON result from the script output
                         try:

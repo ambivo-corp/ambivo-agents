@@ -20,18 +20,21 @@ from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple, Un
 # Additional imports for file operations
 try:
     import aiohttp
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
 
 try:
     import aiofiles
+
     AIOFILES_AVAILABLE = True
 except ImportError:
     AIOFILES_AVAILABLE = False
 
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -39,6 +42,7 @@ except ImportError:
 # Optional requests import for URL fallback
 try:
     import requests
+
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
@@ -474,11 +478,11 @@ class BaseAgent(ABC):
 
         # Initialize executor
         self.executor = ThreadPoolExecutor(max_workers=4)
-        
+
         # Initialize logger if not already set
-        if not hasattr(self, 'logger'):
+        if not hasattr(self, "logger"):
             self.logger = logging.getLogger(f"{self.__class__.__name__}.{self.agent_id}")
-        
+
         # Initialize skill assignment system
         self.__init_skills__()
 
@@ -702,7 +706,7 @@ class BaseAgent(ABC):
                     asyncio.set_event_loop(new_loop)
                     try:
                         # Filter out timeout parameter for async chat call
-                        filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'timeout'}
+                        filtered_kwargs = {k: v for k, v in kwargs.items() if k != "timeout"}
                         return new_loop.run_until_complete(self.chat(message, **filtered_kwargs))
                     finally:
                         new_loop.close()
@@ -714,7 +718,7 @@ class BaseAgent(ABC):
             except RuntimeError:
                 # No event loop running, safe to use asyncio.run()
                 # Filter out timeout parameter that asyncio.run() doesn't accept
-                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'timeout'}
+                filtered_kwargs = {k: v for k, v in kwargs.items() if k != "timeout"}
                 return asyncio.run(self.chat(message, **filtered_kwargs))
 
         except Exception as e:
@@ -1011,7 +1015,7 @@ class BaseAgent(ABC):
                     logging.warning(f"⚠️  Could not clear memory: {e}")
 
             # Cleanup skill agents
-            if hasattr(self, '_skill_agents'):
+            if hasattr(self, "_skill_agents"):
                 try:
                     await self.cleanup_skill_agents()
                     logging.info(f"🔧 Cleaned up skill agents for session {session_id}")
@@ -1112,37 +1116,41 @@ class BaseAgent(ABC):
         pass
 
     # 📁 FILE OPERATIONS (Available to all agents)
-    
+
     def _is_path_restricted(self, file_path: str) -> bool:
         """
         Check if a file path is in a restricted directory
-        
+
         Args:
             file_path: File path to check
-            
+
         Returns:
             True if the path is restricted, False otherwise
         """
         try:
             from pathlib import Path
             import os
-            
+
             # Get restricted directories from config
             restricted_dirs = []
-            if hasattr(self, 'config') and self.config:
-                restricted_dirs = self.config.get('security', {}).get('file_access', {}).get('restricted_directories', [])
-            
+            if hasattr(self, "config") and self.config:
+                restricted_dirs = (
+                    self.config.get("security", {})
+                    .get("file_access", {})
+                    .get("restricted_directories", [])
+                )
+
             if not restricted_dirs:
                 return False
-            
+
             # Resolve the file path to absolute path
             resolved_path = Path(file_path).expanduser().resolve()
-            
+
             # Check each restricted directory
             for restricted_dir in restricted_dirs:
                 # Expand user home directory (~) and resolve to absolute path
                 restricted_path = Path(restricted_dir).expanduser().resolve()
-                
+
                 # Check if the file path is within this restricted directory
                 try:
                     resolved_path.relative_to(restricted_path)
@@ -1150,51 +1158,52 @@ class BaseAgent(ABC):
                 except ValueError:
                     # Not within this restricted directory, continue checking
                     continue
-                    
+
             return False
-            
+
         except Exception:
             # If any error occurs in checking, err on the side of caution
             return True
 
-    async def read_file(self, file_path: str, encoding: str = 'utf-8') -> Dict[str, Any]:
+    async def read_file(self, file_path: str, encoding: str = "utf-8") -> Dict[str, Any]:
         """
         Read a file from local filesystem or URL
-        
+
         Args:
             file_path: Local file path or URL (http/https)
             encoding: Text encoding (default: utf-8)
-            
+
         Returns:
             Dict with success status, content, and metadata
         """
         try:
             # Check for restricted paths first (only for local files)
-            if not file_path.startswith(('http://', 'https://')):
+            if not file_path.startswith(("http://", "https://")):
                 if self._is_path_restricted(file_path):
                     return {
-                        'success': False,
-                        'error': f'Access denied: File path "{file_path}" is in a restricted directory for security reasons'
+                        "success": False,
+                        "error": f'Access denied: File path "{file_path}" is in a restricted directory for security reasons',
                     }
             import mimetypes
-            
+
             # Check if it's a URL
-            if file_path.startswith(('http://', 'https://')):
+            if file_path.startswith(("http://", "https://")):
                 # Prefer aiohttp when available, fallback to requests
                 if AIOHTTP_AVAILABLE:
                     import aiohttp
+
                     async with aiohttp.ClientSession() as session:
                         async with session.get(file_path) as response:
                             response.raise_for_status()
                             content = await response.text()
                             return {
-                                'success': True,
-                                'content': content,
-                                'source': 'url',
-                                'path': file_path,
-                                'size': len(content),
-                                'content_type': response.headers.get('Content-Type', 'text/plain'),
-                                'encoding': encoding
+                                "success": True,
+                                "content": content,
+                                "source": "url",
+                                "path": file_path,
+                                "size": len(content),
+                                "content_type": response.headers.get("Content-Type", "text/plain"),
+                                "encoding": encoding,
                             }
                 elif REQUESTS_AVAILABLE:
                     try:
@@ -1202,29 +1211,25 @@ class BaseAgent(ABC):
                         resp.raise_for_status()
                         content = resp.text
                         return {
-                            'success': True,
-                            'content': content,
-                            'source': 'url',
-                            'path': file_path,
-                            'size': len(content),
-                            'content_type': resp.headers.get('Content-Type', 'text/plain'),
-                            'encoding': resp.encoding or encoding
+                            "success": True,
+                            "content": content,
+                            "source": "url",
+                            "path": file_path,
+                            "size": len(content),
+                            "content_type": resp.headers.get("Content-Type", "text/plain"),
+                            "encoding": resp.encoding or encoding,
                         }
                     except Exception as e:
-                        return {
-                            'success': False,
-                            'error': str(e),
-                            'path': file_path
-                        }
+                        return {"success": False, "error": str(e), "path": file_path}
                 else:
                     return {
-                        'success': False,
-                        'error': 'No HTTP client available. Install aiohttp or requests to read URLs.'
+                        "success": False,
+                        "error": "No HTTP client available. Install aiohttp or requests to read URLs.",
                     }
             else:
                 # Read from local file
                 path = Path(file_path)
-                
+
                 # Try multiple path resolutions
                 if not path.is_absolute():
                     # Try relative to current directory
@@ -1238,76 +1243,80 @@ class BaseAgent(ABC):
                             if p.exists():
                                 path = p
                                 break
-                
+
                 if not path.exists():
                     return {
-                        'success': False,
-                        'error': f'File not found: {file_path}',
-                        'tried_paths': [str(p) for p in possible_paths] if 'possible_paths' in locals() else [str(path)]
+                        "success": False,
+                        "error": f"File not found: {file_path}",
+                        "tried_paths": (
+                            [str(p) for p in possible_paths]
+                            if "possible_paths" in locals()
+                            else [str(path)]
+                        ),
                     }
-                
+
                 # Detect file type
                 mime_type, _ = mimetypes.guess_type(str(path))
-                
+
                 # Read file
-                if path.suffix.lower() in ['.json', '.csv', '.txt', '.xml', '.yml', '.yaml']:
+                if path.suffix.lower() in [".json", ".csv", ".txt", ".xml", ".yml", ".yaml"]:
                     if AIOFILES_AVAILABLE:
                         import aiofiles
-                        async with aiofiles.open(path, mode='r', encoding=encoding) as f:
+
+                        async with aiofiles.open(path, mode="r", encoding=encoding) as f:
                             content = await f.read()
                     else:
                         # Fallback to sync read
-                        with open(path, 'r', encoding=encoding) as f:
+                        with open(path, "r", encoding=encoding) as f:
                             content = f.read()
                 else:
                     # Binary file
                     if AIOFILES_AVAILABLE:
                         import aiofiles
-                        async with aiofiles.open(path, mode='rb') as f:
+
+                        async with aiofiles.open(path, mode="rb") as f:
                             content = await f.read()
                     else:
                         # Fallback to sync read
-                        with open(path, 'rb') as f:
+                        with open(path, "rb") as f:
                             content = f.read()
-                    
+
                     return {
-                        'success': True,
-                        'content': content,
-                        'source': 'local',
-                        'path': str(path),
-                        'size': len(content),
-                        'content_type': mime_type or 'application/octet-stream',
-                        'encoding': None,
-                        'is_binary': True
+                        "success": True,
+                        "content": content,
+                        "source": "local",
+                        "path": str(path),
+                        "size": len(content),
+                        "content_type": mime_type or "application/octet-stream",
+                        "encoding": None,
+                        "is_binary": True,
                     }
-                
+
                 return {
-                    'success': True,
-                    'content': content,
-                    'source': 'local',
-                    'path': str(path),
-                    'size': len(content),
-                    'content_type': mime_type or 'text/plain',
-                    'encoding': encoding,
-                    'extension': path.suffix
+                    "success": True,
+                    "content": content,
+                    "source": "local",
+                    "path": str(path),
+                    "size": len(content),
+                    "content_type": mime_type or "text/plain",
+                    "encoding": encoding,
+                    "extension": path.suffix,
                 }
-                
+
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'path': file_path
-            }
-    
-    async def parse_file_content(self, content: str, file_type: str = None, file_path: str = None) -> Dict[str, Any]:
+            return {"success": False, "error": str(e), "path": file_path}
+
+    async def parse_file_content(
+        self, content: str, file_type: str = None, file_path: str = None
+    ) -> Dict[str, Any]:
         """
         Parse file content based on type
-        
+
         Args:
             content: File content as string
             file_type: Type of file (json, csv, xml, txt)
             file_path: Optional file path to infer type
-            
+
         Returns:
             Parsed content as appropriate data structure
         """
@@ -1317,46 +1326,46 @@ class BaseAgent(ABC):
             import xml.etree.ElementTree as ET
             import yaml
             from io import StringIO
-            
+
             # Infer file type from path if not provided
             if not file_type and file_path:
                 ext = Path(file_path).suffix.lower()
-                file_type = ext[1:] if ext else 'txt'
-            
-            file_type = (file_type or 'txt').lower()
-            
-            if file_type == 'json':
+                file_type = ext[1:] if ext else "txt"
+
+            file_type = (file_type or "txt").lower()
+
+            if file_type == "json":
                 # Parse JSON
                 data = json.loads(content)
                 return {
-                    'success': True,
-                    'data': data,
-                    'type': 'json',
-                    'is_array': isinstance(data, list),
-                    'is_object': isinstance(data, dict),
-                    'count': len(data) if isinstance(data, (list, dict)) else 1
+                    "success": True,
+                    "data": data,
+                    "type": "json",
+                    "is_array": isinstance(data, list),
+                    "is_object": isinstance(data, dict),
+                    "count": len(data) if isinstance(data, (list, dict)) else 1,
                 }
-                
-            elif file_type == 'csv':
+
+            elif file_type == "csv":
                 # Parse CSV
                 reader = csv.DictReader(StringIO(content))
                 data = list(reader)
-                
+
                 # Get column names
                 columns = data[0].keys() if data else []
-                
+
                 return {
-                    'success': True,
-                    'data': data,
-                    'type': 'csv',
-                    'columns': list(columns),
-                    'row_count': len(data)
+                    "success": True,
+                    "data": data,
+                    "type": "csv",
+                    "columns": list(columns),
+                    "row_count": len(data),
                 }
-                
-            elif file_type == 'xml':
+
+            elif file_type == "xml":
                 # Parse XML
                 root = ET.fromstring(content)
-                
+
                 def xml_to_dict(element):
                     result = {}
                     for child in element:
@@ -1365,55 +1374,47 @@ class BaseAgent(ABC):
                         else:
                             result[child.tag] = xml_to_dict(child)
                     return result
-                
+
                 data = {root.tag: xml_to_dict(root)}
-                
-                return {
-                    'success': True,
-                    'data': data,
-                    'type': 'xml',
-                    'root_tag': root.tag
-                }
-                
-            elif file_type in ['yml', 'yaml']:
+
+                return {"success": True, "data": data, "type": "xml", "root_tag": root.tag}
+
+            elif file_type in ["yml", "yaml"]:
                 # Parse YAML
                 if not YAML_AVAILABLE:
                     return {
-                        'success': False,
-                        'error': 'PyYAML not available. Install with: pip install PyYAML'
+                        "success": False,
+                        "error": "PyYAML not available. Install with: pip install PyYAML",
                     }
                 import yaml
+
                 data = yaml.safe_load(content)
-                return {
-                    'success': True,
-                    'data': data,
-                    'type': 'yaml'
-                }
-                
+                return {"success": True, "data": data, "type": "yaml"}
+
             else:
                 # Plain text
                 return {
-                    'success': True,
-                    'data': content,
-                    'type': 'text',
-                    'lines': content.count('\n') + 1,
-                    'characters': len(content)
+                    "success": True,
+                    "data": content,
+                    "type": "text",
+                    "lines": content.count("\n") + 1,
+                    "characters": len(content),
                 }
-                
+
         except Exception as e:
             return {
-                'success': False,
-                'error': str(e),
-                'content_preview': content[:200] + '...' if len(content) > 200 else content
+                "success": False,
+                "error": str(e),
+                "content_preview": content[:200] + "..." if len(content) > 200 else content,
             }
-    
+
     async def convert_json_to_csv(self, json_data: Union[str, list, dict]) -> Dict[str, Any]:
         """
         Convert JSON data to CSV format
-        
+
         Args:
             json_data: JSON string, list of dicts, or single dict
-            
+
         Returns:
             Dict with CSV content and metadata
         """
@@ -1421,65 +1422,59 @@ class BaseAgent(ABC):
             import json
             import csv
             from io import StringIO
-            
+
             # Parse JSON if string
             if isinstance(json_data, str):
                 data = json.loads(json_data)
             else:
                 data = json_data
-            
+
             # Ensure data is a list
             if isinstance(data, dict):
                 data = [data]
             elif not isinstance(data, list):
                 return {
-                    'success': False,
-                    'error': 'JSON data must be an object or array of objects'
+                    "success": False,
+                    "error": "JSON data must be an object or array of objects",
                 }
-            
+
             if not data:
-                return {
-                    'success': True,
-                    'csv': '',
-                    'rows': 0,
-                    'columns': []
-                }
-            
+                return {"success": True, "csv": "", "rows": 0, "columns": []}
+
             # Get all unique keys
             all_keys = set()
             for item in data:
                 if isinstance(item, dict):
                     all_keys.update(item.keys())
-            
+
             # Create CSV
             output = StringIO()
             writer = csv.DictWriter(output, fieldnames=sorted(all_keys))
             writer.writeheader()
             writer.writerows(data)
-            
+
             csv_content = output.getvalue()
-            
+
             return {
-                'success': True,
-                'csv': csv_content,
-                'rows': len(data),
-                'columns': sorted(all_keys)
+                "success": True,
+                "csv": csv_content,
+                "rows": len(data),
+                "columns": sorted(all_keys),
             }
-            
+
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e)
-            }
-    
-    async def convert_csv_to_json(self, csv_data: str, numeric_conversion: bool = True) -> Dict[str, Any]:
+            return {"success": False, "error": str(e)}
+
+    async def convert_csv_to_json(
+        self, csv_data: str, numeric_conversion: bool = True
+    ) -> Dict[str, Any]:
         """
         Convert CSV data to JSON format
-        
+
         Args:
             csv_data: CSV content as string
             numeric_conversion: Convert numeric strings to numbers
-            
+
         Returns:
             Dict with JSON data and metadata
         """
@@ -1487,17 +1482,17 @@ class BaseAgent(ABC):
             import csv
             import json
             from io import StringIO
-            
+
             # Parse CSV
             reader = csv.DictReader(StringIO(csv_data))
             data = []
-            
+
             for row in reader:
                 if numeric_conversion:
                     # Convert numeric strings
                     converted_row = {}
                     for key, value in row.items():
-                        if value == '':
+                        if value == "":
                             converted_row[key] = None
                         elif value.isdigit():
                             converted_row[key] = int(value)
@@ -1509,58 +1504,51 @@ class BaseAgent(ABC):
                     data.append(converted_row)
                 else:
                     data.append(row)
-            
+
             return {
-                'success': True,
-                'json': data,
-                'json_string': json.dumps(data, indent=2),
-                'rows': len(data),
-                'columns': list(data[0].keys()) if data else []
+                "success": True,
+                "json": data,
+                "json_string": json.dumps(data, indent=2),
+                "rows": len(data),
+                "columns": list(data[0].keys()) if data else [],
             }
-            
+
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e)
-            }
-    
+            return {"success": False, "error": str(e)}
+
     async def read_and_parse_file(self, file_path: str, auto_parse: bool = True) -> Dict[str, Any]:
         """
         Convenience method to read and parse a file in one operation
-        
+
         Args:
             file_path: Local path or URL
             auto_parse: Automatically parse based on file type
-            
+
         Returns:
             Combined result with content and parsed data
         """
         # Read file
         read_result = await self.read_file(file_path)
-        
-        if not read_result['success']:
+
+        if not read_result["success"]:
             return read_result
-        
-        if not auto_parse or read_result.get('is_binary'):
+
+        if not auto_parse or read_result.get("is_binary"):
             return read_result
-        
+
         # Parse content
-        content = read_result['content']
+        content = read_result["content"]
         file_type = None
-        
-        if 'extension' in read_result:
-            file_type = read_result['extension'][1:]  # Remove dot
-        elif '.' in file_path:
-            file_type = file_path.split('.')[-1]
-        
+
+        if "extension" in read_result:
+            file_type = read_result["extension"][1:]  # Remove dot
+        elif "." in file_path:
+            file_type = file_path.split(".")[-1]
+
         parse_result = await self.parse_file_content(content, file_type, file_path)
-        
+
         # Combine results
-        return {
-            **read_result,
-            'parsed': parse_result['success'],
-            'parse_result': parse_result
-        }
+        return {**read_result, "parsed": parse_result["success"], "parse_result": parse_result}
 
     def register_agent(self, agent: "BaseAgent"):
         """Default implementation - only ProxyAgent should override this"""
@@ -1569,23 +1557,23 @@ class BaseAgent(ABC):
     def resolve_file_path(self, filename: str, agent_type: Optional[str] = None) -> Optional[Path]:
         """
         Universal file resolution for all agents using shared_base_dir configuration.
-        
+
         Args:
             filename: Name or relative path of file to find
             agent_type: Agent type override (analytics, media, code, database, scraper)
                        If None, will auto-detect from class name
-        
+
         Returns:
             Resolved Path object if file exists, None otherwise
         """
         try:
             # Import here to avoid circular import
             from .file_resolution import resolve_agent_file_path, get_agent_type_from_config
-            
+
             # Auto-detect agent type if not provided
             if agent_type is None:
                 agent_type = get_agent_type_from_config(self.__class__.__name__)
-            
+
             return resolve_agent_file_path(filename, agent_type)
         except Exception:
             # Fallback to simple path check
@@ -1594,371 +1582,448 @@ class BaseAgent(ABC):
             return None
 
     # 🛠️ SKILL ASSIGNMENT SYSTEM
-    
+
     def __init_skills__(self):
         """Initialize skill assignment system (called during __init__)"""
-        if not hasattr(self, '_assigned_skills'):
+        if not hasattr(self, "_assigned_skills"):
             self._assigned_skills = {
-                'api_skills': {},      # API specs and configs
-                'database_skills': {}, # Database connections
-                'kb_skills': {},       # Knowledge base configs
+                "api_skills": {},  # API specs and configs
+                "database_skills": {},  # Database connections
+                "kb_skills": {},  # Knowledge base configs
             }
-            self._skill_agents = {}    # Cache for instantiated skill agents
-    
-    async def assign_api_skill(self, api_spec_path: str, base_url: str = None, api_token: str = None, skill_name: str = None) -> Dict[str, Any]:
+            self._skill_agents = {}  # Cache for instantiated skill agents
+
+    async def assign_api_skill(
+        self,
+        api_spec_path: str,
+        base_url: str = None,
+        api_token: str = None,
+        skill_name: str = None,
+    ) -> Dict[str, Any]:
         """
         Assign an API skill to this agent by providing an OpenAPI spec
-        
+
         Args:
             api_spec_path: Path to OpenAPI spec (YAML or JSON) or URL
             base_url: Base URL for API calls (overrides spec servers)
             api_token: Authentication token for API
             skill_name: Optional name for this skill (defaults to API title)
-            
+
         Returns:
             Dict with success status and skill details
         """
         try:
-            if not hasattr(self, '_assigned_skills'):
+            if not hasattr(self, "_assigned_skills"):
                 self.__init_skills__()
-            
+
             # Read and parse API spec
             spec_result = await self.read_and_parse_file(api_spec_path)
-            if not spec_result['success']:
-                return {'success': False, 'error': f"Failed to read API spec: {spec_result['error']}"}
-            
-            if not spec_result.get('parsed'):
-                return {'success': False, 'error': "Could not parse API specification"}
-            
-            api_spec = spec_result['parse_result']['data']
-            
+            if not spec_result["success"]:
+                return {
+                    "success": False,
+                    "error": f"Failed to read API spec: {spec_result['error']}",
+                }
+
+            if not spec_result.get("parsed"):
+                return {"success": False, "error": "Could not parse API specification"}
+
+            api_spec = spec_result["parse_result"]["data"]
+
             # Extract skill name from spec if not provided
             if not skill_name:
-                skill_name = api_spec.get('info', {}).get('title', f"api_skill_{len(self._assigned_skills['api_skills'])}")
-            
+                skill_name = api_spec.get("info", {}).get(
+                    "title", f"api_skill_{len(self._assigned_skills['api_skills'])}"
+                )
+
             # Extract base URL from spec if not provided
-            if not base_url and 'servers' in api_spec:
-                base_url = api_spec['servers'][0]['url']
-            
+            if not base_url and "servers" in api_spec:
+                base_url = api_spec["servers"][0]["url"]
+
             # Store skill configuration
             skill_config = {
-                'spec': api_spec,
-                'base_url': base_url,
-                'api_token': api_token,
-                'spec_path': api_spec_path,
-                'assigned_at': datetime.now().isoformat(),
-                'endpoints': self._extract_api_endpoints(api_spec)
+                "spec": api_spec,
+                "base_url": base_url,
+                "api_token": api_token,
+                "spec_path": api_spec_path,
+                "assigned_at": datetime.now().isoformat(),
+                "endpoints": self._extract_api_endpoints(api_spec),
             }
-            
-            self._assigned_skills['api_skills'][skill_name] = skill_config
-            
-            self.logger.info(f"Assigned API skill '{skill_name}' with {len(skill_config['endpoints'])} endpoints")
-            
+
+            self._assigned_skills["api_skills"][skill_name] = skill_config
+
+            self.logger.info(
+                f"Assigned API skill '{skill_name}' with {len(skill_config['endpoints'])} endpoints"
+            )
+
             return {
-                'success': True,
-                'skill_name': skill_name,
-                'endpoints_count': len(skill_config['endpoints']),
-                'base_url': base_url,
-                'api_title': api_spec.get('info', {}).get('title', 'Unknown')
+                "success": True,
+                "skill_name": skill_name,
+                "endpoints_count": len(skill_config["endpoints"]),
+                "base_url": base_url,
+                "api_title": api_spec.get("info", {}).get("title", "Unknown"),
             }
-            
+
         except Exception as e:
-            return {'success': False, 'error': f"Failed to assign API skill: {str(e)}"}
-    
-    async def assign_database_skill(self, connection_string: str, skill_name: str = None, description: str = None) -> Dict[str, Any]:
+            return {"success": False, "error": f"Failed to assign API skill: {str(e)}"}
+
+    async def assign_database_skill(
+        self, connection_string: str, skill_name: str = None, description: str = None
+    ) -> Dict[str, Any]:
         """
         Assign a database skill to this agent
-        
+
         Args:
             connection_string: Database connection string or config dict
             skill_name: Optional name for this skill
             description: Optional description of the database
-            
+
         Returns:
             Dict with success status and skill details
         """
         try:
-            if not hasattr(self, '_assigned_skills'):
+            if not hasattr(self, "_assigned_skills"):
                 self.__init_skills__()
-            
+
             # Generate skill name if not provided
             if not skill_name:
                 # Extract database name from connection string
-                if 'database=' in connection_string:
-                    db_name = connection_string.split('database=')[1].split(';')[0].split('&')[0]
+                if "database=" in connection_string:
+                    db_name = connection_string.split("database=")[1].split(";")[0].split("&")[0]
                     skill_name = f"db_{db_name}"
                 else:
                     skill_name = f"database_skill_{len(self._assigned_skills['database_skills'])}"
-            
+
             # Store skill configuration
             skill_config = {
-                'connection_string': connection_string,
-                'description': description,
-                'assigned_at': datetime.now().isoformat(),
-                'type': self._detect_database_type(connection_string)
+                "connection_string": connection_string,
+                "description": description,
+                "assigned_at": datetime.now().isoformat(),
+                "type": self._detect_database_type(connection_string),
             }
-            
-            self._assigned_skills['database_skills'][skill_name] = skill_config
-            
+
+            self._assigned_skills["database_skills"][skill_name] = skill_config
+
             self.logger.info(f"Assigned database skill '{skill_name}' ({skill_config['type']})")
-            
+
             return {
-                'success': True,
-                'skill_name': skill_name,
-                'database_type': skill_config['type'],
-                'description': description
+                "success": True,
+                "skill_name": skill_name,
+                "database_type": skill_config["type"],
+                "description": description,
             }
-            
+
         except Exception as e:
-            return {'success': False, 'error': f"Failed to assign database skill: {str(e)}"}
-    
-    async def assign_kb_skill(self, documents_path: str, collection_name: str = None, skill_name: str = None) -> Dict[str, Any]:
+            return {"success": False, "error": f"Failed to assign database skill: {str(e)}"}
+
+    async def assign_kb_skill(
+        self, documents_path: str, collection_name: str = None, skill_name: str = None
+    ) -> Dict[str, Any]:
         """
         Assign a knowledge base skill to this agent
-        
+
         Args:
             documents_path: Path to documents or directory to ingest
             collection_name: Qdrant collection name
             skill_name: Optional name for this skill
-            
+
         Returns:
             Dict with success status and skill details
         """
         try:
-            if not hasattr(self, '_assigned_skills'):
+            if not hasattr(self, "_assigned_skills"):
                 self.__init_skills__()
-            
+
             # Generate names if not provided
             if not skill_name:
                 path_name = Path(documents_path).stem
                 skill_name = f"kb_{path_name}"
-            
+
             if not collection_name:
                 collection_name = f"collection_{skill_name}"
-            
+
             # Store skill configuration
             skill_config = {
-                'documents_path': documents_path,
-                'collection_name': collection_name,
-                'assigned_at': datetime.now().isoformat(),
+                "documents_path": documents_path,
+                "collection_name": collection_name,
+                "assigned_at": datetime.now().isoformat(),
             }
-            
-            self._assigned_skills['kb_skills'][skill_name] = skill_config
-            
-            self.logger.info(f"Assigned knowledge base skill '{skill_name}' for collection '{collection_name}'")
-            
+
+            self._assigned_skills["kb_skills"][skill_name] = skill_config
+
+            self.logger.info(
+                f"Assigned knowledge base skill '{skill_name}' for collection '{collection_name}'"
+            )
+
             return {
-                'success': True,
-                'skill_name': skill_name,
-                'collection_name': collection_name,
-                'documents_path': documents_path
+                "success": True,
+                "skill_name": skill_name,
+                "collection_name": collection_name,
+                "documents_path": documents_path,
             }
-            
+
         except Exception as e:
-            return {'success': False, 'error': f"Failed to assign KB skill: {str(e)}"}
-    
+            return {"success": False, "error": f"Failed to assign KB skill: {str(e)}"}
+
     def list_assigned_skills(self) -> Dict[str, Any]:
         """List all assigned skills"""
-        if not hasattr(self, '_assigned_skills'):
+        if not hasattr(self, "_assigned_skills"):
             self.__init_skills__()
-        
+
         summary = {
-            'api_skills': list(self._assigned_skills['api_skills'].keys()),
-            'database_skills': list(self._assigned_skills['database_skills'].keys()),
-            'kb_skills': list(self._assigned_skills['kb_skills'].keys()),
-            'total_skills': (
-                len(self._assigned_skills['api_skills']) + 
-                len(self._assigned_skills['database_skills']) + 
-                len(self._assigned_skills['kb_skills'])
-            )
+            "api_skills": list(self._assigned_skills["api_skills"].keys()),
+            "database_skills": list(self._assigned_skills["database_skills"].keys()),
+            "kb_skills": list(self._assigned_skills["kb_skills"].keys()),
+            "total_skills": (
+                len(self._assigned_skills["api_skills"])
+                + len(self._assigned_skills["database_skills"])
+                + len(self._assigned_skills["kb_skills"])
+            ),
         }
-        
+
         return summary
-    
+
     def _extract_api_endpoints(self, api_spec: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract endpoint information from OpenAPI spec"""
         endpoints = []
-        
-        for path, methods in api_spec.get('paths', {}).items():
+
+        for path, methods in api_spec.get("paths", {}).items():
             for method, details in methods.items():
-                if method.upper() in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']:
-                    endpoints.append({
-                        'path': path,
-                        'method': method.upper(),
-                        'operation_id': details.get('operationId'),
-                        'summary': details.get('summary'),
-                        'description': details.get('description'),
-                        'tags': details.get('tags', [])
-                    })
-        
+                if method.upper() in ["GET", "POST", "PUT", "DELETE", "PATCH"]:
+                    endpoints.append(
+                        {
+                            "path": path,
+                            "method": method.upper(),
+                            "operation_id": details.get("operationId"),
+                            "summary": details.get("summary"),
+                            "description": details.get("description"),
+                            "tags": details.get("tags", []),
+                        }
+                    )
+
         return endpoints
-    
+
     def _detect_database_type(self, connection_string: str) -> str:
         """Detect database type from connection string"""
         connection_lower = connection_string.lower()
-        
-        if connection_lower.startswith('mongodb://') or connection_lower.startswith('mongodb+srv://'):
-            return 'mongodb'
-        elif 'postgresql://' in connection_lower or 'postgres://' in connection_lower:
-            return 'postgresql'
-        elif 'mysql://' in connection_lower or 'mysql+' in connection_lower:
-            return 'mysql'
-        elif 'sqlite:///' in connection_lower:
-            return 'sqlite'
+
+        if connection_lower.startswith("mongodb://") or connection_lower.startswith(
+            "mongodb+srv://"
+        ):
+            return "mongodb"
+        elif "postgresql://" in connection_lower or "postgres://" in connection_lower:
+            return "postgresql"
+        elif "mysql://" in connection_lower or "mysql+" in connection_lower:
+            return "mysql"
+        elif "sqlite:///" in connection_lower:
+            return "sqlite"
         else:
-            return 'unknown'
-    
+            return "unknown"
+
     # 🎯 INTENT CLASSIFICATION FOR SKILLS
-    
+
     async def _classify_intent_for_skills(self, message: str) -> Dict[str, Any]:
         """
         Classify user intent to determine if assigned skills should be used
-        
+
         Args:
             message: User message content
-            
+
         Returns:
             Dict with intent classification and skill routing information
         """
-        if not hasattr(self, '_assigned_skills'):
-            return {'should_use_skills': False, 'reason': 'no_skills_assigned'}
-        
+        if not hasattr(self, "_assigned_skills"):
+            return {"should_use_skills": False, "reason": "no_skills_assigned"}
+
         message_lower = message.lower()
         intent_result = {
-            'should_use_skills': False,
-            'skill_type': None,
-            'skill_name': None,
-            'confidence': 0.0,
-            'reasoning': []
+            "should_use_skills": False,
+            "skill_type": None,
+            "skill_name": None,
+            "confidence": 0.0,
+            "reasoning": [],
         }
-        
+
         # API Skills Detection
         api_keywords = [
-            'create lead', 'make lead', 'add lead', 'new lead',
-            'list leads', 'show leads', 'get leads', 'find leads',
-            'send email', 'send message', 'email to',
-            'send sms', 'text message', 'sms to',
-            'call api', 'api call', 'make request', 'post to', 'get from',
-            'create contact', 'add contact', 'new contact',
-            'list contacts', 'show contacts', 'get contacts'
+            "create lead",
+            "make lead",
+            "add lead",
+            "new lead",
+            "list leads",
+            "show leads",
+            "get leads",
+            "find leads",
+            "send email",
+            "send message",
+            "email to",
+            "send sms",
+            "text message",
+            "sms to",
+            "call api",
+            "api call",
+            "make request",
+            "post to",
+            "get from",
+            "create contact",
+            "add contact",
+            "new contact",
+            "list contacts",
+            "show contacts",
+            "get contacts",
         ]
-        
+
         for keyword in api_keywords:
             if keyword in message_lower:
                 # Find best matching API skill
                 best_skill = self._find_best_api_skill_for_intent(message_lower, keyword)
                 if best_skill:
-                    intent_result.update({
-                        'should_use_skills': True,
-                        'skill_type': 'api',
-                        'skill_name': best_skill,
-                        'confidence': 0.8,
-                        'reasoning': [f"Matched API keyword: '{keyword}'"]
-                    })
+                    intent_result.update(
+                        {
+                            "should_use_skills": True,
+                            "skill_type": "api",
+                            "skill_name": best_skill,
+                            "confidence": 0.8,
+                            "reasoning": [f"Matched API keyword: '{keyword}'"],
+                        }
+                    )
                     break
-        
+
         # Database Skills Detection
-        if not intent_result['should_use_skills']:
+        if not intent_result["should_use_skills"]:
             db_keywords = [
-                'query database', 'database query', 'select from', 'sql query',
-                'show tables', 'describe table', 'table structure',
-                'count records', 'show data', 'database data',
-                'recent sales', 'sales data', 'customer data', 'order data',
-                'database', 'sql', 'select', 'from table'
+                "query database",
+                "database query",
+                "select from",
+                "sql query",
+                "show tables",
+                "describe table",
+                "table structure",
+                "count records",
+                "show data",
+                "database data",
+                "recent sales",
+                "sales data",
+                "customer data",
+                "order data",
+                "database",
+                "sql",
+                "select",
+                "from table",
             ]
-            
+
             for keyword in db_keywords:
                 if keyword in message_lower:
                     # Use first database skill if multiple available
-                    if self._assigned_skills['database_skills']:
-                        skill_name = list(self._assigned_skills['database_skills'].keys())[0]
-                        intent_result.update({
-                            'should_use_skills': True,
-                            'skill_type': 'database',
-                            'skill_name': skill_name,
-                            'confidence': 0.7,
-                            'reasoning': [f"Matched database keyword: '{keyword}'"]
-                        })
+                    if self._assigned_skills["database_skills"]:
+                        skill_name = list(self._assigned_skills["database_skills"].keys())[0]
+                        intent_result.update(
+                            {
+                                "should_use_skills": True,
+                                "skill_type": "database",
+                                "skill_name": skill_name,
+                                "confidence": 0.7,
+                                "reasoning": [f"Matched database keyword: '{keyword}'"],
+                            }
+                        )
                         break
-        
+
         # Knowledge Base Skills Detection
-        if not intent_result['should_use_skills']:
+        if not intent_result["should_use_skills"]:
             kb_keywords = [
-                'what do our docs say', 'according to documentation', 'in our documents',
-                'search documents', 'find in docs', 'knowledge base',
-                'what does the manual say', 'company policy', 'documentation',
-                'search knowledge', 'find information about'
+                "what do our docs say",
+                "according to documentation",
+                "in our documents",
+                "search documents",
+                "find in docs",
+                "knowledge base",
+                "what does the manual say",
+                "company policy",
+                "documentation",
+                "search knowledge",
+                "find information about",
             ]
-            
+
             for keyword in kb_keywords:
                 if keyword in message_lower:
                     # Use first KB skill if multiple available
-                    if self._assigned_skills['kb_skills']:
-                        skill_name = list(self._assigned_skills['kb_skills'].keys())[0]
-                        intent_result.update({
-                            'should_use_skills': True,
-                            'skill_type': 'kb',
-                            'skill_name': skill_name,
-                            'confidence': 0.7,
-                            'reasoning': [f"Matched KB keyword: '{keyword}'"]
-                        })
+                    if self._assigned_skills["kb_skills"]:
+                        skill_name = list(self._assigned_skills["kb_skills"].keys())[0]
+                        intent_result.update(
+                            {
+                                "should_use_skills": True,
+                                "skill_type": "kb",
+                                "skill_name": skill_name,
+                                "confidence": 0.7,
+                                "reasoning": [f"Matched KB keyword: '{keyword}'"],
+                            }
+                        )
                         break
-        
+
         # Enhanced LLM-based intent classification (if LLM available)
-        if not intent_result['should_use_skills'] and self.llm_service:
+        if not intent_result["should_use_skills"] and self.llm_service:
             llm_intent = await self._llm_based_intent_classification(message)
-            if llm_intent['should_use_skills']:
+            if llm_intent["should_use_skills"]:
                 intent_result.update(llm_intent)
-        
+
         return intent_result
-    
+
     def _find_best_api_skill_for_intent(self, message: str, matched_keyword: str) -> Optional[str]:
         """Find the best API skill for a given intent"""
-        if not self._assigned_skills['api_skills']:
+        if not self._assigned_skills["api_skills"]:
             return None
-        
+
         # Simple matching - could be enhanced with more sophisticated logic
-        for skill_name, skill_config in self._assigned_skills['api_skills'].items():
-            endpoints = skill_config.get('endpoints', [])
-            
+        for skill_name, skill_config in self._assigned_skills["api_skills"].items():
+            endpoints = skill_config.get("endpoints", [])
+
             # Check if any endpoint matches the intent
             for endpoint in endpoints:
-                summary = (endpoint.get('summary') or '').lower()
-                description = (endpoint.get('description') or '').lower()
-                operation_id = (endpoint.get('operation_id') or '').lower()
-                
+                summary = (endpoint.get("summary") or "").lower()
+                description = (endpoint.get("description") or "").lower()
+                operation_id = (endpoint.get("operation_id") or "").lower()
+
                 # Match keywords to endpoint descriptions
-                if 'lead' in matched_keyword and ('lead' in summary or 'lead' in description or 'lead' in operation_id):
+                if "lead" in matched_keyword and (
+                    "lead" in summary or "lead" in description or "lead" in operation_id
+                ):
                     return skill_name
-                elif 'email' in matched_keyword and ('email' in summary or 'email' in description):
+                elif "email" in matched_keyword and ("email" in summary or "email" in description):
                     return skill_name
-                elif 'sms' in matched_keyword and ('sms' in summary or 'sms' in description):
+                elif "sms" in matched_keyword and ("sms" in summary or "sms" in description):
                     return skill_name
-                elif 'contact' in matched_keyword and ('contact' in summary or 'contact' in description):
+                elif "contact" in matched_keyword and (
+                    "contact" in summary or "contact" in description
+                ):
                     return skill_name
-        
+
         # Return first API skill as fallback
-        return list(self._assigned_skills['api_skills'].keys())[0]
-    
+        return list(self._assigned_skills["api_skills"].keys())[0]
+
     async def _llm_based_intent_classification(self, message: str) -> Dict[str, Any]:
         """Use LLM to classify intent for skill usage"""
         try:
             # Build skills context for LLM
             skills_context = []
-            
-            for skill_name, skill_config in self._assigned_skills['api_skills'].items():
-                api_info = skill_config['spec'].get('info', {})
-                skills_context.append(f"API Skill '{skill_name}': {api_info.get('title', 'Unknown')} - {api_info.get('description', 'No description')}")
-            
-            for skill_name, skill_config in self._assigned_skills['database_skills'].items():
-                skills_context.append(f"Database Skill '{skill_name}': {skill_config['type']} database - {skill_config.get('description', 'No description')}")
-            
-            for skill_name, skill_config in self._assigned_skills['kb_skills'].items():
-                skills_context.append(f"Knowledge Base Skill '{skill_name}': Documents from {skill_config['documents_path']}")
-            
+
+            for skill_name, skill_config in self._assigned_skills["api_skills"].items():
+                api_info = skill_config["spec"].get("info", {})
+                skills_context.append(
+                    f"API Skill '{skill_name}': {api_info.get('title', 'Unknown')} - {api_info.get('description', 'No description')}"
+                )
+
+            for skill_name, skill_config in self._assigned_skills["database_skills"].items():
+                skills_context.append(
+                    f"Database Skill '{skill_name}': {skill_config['type']} database - {skill_config.get('description', 'No description')}"
+                )
+
+            for skill_name, skill_config in self._assigned_skills["kb_skills"].items():
+                skills_context.append(
+                    f"Knowledge Base Skill '{skill_name}': Documents from {skill_config['documents_path']}"
+                )
+
             if not skills_context:
-                return {'should_use_skills': False, 'reason': 'no_skills_available'}
-            
+                return {"should_use_skills": False, "reason": "no_skills_available"}
+
             prompt = f"""Analyze this user message and determine if it should use one of the assigned skills:
 
 User message: "{message}"
@@ -1979,43 +2044,47 @@ Only return JSON, no other text."""
 
             response = await self.llm_service.generate_response(
                 prompt,
-                context={'conversation_history': []},
-                system_message="You are a precise intent classifier. Respond only with valid JSON."
+                context={"conversation_history": []},
+                system_message="You are a precise intent classifier. Respond only with valid JSON.",
             )
-            
+
             if response:
                 import json
+
                 # Extract JSON from response
                 response_str = str(response)
-                start = response_str.find('{')
-                end = response_str.rfind('}')
+                start = response_str.find("{")
+                end = response_str.rfind("}")
                 if start != -1 and end != -1:
-                    result = json.loads(response_str[start:end+1])
-                    
+                    result = json.loads(response_str[start : end + 1])
+
                     # Validate the skill exists
-                    if result.get('should_use_skills') and result.get('skill_name'):
-                        skill_type = result.get('skill_type')
-                        skill_name = result.get('skill_name')
-                        
-                        if skill_type in self._assigned_skills and skill_name in self._assigned_skills[skill_type + '_skills']:
+                    if result.get("should_use_skills") and result.get("skill_name"):
+                        skill_type = result.get("skill_type")
+                        skill_name = result.get("skill_name")
+
+                        if (
+                            skill_type in self._assigned_skills
+                            and skill_name in self._assigned_skills[skill_type + "_skills"]
+                        ):
                             return result
-                    
-            return {'should_use_skills': False, 'reason': 'llm_classification_failed'}
-            
+
+            return {"should_use_skills": False, "reason": "llm_classification_failed"}
+
         except Exception as e:
             self.logger.warning(f"LLM-based intent classification failed: {e}")
-            return {'should_use_skills': False, 'reason': f'llm_error: {str(e)}'}
-    
+            return {"should_use_skills": False, "reason": f"llm_error: {str(e)}"}
+
     # 🚀 DYNAMIC AGENT INSTANTIATION
-    
+
     async def _get_or_create_skill_agent(self, skill_type: str, skill_name: str) -> Optional[Any]:
         """
         Get or create a specialized agent for the given skill
-        
+
         Args:
             skill_type: Type of skill (api, database, kb)
             skill_name: Name of the specific skill
-            
+
         Returns:
             Instantiated specialized agent or None if failed
         """
@@ -2024,89 +2093,97 @@ Only return JSON, no other text."""
             cache_key = f"{skill_type}_{skill_name}"
             if cache_key in self._skill_agents:
                 return self._skill_agents[cache_key]
-            
+
             # Import agents dynamically to avoid circular imports
-            if skill_type == 'api':
+            if skill_type == "api":
                 from ..agents.api_agent import APIAgent
-                skill_config = self._assigned_skills['api_skills'][skill_name]
-                
+
+                skill_config = self._assigned_skills["api_skills"][skill_name]
+
                 # Configure APIAgent with the API spec
                 agent_config = {
-                    'api_agent': {
-                        'allowed_domains': [skill_config['base_url']] if skill_config['base_url'] else None,
-                        'verify_ssl': True,
-                        'timeout_seconds': 30
+                    "api_agent": {
+                        "allowed_domains": (
+                            [skill_config["base_url"]] if skill_config["base_url"] else None
+                        ),
+                        "verify_ssl": True,
+                        "timeout_seconds": 30,
                     }
                 }
-                
+
                 agent = APIAgent.create_simple(
                     user_id=self.context.user_id,
                     config=agent_config,
                     session_id=self.context.session_id,
-                    conversation_id=self.context.conversation_id
+                    conversation_id=self.context.conversation_id,
                 )
-                
+
                 # Store API spec and config in agent for easy access
-                agent._assigned_api_spec = skill_config['spec']
-                agent._assigned_base_url = skill_config['base_url']
-                agent._assigned_api_token = skill_config['api_token']
-                
-            elif skill_type == 'database':
+                agent._assigned_api_spec = skill_config["spec"]
+                agent._assigned_base_url = skill_config["base_url"]
+                agent._assigned_api_token = skill_config["api_token"]
+
+            elif skill_type == "database":
                 try:
                     from ..agents.database_agent import DatabaseAgent
                 except ImportError:
-                    self.logger.error("DatabaseAgent not available. Install with: pip install ambivo-agents[database]")
+                    self.logger.error(
+                        "DatabaseAgent not available. Install with: pip install ambivo-agents[database]"
+                    )
                     return None
-                
-                skill_config = self._assigned_skills['database_skills'][skill_name]
-                
+
+                skill_config = self._assigned_skills["database_skills"][skill_name]
+
                 agent = DatabaseAgent.create_simple(
                     user_id=self.context.user_id,
                     session_id=self.context.session_id,
-                    conversation_id=self.context.conversation_id
+                    conversation_id=self.context.conversation_id,
                 )
-                
+
                 # Store connection info
-                agent._assigned_connection_string = skill_config['connection_string']
-                agent._assigned_db_type = skill_config['type']
-                
-            elif skill_type == 'kb':
+                agent._assigned_connection_string = skill_config["connection_string"]
+                agent._assigned_db_type = skill_config["type"]
+
+            elif skill_type == "kb":
                 from ..agents.knowledge_base import KnowledgeBaseAgent
-                skill_config = self._assigned_skills['kb_skills'][skill_name]
-                
+
+                skill_config = self._assigned_skills["kb_skills"][skill_name]
+
                 agent = KnowledgeBaseAgent.create_simple(
                     user_id=self.context.user_id,
                     session_id=self.context.session_id,
-                    conversation_id=self.context.conversation_id
+                    conversation_id=self.context.conversation_id,
                 )
-                
+
                 # Store KB config
-                agent._assigned_documents_path = skill_config['documents_path']
-                agent._assigned_collection_name = skill_config['collection_name']
-                
+                agent._assigned_documents_path = skill_config["documents_path"]
+                agent._assigned_collection_name = skill_config["collection_name"]
+
             else:
                 self.logger.error(f"Unknown skill type: {skill_type}")
                 return None
-            
+
             # Cache the agent
             self._skill_agents[cache_key] = agent
-            
+
             self.logger.info(f"Created {skill_type} agent for skill '{skill_name}'")
             return agent
-            
+
         except Exception as e:
             self.logger.error(f"Failed to create skill agent {skill_type}/{skill_name}: {e}")
             return None
-    
-    async def _execute_skill_request(self, skill_type: str, skill_name: str, user_message: str) -> Dict[str, Any]:
+
+    async def _execute_skill_request(
+        self, skill_type: str, skill_name: str, user_message: str
+    ) -> Dict[str, Any]:
         """
         Execute a request using the specified skill
-        
+
         Args:
             skill_type: Type of skill (api, database, kb)
             skill_name: Name of the specific skill
             user_message: Original user message
-            
+
         Returns:
             Dict with execution result and metadata
         """
@@ -2115,29 +2192,31 @@ Only return JSON, no other text."""
             skill_agent = await self._get_or_create_skill_agent(skill_type, skill_name)
             if not skill_agent:
                 return {
-                    'success': False,
-                    'error': f"Could not create {skill_type} agent for skill '{skill_name}'"
+                    "success": False,
+                    "error": f"Could not create {skill_type} agent for skill '{skill_name}'",
                 }
-            
+
             # Execute based on skill type
-            if skill_type == 'api':
+            if skill_type == "api":
                 return await self._execute_api_skill(skill_agent, skill_name, user_message)
-            elif skill_type == 'database':
+            elif skill_type == "database":
                 return await self._execute_database_skill(skill_agent, skill_name, user_message)
-            elif skill_type == 'kb':
+            elif skill_type == "kb":
                 return await self._execute_kb_skill(skill_agent, skill_name, user_message)
             else:
-                return {'success': False, 'error': f"Unknown skill type: {skill_type}"}
-                
+                return {"success": False, "error": f"Unknown skill type: {skill_type}"}
+
         except Exception as e:
-            return {'success': False, 'error': f"Skill execution failed: {str(e)}"}
-    
-    async def _execute_api_skill(self, api_agent: Any, skill_name: str, user_message: str) -> Dict[str, Any]:
+            return {"success": False, "error": f"Skill execution failed: {str(e)}"}
+
+    async def _execute_api_skill(
+        self, api_agent: Any, skill_name: str, user_message: str
+    ) -> Dict[str, Any]:
         """Execute API skill request"""
         try:
             # Get skill configuration
-            skill_config = self._assigned_skills['api_skills'][skill_name]
-            
+            skill_config = self._assigned_skills["api_skills"][skill_name]
+
             # Use the APIAgent's natural language processing
             # Add context about the available API spec
             enhanced_message = f"""Using the assigned API specification for '{skill_name}':
@@ -2149,133 +2228,141 @@ Available endpoints include:
 
 Base URL: {skill_config['base_url']}
 """
-            
+
             response = await api_agent.chat(enhanced_message)
-            
+
             return {
-                'success': True,
-                'response': response,
-                'skill_type': 'api',
-                'skill_name': skill_name,
-                'agent_type': 'APIAgent'
+                "success": True,
+                "response": response,
+                "skill_type": "api",
+                "skill_name": skill_name,
+                "agent_type": "APIAgent",
             }
-            
+
         except Exception as e:
-            return {'success': False, 'error': f"API skill execution failed: {str(e)}"}
-    
-    async def _execute_database_skill(self, db_agent: Any, skill_name: str, user_message: str) -> Dict[str, Any]:
+            return {"success": False, "error": f"API skill execution failed: {str(e)}"}
+
+    async def _execute_database_skill(
+        self, db_agent: Any, skill_name: str, user_message: str
+    ) -> Dict[str, Any]:
         """Execute database skill request"""
         try:
             # Connect to database if not already connected
-            skill_config = self._assigned_skills['database_skills'][skill_name]
-            
+            skill_config = self._assigned_skills["database_skills"][skill_name]
+
             # Add connection context to the message
             enhanced_message = f"""Connect to the assigned {skill_config['type']} database and then: {user_message}
             
 Connection: {skill_config['connection_string']}
 """
-            
+
             response = await db_agent.chat(enhanced_message)
-            
+
             return {
-                'success': True,
-                'response': response,
-                'skill_type': 'database',
-                'skill_name': skill_name,
-                'agent_type': 'DatabaseAgent'
+                "success": True,
+                "response": response,
+                "skill_type": "database",
+                "skill_name": skill_name,
+                "agent_type": "DatabaseAgent",
             }
-            
+
         except Exception as e:
-            return {'success': False, 'error': f"Database skill execution failed: {str(e)}"}
-    
-    async def _execute_kb_skill(self, kb_agent: Any, skill_name: str, user_message: str) -> Dict[str, Any]:
+            return {"success": False, "error": f"Database skill execution failed: {str(e)}"}
+
+    async def _execute_kb_skill(
+        self, kb_agent: Any, skill_name: str, user_message: str
+    ) -> Dict[str, Any]:
         """Execute knowledge base skill request"""
         try:
-            skill_config = self._assigned_skills['kb_skills'][skill_name]
-            
+            skill_config = self._assigned_skills["kb_skills"][skill_name]
+
             # Add context about the knowledge base
             enhanced_message = f"""Search in the assigned knowledge base '{skill_name}' for: {user_message}
             
 Knowledge base collection: {skill_config['collection_name']}
 Documents source: {skill_config['documents_path']}
 """
-            
+
             response = await kb_agent.chat(enhanced_message)
-            
+
             return {
-                'success': True,
-                'response': response,
-                'skill_type': 'kb',
-                'skill_name': skill_name,
-                'agent_type': 'KnowledgeBaseAgent'
+                "success": True,
+                "response": response,
+                "skill_type": "kb",
+                "skill_name": skill_name,
+                "agent_type": "KnowledgeBaseAgent",
             }
-            
+
         except Exception as e:
-            return {'success': False, 'error': f"KB skill execution failed: {str(e)}"}
-    
+            return {"success": False, "error": f"KB skill execution failed: {str(e)}"}
+
     async def _should_use_assigned_skills(self, message: str) -> Dict[str, Any]:
         """
         Main method to determine if and how to use assigned skills
-        
+
         Args:
             message: User message
-            
+
         Returns:
             Dict with routing decision and execution result if applicable
         """
         # Classify intent
         intent = await self._classify_intent_for_skills(message)
-        
-        if not intent['should_use_skills']:
+
+        if not intent["should_use_skills"]:
             return {
-                'should_use_skills': False,
-                'intent': intent,
-                'reason': intent.get('reason', 'No matching skills found')
+                "should_use_skills": False,
+                "intent": intent,
+                "reason": intent.get("reason", "No matching skills found"),
             }
-        
+
         # Execute the identified skill
         execution_result = await self._execute_skill_request(
-            intent['skill_type'],
-            intent['skill_name'],
-            message
+            intent["skill_type"], intent["skill_name"], message
         )
-        
+
         return {
-            'should_use_skills': True,
-            'intent': intent,
-            'execution_result': execution_result,
-            'used_skill': f"{intent['skill_type']}/{intent['skill_name']}"
+            "should_use_skills": True,
+            "intent": intent,
+            "execution_result": execution_result,
+            "used_skill": f"{intent['skill_type']}/{intent['skill_name']}",
         }
-    
+
     # 🌟 RESPONSE TRANSLATION TO NATURAL LANGUAGE
-    
-    async def _translate_technical_response(self, execution_result: Dict[str, Any], original_message: str) -> str:
+
+    async def _translate_technical_response(
+        self, execution_result: Dict[str, Any], original_message: str
+    ) -> str:
         """
         Translate technical agent responses to natural language
-        
+
         Args:
             execution_result: Result from skill execution
             original_message: Original user message for context
-            
+
         Returns:
             Natural language response string
         """
-        if not execution_result.get('success'):
+        if not execution_result.get("success"):
             return f"I encountered an error while processing your request: {execution_result.get('error', 'Unknown error')}"
-        
-        raw_response = execution_result.get('response', '')
-        skill_type = execution_result.get('skill_type')
-        skill_name = execution_result.get('skill_name')
-        agent_type = execution_result.get('agent_type')
-        
+
+        raw_response = execution_result.get("response", "")
+        skill_type = execution_result.get("skill_type")
+        skill_name = execution_result.get("skill_name")
+        agent_type = execution_result.get("agent_type")
+
         # If LLM service is available, use it for intelligent translation
         if self.llm_service:
-            return await self._llm_translate_response(raw_response, skill_type, skill_name, original_message)
-        
+            return await self._llm_translate_response(
+                raw_response, skill_type, skill_name, original_message
+            )
+
         # Fallback to simple template-based translation
         return self._template_translate_response(raw_response, skill_type, skill_name, agent_type)
-    
-    async def _llm_translate_response(self, raw_response: str, skill_type: str, skill_name: str, original_message: str) -> str:
+
+    async def _llm_translate_response(
+        self, raw_response: str, skill_type: str, skill_name: str, original_message: str
+    ) -> str:
         """Use LLM to translate technical response to natural language"""
         try:
             prompt = f"""You are a helpful assistant that translates technical responses into natural, conversational language.
@@ -2295,36 +2382,38 @@ Response:"""
 
             translated = await self.llm_service.generate_response(
                 prompt,
-                context={'conversation_history': []},
-                system_message="You are a helpful assistant that makes technical information accessible to users."
+                context={"conversation_history": []},
+                system_message="You are a helpful assistant that makes technical information accessible to users.",
             )
-            
+
             if translated:
                 return str(translated)
             else:
                 return self._template_translate_response(raw_response, skill_type, skill_name, None)
-                
+
         except Exception as e:
             self.logger.warning(f"LLM translation failed: {e}")
             return self._template_translate_response(raw_response, skill_type, skill_name, None)
-    
-    def _template_translate_response(self, raw_response: str, skill_type: str, skill_name: str, agent_type: str = None) -> str:
+
+    def _template_translate_response(
+        self, raw_response: str, skill_type: str, skill_name: str, agent_type: str = None
+    ) -> str:
         """Fallback template-based response translation"""
-        
+
         # Truncate very long responses for readability
         if len(raw_response) > 1000:
             summary = raw_response[:500] + "..."
         else:
             summary = raw_response
-        
+
         skill_descriptions = {
-            'api': f"API service '{skill_name}'",
-            'database': f"database '{skill_name}'",
-            'kb': f"knowledge base '{skill_name}'"
+            "api": f"API service '{skill_name}'",
+            "database": f"database '{skill_name}'",
+            "kb": f"knowledge base '{skill_name}'",
         }
-        
+
         skill_desc = skill_descriptions.get(skill_type, f"{skill_type} skill '{skill_name}'")
-        
+
         return f"""✅ I've completed your request using the {skill_desc}.
 
 **Response:**
@@ -2335,7 +2424,7 @@ Response:"""
     async def cleanup_skill_agents(self) -> bool:
         """
         Cleanup all instantiated skill agents
-        
+
         Returns:
             True if cleanup successful, False otherwise
         """
@@ -2343,19 +2432,19 @@ Response:"""
             cleanup_count = 0
             for cache_key, agent in list(self._skill_agents.items()):
                 try:
-                    if hasattr(agent, 'cleanup_session'):
+                    if hasattr(agent, "cleanup_session"):
                         await agent.cleanup_session()
                     cleanup_count += 1
                 except Exception as e:
                     self.logger.warning(f"Failed to cleanup skill agent {cache_key}: {e}")
-            
+
             self._skill_agents.clear()
-            
+
             if cleanup_count > 0:
                 self.logger.info(f"Cleaned up {cleanup_count} skill agents")
-            
+
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Failed to cleanup skill agents: {e}")
             return False
@@ -2446,7 +2535,7 @@ def quick_chat_sync(agent_class, message: str, user_id: str = None, **kwargs) ->
                 asyncio.set_event_loop(new_loop)
                 try:
                     # Filter out timeout parameter for async quick_chat call
-                    filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'timeout'}
+                    filtered_kwargs = {k: v for k, v in kwargs.items() if k != "timeout"}
                     return new_loop.run_until_complete(
                         quick_chat(agent_class, message, user_id, **filtered_kwargs)
                     )
@@ -2460,7 +2549,7 @@ def quick_chat_sync(agent_class, message: str, user_id: str = None, **kwargs) ->
         except RuntimeError:
             # No event loop, safe to use asyncio.run
             # Filter out timeout parameter that asyncio.run() doesn't accept
-            filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'timeout'}
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k != "timeout"}
             return asyncio.run(quick_chat(agent_class, message, user_id, **filtered_kwargs))
 
     except Exception as e:

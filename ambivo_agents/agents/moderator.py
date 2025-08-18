@@ -241,6 +241,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 WebSearchAgent,
                 YouTubeDownloadAgent,
             )
+
             # Import DatabaseAgent separately due to optional dependencies
             try:
                 from .database_agent import DatabaseAgent
@@ -771,7 +772,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 "indicators": [
                     "database",
                     "sql",
-                    "mongodb", 
+                    "mongodb",
                     "mysql",
                     "postgresql",
                     "table",
@@ -790,7 +791,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     "insert file",
                     # Academic data indicators
                     "faculty",
-                    "researchers", 
+                    "researchers",
                     "publications",
                     "academic",
                     "university",
@@ -1130,20 +1131,22 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     def _check_ingestion_ambiguity(self, message: str, agent_scores: dict) -> Optional[dict]:
         """Check if ingestion command is ambiguous and needs clarification"""
         message_lower = message.lower()
-        
+
         # Check if this is an ingestion command
-        is_ingestion = any(keyword in message_lower for keyword in ["ingest", "import", "load into", "add to"])
+        is_ingestion = any(
+            keyword in message_lower for keyword in ["ingest", "import", "load into", "add to"]
+        )
         if not is_ingestion:
             return None
-        
+
         # Get scores for relevant agents
         db_score = agent_scores.get("database_agent", 0)
         kb_score = agent_scores.get("knowledge_base", 0)
-        
+
         # Check for ambiguous cases where scores are close or both are viable
         if db_score > 0 and kb_score > 0:
             score_diff = abs(db_score - kb_score)
-            
+
             # If scores are very close (within 3 points), ask for clarification
             if score_diff <= 3:
                 return {
@@ -1156,20 +1159,22 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     "reasoning": "Ingestion destination ambiguous - requesting clarification",
                     "clarification_request": {
                         "type": "ingestion_destination",
-                        "message": self._generate_ingestion_clarification(message, db_score, kb_score)
-                    }
+                        "message": self._generate_ingestion_clarification(
+                            message, db_score, kb_score
+                        ),
+                    },
                 }
-        
+
         # Check for ambiguous ingestion without clear destination
         ambiguous_patterns = [
             r"ingest\s+.*\.(?:csv|json|txt)\s*$",  # Just "ingest file.csv" with no destination
             r"(?:load|import)\s+.*\.(?:csv|json|txt)\s*$",  # "load file.csv" with no destination
         ]
-        
+
         if any(re.search(pattern, message_lower) for pattern in ambiguous_patterns):
             # No clear destination specified
             return {
-                "primary_agent": "assistant", 
+                "primary_agent": "assistant",
                 "confidence": 0.9,
                 "requires_multiple_agents": False,
                 "workflow_detected": False,
@@ -1178,13 +1183,15 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 "reasoning": "Ingestion destination not specified - requesting clarification",
                 "clarification_request": {
                     "type": "ingestion_destination",
-                    "message": self._generate_ingestion_clarification(message, db_score, kb_score)
-                }
+                    "message": self._generate_ingestion_clarification(message, db_score, kb_score),
+                },
             }
-        
+
         return None
-    
-    def _generate_ingestion_clarification(self, original_message: str, db_score: int, kb_score: int) -> str:
+
+    def _generate_ingestion_clarification(
+        self, original_message: str, db_score: int, kb_score: int
+    ) -> str:
         """Generate clarification message for ingestion commands"""
         return f"""I can help you ingest data, but I need clarification on the destination:
 
@@ -1255,59 +1262,72 @@ Which type of ingestion would you like?"""
         primary_response: AgentResponse = None,
     ) -> str:
         """Enhanced fallback with intelligent code execution for unhandled tasks"""
-        
+
         # Check if this is a low-confidence routing or failed primary agent
         confidence = intent_analysis.get("confidence", 0.0)
         primary_agent = intent_analysis.get("primary_agent", "assistant")
-        
-        self.logger.info(f"🔄 Enhanced fallback triggered for {primary_agent} (confidence: {confidence:.2f})")
-        
+
+        self.logger.info(
+            f"🔄 Enhanced fallback triggered for {primary_agent} (confidence: {confidence:.2f})"
+        )
+
         # First try assistant agent if it's not the primary agent and it's available
-        if (primary_agent != "assistant" and 
-            "assistant" in self.specialized_agents and 
-            confidence < 0.7):
-            
+        if (
+            primary_agent != "assistant"
+            and "assistant" in self.specialized_agents
+            and confidence < 0.7
+        ):
+
             self.logger.info("🎯 Trying assistant agent as first fallback")
-            
+
             assistant_response = await self._route_to_agent_with_context(
                 "assistant", user_message, context, llm_context
             )
-            
+
             if assistant_response.success:
                 return assistant_response.content
-        
+
         # Check if task could be solved with code execution
         if self._is_programmable_task(user_message):
             self.logger.info("💻 Task appears programmable, attempting code execution fallback")
-            
+
             if "code_executor" in self.specialized_agents:
                 # Setup file sharing for Docker execution
                 input_dir, output_dir = self._setup_docker_file_sharing(user_message)
-                
+
                 # Create enhanced prompt for code execution with file sharing instructions
                 enhanced_code_prompt = await self._create_code_execution_prompt(
                     user_message, intent_analysis, llm_context
                 )
-                
+
                 # Add file sharing context to llm_context
                 if llm_context:
-                    llm_context.update({
-                        "docker_input_dir": input_dir,
-                        "docker_output_dir": output_dir,
-                        "enhanced_fallback": True
-                    })
-                
+                    llm_context.update(
+                        {
+                            "docker_input_dir": input_dir,
+                            "docker_output_dir": output_dir,
+                            "enhanced_fallback": True,
+                        }
+                    )
+
                 code_response = await self._route_to_agent_with_context_and_files(
-                    "code_executor", enhanced_code_prompt, context, llm_context, input_dir, output_dir
+                    "code_executor",
+                    enhanced_code_prompt,
+                    context,
+                    llm_context,
+                    input_dir,
+                    output_dir,
                 )
-                
+
                 if code_response.success:
                     # Check if output files were created
                     output_files = self._check_output_files(output_dir) if output_dir else []
                     output_summary = ""
                     if output_files:
-                        output_summary = f"\n\n**📁 Generated Files:**\n" + "\n".join([f"- {file}" for file in output_files])
-                    
+                        output_summary = f"\n\n**📁 Generated Files:**\n" + "\n".join(
+                            [f"- {file}" for file in output_files]
+                        )
+
                     return f"""**✅ Task completed using code execution:**
 
 {code_response.content}{output_summary}
@@ -1315,7 +1335,7 @@ Which type of ingestion would you like?"""
 *Note: This task was automatically solved by writing and executing code since no specialized agent could handle it directly.*"""
                 else:
                     self.logger.warning(f"Code execution fallback failed: {code_response.error}")
-        
+
         # Final fallback - try assistant with enhanced context or return error
         if "assistant" in self.specialized_agents:
             enhanced_assistant_prompt = f"""I need help with this request, but no specialized agent seems capable of handling it directly:
@@ -1327,14 +1347,14 @@ Which type of ingestion would you like?"""
 **Available Agents:** {', '.join(self.specialized_agents.keys())}
 
 Could you help me understand what's needed and provide guidance, or suggest an alternative approach?"""
-            
+
             fallback_response = await self._route_to_agent_with_context(
                 "assistant", enhanced_assistant_prompt, context, llm_context
             )
-            
+
             if fallback_response.success:
                 return fallback_response.content
-        
+
         # Ultimate fallback - error message
         error_details = primary_response.error if primary_response else "Agent routing failed"
         return f"""**❌ Unable to Process Request**
@@ -1358,66 +1378,133 @@ Please try a different approach or rephrase your request."""
     def _is_programmable_task(self, user_message: str) -> bool:
         """Determine if a task could potentially be solved with code"""
         message_lower = user_message.lower()
-        
+
         # Data conversion and file manipulation tasks
         file_conversion_indicators = [
-            "convert csv to xlsx", "convert xlsx to csv", "csv to excel", "excel to csv",
-            "convert json to csv", "csv to json", "xml to csv", "csv to xml",
-            "convert file", "file conversion", "change format", "transform data",
-            "parse file", "process file", "read file", "write file",
-            "extract data from", "combine files", "merge files", "split file",
-            "rename files", "organize files", "batch process"
+            "convert csv to xlsx",
+            "convert xlsx to csv",
+            "csv to excel",
+            "excel to csv",
+            "convert json to csv",
+            "csv to json",
+            "xml to csv",
+            "csv to xml",
+            "convert file",
+            "file conversion",
+            "change format",
+            "transform data",
+            "parse file",
+            "process file",
+            "read file",
+            "write file",
+            "extract data from",
+            "combine files",
+            "merge files",
+            "split file",
+            "rename files",
+            "organize files",
+            "batch process",
         ]
-        
+
         # Mathematical and calculation tasks
         calculation_indicators = [
-            "calculate", "compute", "solve", "find result", "math", "equation",
-            "formula", "statistics", "average", "sum", "count", "percentage",
-            "total", "multiply", "divide", "add", "subtract", "algorithm"
+            "calculate",
+            "compute",
+            "solve",
+            "find result",
+            "math",
+            "equation",
+            "formula",
+            "statistics",
+            "average",
+            "sum",
+            "count",
+            "percentage",
+            "total",
+            "multiply",
+            "divide",
+            "add",
+            "subtract",
+            "algorithm",
         ]
-        
+
         # Text processing tasks
         text_processing_indicators = [
-            "parse text", "extract text", "clean text", "format text",
-            "find pattern", "replace text", "regular expression", "regex",
-            "word count", "character count", "text analysis", "string manipulation"
+            "parse text",
+            "extract text",
+            "clean text",
+            "format text",
+            "find pattern",
+            "replace text",
+            "regular expression",
+            "regex",
+            "word count",
+            "character count",
+            "text analysis",
+            "string manipulation",
         ]
-        
+
         # Data analysis tasks
         analysis_indicators = [
-            "analyze data", "data analysis", "find trends", "pattern analysis",
-            "compare data", "sort data", "filter data", "group data",
-            "unique values", "duplicate values", "missing values"
+            "analyze data",
+            "data analysis",
+            "find trends",
+            "pattern analysis",
+            "compare data",
+            "sort data",
+            "filter data",
+            "group data",
+            "unique values",
+            "duplicate values",
+            "missing values",
         ]
-        
+
         # API/web tasks that can be coded
         api_indicators = [
-            "fetch data", "http request", "api call", "download from url",
-            "scrape", "parse html", "xml parsing", "json parsing"
+            "fetch data",
+            "http request",
+            "api call",
+            "download from url",
+            "scrape",
+            "parse html",
+            "xml parsing",
+            "json parsing",
         ]
-        
+
         # Automation tasks
         automation_indicators = [
-            "automate", "batch", "process multiple", "loop through",
-            "repeat for", "do for each", "bulk operation"
+            "automate",
+            "batch",
+            "process multiple",
+            "loop through",
+            "repeat for",
+            "do for each",
+            "bulk operation",
         ]
-        
-        all_indicators = (file_conversion_indicators + calculation_indicators + 
-                         text_processing_indicators + analysis_indicators + 
-                         api_indicators + automation_indicators)
-        
+
+        all_indicators = (
+            file_conversion_indicators
+            + calculation_indicators
+            + text_processing_indicators
+            + analysis_indicators
+            + api_indicators
+            + automation_indicators
+        )
+
         # Check if message contains any programmable task indicators
         contains_programmable_task = any(indicator in message_lower for indicator in all_indicators)
-        
+
         # Additional heuristics
-        has_specific_format_mention = any(fmt in message_lower for fmt in 
-                                        ['.csv', '.xlsx', '.json', '.xml', '.txt', '.pdf'])
-        
-        has_action_words = any(word in message_lower for word in 
-                              ['convert', 'transform', 'process', 'analyze', 'calculate', 'generate'])
-        
-        return (contains_programmable_task or 
-                (has_specific_format_mention and has_action_words))
+        has_specific_format_mention = any(
+            fmt in message_lower for fmt in [".csv", ".xlsx", ".json", ".xml", ".txt", ".pdf"]
+        )
+
+        has_action_words = any(
+            word in message_lower
+            for word in ["convert", "transform", "process", "analyze", "calculate", "generate"]
+        )
+
+        return contains_programmable_task or (has_specific_format_mention and has_action_words)
 
     async def _create_code_execution_prompt(
         self,
@@ -1426,14 +1513,14 @@ Please try a different approach or rephrase your request."""
         llm_context: Dict[str, Any] = None,
     ) -> str:
         """Create an enhanced prompt for code execution to solve the user's task"""
-        
+
         # Analyze what type of task this might be
         task_type = self._identify_task_type(user_message)
-        
+
         # Detect file paths in the user message for Docker volume mounting
         file_paths = self._extract_file_paths_from_message(user_message)
         file_sharing_instructions = ""
-        
+
         if file_paths or task_type == "File Format Conversion":
             file_sharing_instructions = f"""
 
@@ -1484,18 +1571,18 @@ Please write and execute the code to solve this task, explaining each step clear
     def _identify_task_type(self, user_message: str) -> str:
         """Identify the type of task for better code generation"""
         message_lower = user_message.lower()
-        
-        if any(term in message_lower for term in ['csv', 'xlsx', 'excel', 'convert file']):
+
+        if any(term in message_lower for term in ["csv", "xlsx", "excel", "convert file"]):
             return "File Format Conversion"
-        elif any(term in message_lower for term in ['calculate', 'math', 'formula', 'compute']):
+        elif any(term in message_lower for term in ["calculate", "math", "formula", "compute"]):
             return "Mathematical Calculation"
-        elif any(term in message_lower for term in ['parse', 'extract', 'text processing']):
+        elif any(term in message_lower for term in ["parse", "extract", "text processing"]):
             return "Text Processing"
-        elif any(term in message_lower for term in ['analyze', 'statistics', 'data analysis']):
+        elif any(term in message_lower for term in ["analyze", "statistics", "data analysis"]):
             return "Data Analysis"
-        elif any(term in message_lower for term in ['api', 'http', 'fetch', 'download']):
+        elif any(term in message_lower for term in ["api", "http", "fetch", "download"]):
             return "API/Web Request"
-        elif any(term in message_lower for term in ['automate', 'batch', 'bulk']):
+        elif any(term in message_lower for term in ["automate", "batch", "bulk"]):
             return "Automation/Batch Processing"
         else:
             return "General Programming Task"
@@ -1503,40 +1590,51 @@ Please write and execute the code to solve this task, explaining each step clear
     def _extract_file_paths_from_message(self, user_message: str) -> List[str]:
         """Extract file paths from the user message"""
         import re
-        
+
         # Common file path patterns
         file_patterns = [
             r'["\']([^"\']+\.[a-zA-Z]{2,5})["\']',  # Quoted file paths
-            r'([^\s]+\.[a-zA-Z]{2,5})(?:\s|$)',     # Unquoted file paths
-            r'([./]+[^\s]*\.[a-zA-Z]{2,5})',        # Relative/absolute paths
+            r"([^\s]+\.[a-zA-Z]{2,5})(?:\s|$)",  # Unquoted file paths
+            r"([./]+[^\s]*\.[a-zA-Z]{2,5})",  # Relative/absolute paths
         ]
-        
+
         file_paths = []
         for pattern in file_patterns:
             matches = re.findall(pattern, user_message)
             file_paths.extend(matches)
-        
+
         # Filter for common file extensions
-        valid_extensions = {'.csv', '.xlsx', '.xls', '.json', '.txt', '.xml', '.pdf', '.py', '.js', '.md'}
+        valid_extensions = {
+            ".csv",
+            ".xlsx",
+            ".xls",
+            ".json",
+            ".txt",
+            ".xml",
+            ".pdf",
+            ".py",
+            ".js",
+            ".md",
+        }
         filtered_paths = []
-        
+
         for path in file_paths:
             if any(path.lower().endswith(ext) for ext in valid_extensions):
                 filtered_paths.append(path)
-        
+
         return list(set(filtered_paths))  # Remove duplicates
 
     def _setup_docker_file_sharing(self, user_message: str) -> Tuple[Optional[str], Optional[str]]:
         """Setup Docker input/output directories for file sharing"""
         import os
-        
+
         # Extract file paths from the message
         file_paths = self._extract_file_paths_from_message(user_message)
-        
+
         # Determine input directory based on file paths or current working directory
         input_dir = None
         output_dir = None
-        
+
         if file_paths:
             # Use directory of the first file found
             first_file = file_paths[0]
@@ -1548,24 +1646,26 @@ Please write and execute the code to solve this task, explaining each step clear
         else:
             # No specific files mentioned, use current working directory
             input_dir = os.getcwd()
-        
+
         # Create output directory for generated files
         output_dir = os.path.join(input_dir, "docker_output")
         os.makedirs(output_dir, exist_ok=True)
-        
+
         self.logger.info(f"🔗 Docker file sharing setup - Input: {input_dir}, Output: {output_dir}")
-        
+
         return input_dir, output_dir
 
     def _check_output_files(self, output_dir: str) -> List[str]:
         """Check what files were created in the output directory"""
         import os
-        
+
         if not output_dir or not os.path.exists(output_dir):
             return []
-        
+
         try:
-            files = [f for f in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, f))]
+            files = [
+                f for f in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, f))
+            ]
             return sorted(files)
         except Exception as e:
             self.logger.warning(f"Error checking output files: {e}")
@@ -1581,7 +1681,7 @@ Please write and execute the code to solve this task, explaining each step clear
         output_dir: Optional[str] = None,
     ) -> AgentResponse:
         """Enhanced agent routing with file sharing support for Docker-based agents"""
-        
+
         if agent_type == "code_executor" and input_dir and output_dir:
             # Special handling for code executor with file sharing
             agent = self.specialized_agents.get(agent_type)
@@ -1594,63 +1694,64 @@ Please write and execute the code to solve this task, explaining each step clear
                     metadata={},
                     error=f"Agent {agent_type} not initialized",
                 )
-            
+
             # Modify the agent's Docker executor to use enhanced file sharing
-            if hasattr(agent, 'docker_executor'):
+            if hasattr(agent, "docker_executor"):
                 # Store original execute method
                 original_execute = agent.docker_executor.execute_code
-                
+
                 # Create wrapper that uses file sharing
-                def enhanced_execute(code: str, language: str = "python", files: Dict[str, str] = None):
+                def enhanced_execute(
+                    code: str, language: str = "python", files: Dict[str, str] = None
+                ):
                     return agent.docker_executor.execute_code_with_host_files(
                         code, language, input_dir, output_dir, files
                     )
-                
+
                 # Temporarily replace execute method
                 agent.docker_executor.execute_code = enhanced_execute
-                
+
                 try:
                     # Route normally, but with enhanced Docker execution
                     response = await self._route_to_agent_with_context(
                         agent_type, user_message, context, llm_context
                     )
-                    
+
                     # Add file sharing metadata
                     if response.success:
-                        response.metadata.update({
-                            "docker_input_dir": input_dir,
-                            "docker_output_dir": output_dir,
-                            "enhanced_file_sharing": True
-                        })
-                    
+                        response.metadata.update(
+                            {
+                                "docker_input_dir": input_dir,
+                                "docker_output_dir": output_dir,
+                                "enhanced_file_sharing": True,
+                            }
+                        )
+
                     return response
-                    
+
                 finally:
                     # Restore original execute method
                     agent.docker_executor.execute_code = original_execute
-            
+
         # Fallback to normal routing
         return await self._route_to_agent_with_context(
             agent_type, user_message, context, llm_context
         )
 
     def _should_trigger_enhanced_fallback(
-        self, 
-        agent_response: str, 
-        user_message: str, 
-        intent_analysis: Dict[str, Any]
+        self, agent_response: str, user_message: str, intent_analysis: Dict[str, Any]
     ) -> bool:
         """Check if agent response suggests it couldn't handle the task properly"""
-        
+
         # Check confidence level first
         confidence = intent_analysis.get("confidence", 1.0)
         if confidence < 0.7 and self._is_programmable_task(user_message):
             return True
-        
+
         # Check for specific response patterns that suggest the agent couldn't handle the task
         response_lower = agent_response.lower()
         user_lower = user_message.lower()
-        
+
         # Indicators that the agent couldn't handle the request properly
         failure_indicators = [
             "no dataset loaded",
@@ -1668,27 +1769,31 @@ Please write and execute the code to solve this task, explaining each step clear
             "invalid format",
             "unsupported format",
             "not supported",
-            "feature not available"
+            "feature not available",
         ]
-        
+
         # Check if response contains failure indicators
-        response_suggests_failure = any(indicator in response_lower for indicator in failure_indicators)
-        
+        response_suggests_failure = any(
+            indicator in response_lower for indicator in failure_indicators
+        )
+
         # Check if the user request was for file conversion but the agent is asking for data loading
-        is_conversion_request = any(term in user_lower for term in ['convert', 'transform', 'change format'])
+        is_conversion_request = any(
+            term in user_lower for term in ["convert", "transform", "change format"]
+        )
         response_asks_for_loading = "load data" in response_lower
-        
+
         # Special case: Analytics agent responding to file conversion with "load data first"
         if is_conversion_request and response_asks_for_loading:
             return True
-            
+
         # Check if response is much shorter than expected for the complexity of the request
         complex_request = len(user_message.split()) > 8
         short_response = len(agent_response.split()) < 20
-        
+
         if complex_request and short_response and response_suggests_failure:
             return True
-            
+
         return response_suggests_failure
 
     async def _route_to_agent_with_context(
@@ -1772,15 +1877,20 @@ Please write and execute the code to solve this task, explaining each step clear
 
             # Create message with COMPLETE context package and Markdown formatting instruction
             enhanced_user_message = user_message
-            
+
             # Check if this is a database→analytics workflow
-            if (llm_context and 
-                llm_context.get("intent_analysis", {}).get("workflow_type") == "database_to_analytics"):
-                
+            if (
+                llm_context
+                and llm_context.get("intent_analysis", {}).get("workflow_type")
+                == "database_to_analytics"
+            ):
+
                 # Use enhanced message from workflow analysis
-                enhanced_user_message = llm_context["intent_analysis"].get("enhanced_message", user_message)
+                enhanced_user_message = llm_context["intent_analysis"].get(
+                    "enhanced_message", user_message
+                )
                 self.logger.info(f"🔄 Using enhanced message for database→analytics workflow")
-            
+
             # Add markdown formatting instruction
             enhanced_user_message = f"{enhanced_user_message}\n\n**Formatting Instruction:** Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
 
@@ -1901,6 +2011,18 @@ Please write and execute the code to solve this task, explaining each step clear
             import traceback
 
             self.logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            return AgentResponse(
+                agent_type=agent_type,
+                content=f"Error processing request with {agent_type} agent: {str(e)}",
+                success=False,
+                execution_time=execution_time,
+                metadata={
+                    "error": str(e),
+                    "agent_type": agent_type,
+                    "routing_failed": True,
+                },
+            )
 
     def _get_session_context(self) -> Dict[str, Any]:
         """Enhanced session context with memory verification"""
@@ -2013,17 +2135,24 @@ Please write and execute the code to solve this task, explaining each step clear
                         f"🧠 Moderator retrieved {len(conversation_history)} messages for analysis"
                     )
 
+                except Exception as e:
+                    self.logger.warning(f"Could not get conversation history: {e}")
+
             # 🆕 Check if assigned skills should handle this request BEFORE agent routing
             skill_result = await self._should_use_assigned_skills(user_message)
-            
-            if skill_result.get('should_use_skills'):
-                self.logger.info(f"🔧 ModeratorAgent using assigned skill: {skill_result['used_skill']}")
-                
+
+            if skill_result.get("should_use_skills"):
+                self.logger.info(
+                    f"🔧 ModeratorAgent using assigned skill: {skill_result['used_skill']}"
+                )
+
                 # Translate technical response to natural language
-                execution_result = skill_result['execution_result']
-                if execution_result.get('success'):
-                    natural_response = await self._translate_technical_response(execution_result, user_message)
-                    
+                execution_result = skill_result["execution_result"]
+                if execution_result.get("success"):
+                    natural_response = await self._translate_technical_response(
+                        execution_result, user_message
+                    )
+
                     # Create response with skill metadata
                     response = self.create_response(
                         content=natural_response,
@@ -2032,54 +2161,59 @@ Please write and execute the code to solve this task, explaining each step clear
                         conversation_id=message.conversation_id,
                         metadata={
                             "used_assigned_skill": True,
-                            "skill_type": skill_result['intent']['skill_type'],
-                            "skill_name": skill_result['intent']['skill_name'],
-                            "skill_confidence": skill_result['intent']['confidence'],
+                            "skill_type": skill_result["intent"]["skill_type"],
+                            "skill_name": skill_result["intent"]["skill_name"],
+                            "skill_confidence": skill_result["intent"]["confidence"],
                             "agent_type": "moderator_with_skills",
-                            "underlying_agent": execution_result.get('agent_type'),
+                            "underlying_agent": execution_result.get("agent_type"),
                             "processing_timestamp": datetime.now().isoformat(),
                             "routing_bypassed": True,
                         },
                     )
-                    
+
                     # Store response
                     if self.memory:
                         self.memory.store_message(response)
-                    
+
                     self.logger.info(f"✅ ModeratorAgent skill response completed successfully")
                     return response
                 else:
                     # Skill execution failed, continue with normal routing but add context
-                    self.logger.warning(f"Assigned skill failed: {execution_result.get('error')}, falling back to agent routing")
+                    self.logger.warning(
+                        f"Assigned skill failed: {execution_result.get('error')}, falling back to agent routing"
+                    )
                     # Don't modify user_message here - let normal routing handle it
 
-                except Exception as e:
-                    self.logger.warning(f"Could not get conversation history: {e}")
-
             # Check for database→analytics handoff in conversation history
-            database_handoff_detected = await self._check_for_database_analytics_handoff(conversation_history)
-            
+            database_handoff_detected = await self._check_for_database_analytics_handoff(
+                conversation_history
+            )
+
             # Check if this requires academic database access first
             academic_data_required = self._needs_academic_database_access(user_message)
-            
+
             # Analyze intent with complete context
             intent_analysis = await self._analyze_query_intent(user_message, conversation_context)
-            
+
             # Override intent if academic data is required and no connection exists
             if academic_data_required and not database_handoff_detected:
-                self.logger.info("🎓 Academic data query detected, creating database→analytics workflow")
+                self.logger.info(
+                    "🎓 Academic data query detected, creating database→analytics workflow"
+                )
                 intent_analysis = {
                     "primary_agent": "database_agent",
                     "confidence": 0.95,
                     "requires_multiple_agents": True,
                     "workflow_type": "academic_data_analysis",
                     "enhanced_message": f"First, query the database for: {user_message}\nThen export the results for analysis and visualization.",
-                    "agent_scores": {"database_agent": 0.95, "analytics": 0.85, "assistant": 0.1}
+                    "agent_scores": {"database_agent": 0.95, "analytics": 0.85, "assistant": 0.1},
                 }
-            
+
             # Override intent if database→analytics workflow is detected
             elif database_handoff_detected:
-                self.logger.info("🔄 Database→Analytics handoff detected, routing to analytics workflow")
+                self.logger.info(
+                    "🔄 Database→Analytics handoff detected, routing to analytics workflow"
+                )
                 intent_analysis = await self._create_database_analytics_workflow(
                     user_message, database_handoff_detected, intent_analysis
                 )
@@ -2132,7 +2266,7 @@ Please write and execute the code to solve this task, explaining each step clear
                     should_fallback = self._should_trigger_enhanced_fallback(
                         primary_response.content, user_message, intent_analysis
                     )
-                    
+
                     if should_fallback:
                         # Enhanced fallback with intelligent code execution
                         response_content = await self._enhanced_fallback_routing(
@@ -2451,28 +2585,33 @@ Please continue with the next step for {agent_type} processing."""
                 except Exception as e:
                     # Check if we should try enhanced fallback for streaming
                     self.logger.warning(f"Primary agent streaming failed: {e}")
-                    
+
                     # Try fallback for streaming if applicable
                     confidence = intent_analysis.get("confidence", 0.0)
-                    if (confidence < 0.7 and 
-                        self._is_programmable_task(user_message) and 
-                        "code_executor" in self.specialized_agents):
-                        
+                    if (
+                        confidence < 0.7
+                        and self._is_programmable_task(user_message)
+                        and "code_executor" in self.specialized_agents
+                    ):
+
                         yield StreamChunk(
                             text="**Primary agent failed. Attempting code execution fallback...**\n\n",
                             sub_type=StreamSubType.STATUS,
-                            metadata={"fallback_triggered": True, "fallback_type": "code_execution"},
+                            metadata={
+                                "fallback_triggered": True,
+                                "fallback_type": "code_execution",
+                            },
                         )
-                        
+
                         enhanced_code_prompt = await self._create_code_execution_prompt(
                             user_message, intent_analysis, llm_context
                         )
-                        
+
                         async for chunk in self._route_to_agent_stream_with_context(
                             "code_executor", enhanced_code_prompt, context, llm_context
                         ):
                             yield chunk
-                            
+
                         yield StreamChunk(
                             text="\n*Note: This task was automatically solved by writing and executing code since no specialized agent could handle it directly.*",
                             sub_type=StreamSubType.STATUS,
@@ -2751,11 +2890,13 @@ Please continue with the next step for {agent_type} processing."""
 
         return success and moderator_cleanup
 
-    async def _check_for_database_analytics_handoff(self, conversation_history: List[Dict[str, Any]]) -> Optional[str]:
+    async def _check_for_database_analytics_handoff(
+        self, conversation_history: List[Dict[str, Any]]
+    ) -> Optional[str]:
         """Check if recent conversation contains database handoff for analytics"""
         if not conversation_history:
             return None
-        
+
         # Look for ANALYTICS_HANDOFF messages in recent history
         for message in conversation_history[-5:]:  # Check last 5 messages
             content = message.get("content", "")
@@ -2768,49 +2909,92 @@ Please continue with the next step for {agent_type} processing."""
                         return csv_path
                 except (IndexError, AttributeError):
                     continue
-        
+
         return None
 
     def _needs_academic_database_access(self, user_message: str) -> bool:
         """Check if query requires academic data from database first"""
         message_lower = user_message.lower()
-        
+
         # Academic data keywords
         academic_keywords = [
-            "faculty", "professors", "researchers", "academic", "university", 
-            "publication", "research", "citation", "h-index", "department",
-            "venue", "academic data", "research data", "university data"
+            "faculty",
+            "professors",
+            "researchers",
+            "academic",
+            "university",
+            "publication",
+            "research",
+            "citation",
+            "h-index",
+            "department",
+            "venue",
+            "academic data",
+            "research data",
+            "university data",
         ]
-        
+
         # Analysis keywords that suggest processing after data retrieval
         analysis_keywords = [
-            "analyze", "analysis", "distribution", "trends", "insights", 
-            "visualize", "visualization", "visualizations", "chart", "graph", 
-            "statistics", "compare", "top", "best", "ranking", "summary",
-            "show", "display", "create", "generate", "plot", "analytics",
-            "get", "retrieve", "find", "list", "view", "explore"
+            "analyze",
+            "analysis",
+            "distribution",
+            "trends",
+            "insights",
+            "visualize",
+            "visualization",
+            "visualizations",
+            "chart",
+            "graph",
+            "statistics",
+            "compare",
+            "top",
+            "best",
+            "ranking",
+            "summary",
+            "show",
+            "display",
+            "create",
+            "generate",
+            "plot",
+            "analytics",
+            "get",
+            "retrieve",
+            "find",
+            "list",
+            "view",
+            "explore",
         ]
-        
+
         # Check if message contains both academic data and analysis requests
         has_academic_data = any(keyword in message_lower for keyword in academic_keywords)
         has_analysis_request = any(keyword in message_lower for keyword in analysis_keywords)
-        
+
         return has_academic_data and has_analysis_request
 
     async def _create_database_analytics_workflow(
-        self, 
-        user_message: str, 
-        csv_path: str, 
-        original_intent: Dict[str, Any]
+        self, user_message: str, csv_path: str, original_intent: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Create workflow configuration for database→analytics handoff"""
-        
+
         # Check if user is asking for analytics/visualization
-        analytics_request = any(word in user_message.lower() for word in [
-            "analyze", "chart", "graph", "visualize", "plot", "statistics",
-            "summary", "insights", "trends", "correlation", "dashboard"
-        ])
-        
+        analytics_request = any(
+            word in user_message.lower()
+            for word in [
+                "analyze",
+                "chart",
+                "graph",
+                "visualize",
+                "plot",
+                "statistics",
+                "summary",
+                "insights",
+                "trends",
+                "correlation",
+                "dashboard",
+            ]
+        )
+
         if analytics_request:
             # Create enhanced analytics prompt with CSV path and load command
             rel_path = os.path.relpath(csv_path)
@@ -2830,7 +3014,7 @@ The CSV file contains database query results and is ready for analysis and visua
                 "enhanced_message": enhanced_message,
                 "csv_path": csv_path,
                 "original_intent": original_intent,
-                "agent_scores": {"analytics": 0.95, "database_agent": 0.1, "assistant": 0.1}
+                "agent_scores": {"analytics": 0.95, "database_agent": 0.1, "assistant": 0.1},
             }
         else:
             # User might be asking about the data or something else

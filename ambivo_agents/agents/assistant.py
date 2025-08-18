@@ -9,7 +9,15 @@ import uuid
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict
 
-from ..core.base import AgentMessage, AgentRole, BaseAgent, ExecutionContext, MessageType, StreamChunk, StreamSubType
+from ..core.base import (
+    AgentMessage,
+    AgentRole,
+    BaseAgent,
+    ExecutionContext,
+    MessageType,
+    StreamChunk,
+    StreamSubType,
+)
 from ..core.history import BaseAgentHistoryMixin
 
 
@@ -291,15 +299,17 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
 
             # 🆕 Check if assigned skills should handle this request
             skill_result = await self._should_use_assigned_skills(user_message)
-            
-            if skill_result.get('should_use_skills'):
+
+            if skill_result.get("should_use_skills"):
                 self.logger.info(f"🔧 Using assigned skill: {skill_result['used_skill']}")
-                
+
                 # Translate technical response to natural language
-                execution_result = skill_result['execution_result']
-                if execution_result.get('success'):
-                    natural_response = await self._translate_technical_response(execution_result, user_message)
-                    
+                execution_result = skill_result["execution_result"]
+                if execution_result.get("success"):
+                    natural_response = await self._translate_technical_response(
+                        execution_result, user_message
+                    )
+
                     # Create response with skill metadata
                     response = self.create_response(
                         content=natural_response,
@@ -308,19 +318,19 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                         conversation_id=message.conversation_id,
                         metadata={
                             "used_assigned_skill": True,
-                            "skill_type": skill_result['intent']['skill_type'],
-                            "skill_name": skill_result['intent']['skill_name'],
-                            "skill_confidence": skill_result['intent']['confidence'],
+                            "skill_type": skill_result["intent"]["skill_type"],
+                            "skill_name": skill_result["intent"]["skill_name"],
+                            "skill_confidence": skill_result["intent"]["confidence"],
                             "agent_type": "assistant_with_skills",
-                            "underlying_agent": execution_result.get('agent_type'),
+                            "underlying_agent": execution_result.get("agent_type"),
                             "processing_timestamp": datetime.now().isoformat(),
                         },
                     )
-                    
+
                     # Store response
                     if self.memory:
                         self.memory.store_message(response)
-                    
+
                     return response
                 else:
                     # Skill execution failed, fall back to normal processing with error context
@@ -604,11 +614,13 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                 "streaming_responses",
                 "skill_assignment",
                 "api_skills",
-                "database_skills", 
+                "database_skills",
                 "knowledge_base_skills",
                 "dynamic_agent_spawning",
             ],
-            "assigned_skills": self.list_assigned_skills() if hasattr(self, '_assigned_skills') else None,
+            "assigned_skills": (
+                self.list_assigned_skills() if hasattr(self, "_assigned_skills") else None
+            ),
         }
 
     async def debug_conversation_state(self) -> Dict[str, Any]:

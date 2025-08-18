@@ -39,7 +39,6 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}REDIS_PORT": ("redis", "port"),
     f"{ENV_PREFIX}REDIS_PASSWORD": ("redis", "password"),
     f"{ENV_PREFIX}REDIS_DB": ("redis", "db"),
-    
     # LLM Configuration (Core - all used)
     f"{ENV_PREFIX}LLM_PREFERRED_PROVIDER": ("llm", "preferred_provider"),
     f"{ENV_PREFIX}LLM_TEMPERATURE": ("llm", "temperature"),
@@ -49,26 +48,53 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}LLM_AWS_ACCESS_KEY_ID": ("llm", "aws_access_key_id"),
     f"{ENV_PREFIX}LLM_AWS_SECRET_ACCESS_KEY": ("llm", "aws_secret_access_key"),
     f"{ENV_PREFIX}LLM_AWS_REGION": ("llm", "aws_region"),
-    
     # Agent Capabilities (Used by ModeratorAgent)
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_KNOWLEDGE_BASE": ("agent_capabilities", "enable_knowledge_base"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SEARCH": ("agent_capabilities", "enable_web_search"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_CODE_EXECUTION": ("agent_capabilities", "enable_code_execution"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_FILE_PROCESSING": ("agent_capabilities", "enable_file_processing"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_INGESTION": ("agent_capabilities", "enable_web_ingestion"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_KNOWLEDGE_BASE": (
+        "agent_capabilities",
+        "enable_knowledge_base",
+    ),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SEARCH": (
+        "agent_capabilities",
+        "enable_web_search",
+    ),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_CODE_EXECUTION": (
+        "agent_capabilities",
+        "enable_code_execution",
+    ),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_FILE_PROCESSING": (
+        "agent_capabilities",
+        "enable_file_processing",
+    ),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_INGESTION": (
+        "agent_capabilities",
+        "enable_web_ingestion",
+    ),
     f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_API_CALLS": ("agent_capabilities", "enable_api_calls"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SCRAPING": ("agent_capabilities", "enable_web_scraping"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_PROXY_MODE": ("agent_capabilities", "enable_proxy_mode"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_MEDIA_EDITOR": ("agent_capabilities", "enable_media_editor"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_YOUTUBE_DOWNLOAD": ("agent_capabilities", "enable_youtube_download"),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_WEB_SCRAPING": (
+        "agent_capabilities",
+        "enable_web_scraping",
+    ),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_PROXY_MODE": (
+        "agent_capabilities",
+        "enable_proxy_mode",
+    ),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_MEDIA_EDITOR": (
+        "agent_capabilities",
+        "enable_media_editor",
+    ),
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_YOUTUBE_DOWNLOAD": (
+        "agent_capabilities",
+        "enable_youtube_download",
+    ),
     f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_API_AGENT": ("agent_capabilities", "enable_api_agent"),
     f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_ANALYTICS": ("agent_capabilities", "enable_analytics"),
-    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_DATABASE_AGENT": ("agent_capabilities", "enable_database_agent"),
-    
+    f"{ENV_PREFIX}AGENT_CAPABILITIES_ENABLE_DATABASE_AGENT": (
+        "agent_capabilities",
+        "enable_database_agent",
+    ),
     # Web Search Configuration (Only API keys used)
     f"{ENV_PREFIX}WEB_SEARCH_BRAVE_API_KEY": ("web_search", "brave_api_key"),
     f"{ENV_PREFIX}WEB_SEARCH_AVESAPI_API_KEY": ("web_search", "avesapi_api_key"),
-    
     # Knowledge Base Configuration (Core settings only)
     f"{ENV_PREFIX}KNOWLEDGE_BASE_QDRANT_URL": ("knowledge_base", "qdrant_url"),
     f"{ENV_PREFIX}KNOWLEDGE_BASE_QDRANT_API_KEY": ("knowledge_base", "qdrant_api_key"),
@@ -77,15 +103,16 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}KNOWLEDGE_BASE_SIMILARITY_TOP_K": ("knowledge_base", "similarity_top_k"),
     f"{ENV_PREFIX}KNOWLEDGE_BASE_VECTOR_SIZE": ("knowledge_base", "vector_size"),
     f"{ENV_PREFIX}KNOWLEDGE_BASE_DISTANCE_METRIC": ("knowledge_base", "distance_metric"),
-    f"{ENV_PREFIX}KNOWLEDGE_BASE_DEFAULT_COLLECTION_PREFIX": ("knowledge_base", "default_collection_prefix"),
-    
+    f"{ENV_PREFIX}KNOWLEDGE_BASE_DEFAULT_COLLECTION_PREFIX": (
+        "knowledge_base",
+        "default_collection_prefix",
+    ),
     # YouTube Download Configuration (Used settings only)
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DOWNLOAD_DIR": ("youtube_download", "download_dir"),
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DEFAULT_AUDIO_ONLY": ("youtube_download", "default_audio_only"),
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_TIMEOUT": ("youtube_download", "timeout"),
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DOCKER_IMAGE": ("youtube_download", "docker_image"),
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_MEMORY_LIMIT": ("youtube_download", "memory_limit"),
-    
     # Media Editor Configuration (Basic settings only)
     f"{ENV_PREFIX}MEDIA_EDITOR_INPUT_DIR": ("media_editor", "input_dir"),
     f"{ENV_PREFIX}MEDIA_EDITOR_OUTPUT_DIR": ("media_editor", "output_dir"),
@@ -94,19 +121,16 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}MEDIA_EDITOR_MEMORY_LIMIT": ("media_editor", "memory_limit"),
     f"{ENV_PREFIX}MEDIA_EDITOR_MAX_FILE_SIZE_GB": ("media_editor", "max_file_size_gb"),
     f"{ENV_PREFIX}MEDIA_EDITOR_MAX_CONCURRENT_JOBS": ("media_editor", "max_concurrent_jobs"),
-    
     # Code Executor Configuration (Basic settings only)
     f"{ENV_PREFIX}CODE_EXECUTOR_DOCKER_IMAGE": ("code_executor", "docker_image"),
     f"{ENV_PREFIX}CODE_EXECUTOR_TIMEOUT": ("code_executor", "timeout"),
     f"{ENV_PREFIX}CODE_EXECUTOR_MEMORY_LIMIT": ("code_executor", "memory_limit"),
     f"{ENV_PREFIX}CODE_EXECUTOR_SANDBOX_MODE": ("code_executor", "sandbox_mode"),
     f"{ENV_PREFIX}CODE_EXECUTOR_ALLOW_NETWORK": ("code_executor", "allow_network"),
-    
     # Analytics Configuration (Basic settings only)
     f"{ENV_PREFIX}ANALYTICS_DOCKER_IMAGE": ("analytics", "docker_image"),
     f"{ENV_PREFIX}ANALYTICS_TIMEOUT": ("analytics", "timeout"),
     f"{ENV_PREFIX}ANALYTICS_MEMORY_LIMIT": ("analytics", "memory_limit"),
-    
     # API Agent Configuration (Security settings used)
     f"{ENV_PREFIX}API_AGENT_ALLOWED_DOMAINS": ("api_agent", "allowed_domains"),
     f"{ENV_PREFIX}API_AGENT_BLOCKED_DOMAINS": ("api_agent", "blocked_domains"),
@@ -114,25 +138,28 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}API_AGENT_VERIFY_SSL": ("api_agent", "verify_ssl"),
     f"{ENV_PREFIX}API_AGENT_TIMEOUT_SECONDS": ("api_agent", "timeout_seconds"),
     f"{ENV_PREFIX}API_AGENT_MAX_SAFE_TIMEOUT": ("api_agent", "max_safe_timeout"),
-    f"{ENV_PREFIX}API_AGENT_FORCE_DOCKER_ABOVE_TIMEOUT": ("api_agent", "force_docker_above_timeout"),
+    f"{ENV_PREFIX}API_AGENT_FORCE_DOCKER_ABOVE_TIMEOUT": (
+        "api_agent",
+        "force_docker_above_timeout",
+    ),
     f"{ENV_PREFIX}API_AGENT_DOCKER_IMAGE": ("api_agent", "docker_image"),
-    
     # Web Scraping Configuration (Basic Docker/proxy settings)
     f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_IMAGE": ("web_scraping", "docker_image"),
     f"{ENV_PREFIX}WEB_SCRAPING_PROXY_ENABLED": ("web_scraping", "proxy_enabled"),
     f"{ENV_PREFIX}WEB_SCRAPING_TIMEOUT": ("web_scraping", "timeout"),
     f"{ENV_PREFIX}WEB_SCRAPING_DOCKER_MEMORY_LIMIT": ("web_scraping", "docker_memory_limit"),
     f"{ENV_PREFIX}WEB_SCRAPING_PROXY_HTTP": ("web_scraping", "proxy_config", "http_proxy"),
-    
     # Database Agent Configuration (Basic settings only)
     f"{ENV_PREFIX}DATABASE_AGENT_STRICT_MODE": ("database_agent", "strict_mode"),
     f"{ENV_PREFIX}DATABASE_AGENT_MAX_RESULT_ROWS": ("database_agent", "max_result_rows"),
     f"{ENV_PREFIX}DATABASE_AGENT_QUERY_TIMEOUT": ("database_agent", "query_timeout"),
     f"{ENV_PREFIX}DATABASE_AGENT_LOCAL_EXPORT_DIR": ("database_agent", "local_export_dir"),
-    f"{ENV_PREFIX}DATABASE_AGENT_ENABLE_ANALYTICS_HANDOFF": ("database_agent", "enable_analytics_handoff"),
+    f"{ENV_PREFIX}DATABASE_AGENT_ENABLE_ANALYTICS_HANDOFF": (
+        "database_agent",
+        "enable_analytics_handoff",
+    ),
     f"{ENV_PREFIX}DATABASE_AGENT_AUTO_COPY_TO_SHARED": ("database_agent", "auto_copy_to_shared"),
     f"{ENV_PREFIX}DATABASE_AGENT_SUPPORTED_TYPES": ("database_agent", "supported_types"),
-    
     # Docker Configuration (Core infrastructure)
     f"{ENV_PREFIX}DOCKER_IMAGES": ("docker", "images"),
     f"{ENV_PREFIX}DOCKER_MEMORY_LIMIT": ("docker", "memory_limit"),
@@ -140,26 +167,25 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}DOCKER_WORK_DIR": ("docker", "work_dir"),
     f"{ENV_PREFIX}DOCKER_SHARED_BASE_DIR": ("docker", "shared_base_dir"),
     f"{ENV_PREFIX}DOCKER_LEGACY_FALLBACK_DIRS": ("docker", "legacy_fallback_dirs"),
-    
     # Agent Subdirs Configuration (For consistent file resolution)
     f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_ANALYTICS": ("docker", "agent_subdirs", "analytics"),
     f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_MEDIA": ("docker", "agent_subdirs", "media"),
     f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_CODE": ("docker", "agent_subdirs", "code"),
     f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_DATABASE": ("docker", "agent_subdirs", "database"),
     f"{ENV_PREFIX}DOCKER_AGENT_SUBDIRS_SCRAPER": ("docker", "agent_subdirs", "scraper"),
-    
     # Service Configuration (All used)
     f"{ENV_PREFIX}SERVICE_LOG_LEVEL": ("service", "log_level"),
     f"{ENV_PREFIX}SERVICE_MAX_SESSIONS": ("service", "max_sessions"),
     f"{ENV_PREFIX}SERVICE_SESSION_TIMEOUT": ("service", "session_timeout"),
     f"{ENV_PREFIX}SERVICE_LOG_TO_FILE": ("service", "log_to_file"),
-    
     # Gather Agent Configuration (Natural language parsing and submission)
-    f"{ENV_PREFIX}GATHER_ENABLE_NATURAL_LANGUAGE_PARSING": ("gather", "enable_natural_language_parsing"),
+    f"{ENV_PREFIX}GATHER_ENABLE_NATURAL_LANGUAGE_PARSING": (
+        "gather",
+        "enable_natural_language_parsing",
+    ),
     f"{ENV_PREFIX}GATHER_SUBMISSION_ENDPOINT": ("gather", "submission_endpoint"),
     f"{ENV_PREFIX}GATHER_SUBMISSION_METHOD": ("gather", "submission_method"),
     f"{ENV_PREFIX}GATHER_MEMORY_TTL_SECONDS": ("gather", "memory_ttl_seconds"),
-    
     # Agent Enablement Configuration (New - all used)
     f"{ENV_PREFIX}MODERATOR_ENABLED": ("agents", "moderator", "enabled"),
     f"{ENV_PREFIX}ANALYTICS_ENABLED": ("agents", "analytics", "enabled"),
@@ -167,29 +193,87 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_ENABLED": ("agents", "youtube_download", "enabled"),
     f"{ENV_PREFIX}MEDIA_EDITOR_ENABLED": ("agents", "media_editor", "enabled"),
     f"{ENV_PREFIX}WEB_SCRAPER_ENABLED": ("agents", "web_scraper", "enabled"),
-    
     # File Access Security Configuration (New feature - used)
-    f"{ENV_PREFIX}FILE_ACCESS_RESTRICTED_DIRS": ("security", "file_access", "restricted_directories"),
-    
+    f"{ENV_PREFIX}FILE_ACCESS_RESTRICTED_DIRS": (
+        "security",
+        "file_access",
+        "restricted_directories",
+    ),
     # Workflow Persistence Configuration (New feature)
     f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_BACKEND": ("workflow_persistence", "backend"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_DATABASE_PATH": ("workflow_persistence", "sqlite", "database_path"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_ENABLE_WAL": ("workflow_persistence", "sqlite", "enable_wal"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_TIMEOUT": ("workflow_persistence", "sqlite", "timeout"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_AUTO_VACUUM": ("workflow_persistence", "sqlite", "auto_vacuum"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_JOURNAL_MODE": ("workflow_persistence", "sqlite", "journal_mode"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_AUTO_CHECKPOINT": ("workflow_persistence", "general", "auto_checkpoint"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_CHECKPOINT_INTERVAL": ("workflow_persistence", "general", "checkpoint_interval"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_MAX_CHECKPOINTS_PER_SESSION": ("workflow_persistence", "general", "max_checkpoints_per_session"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_ENABLE_COMPRESSION": ("workflow_persistence", "general", "enable_compression"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_ENABLE_ENCRYPTION": ("workflow_persistence", "general", "enable_encryption"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_DATABASE_PATH": (
+        "workflow_persistence",
+        "sqlite",
+        "database_path",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_ENABLE_WAL": (
+        "workflow_persistence",
+        "sqlite",
+        "enable_wal",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_TIMEOUT": (
+        "workflow_persistence",
+        "sqlite",
+        "timeout",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_AUTO_VACUUM": (
+        "workflow_persistence",
+        "sqlite",
+        "auto_vacuum",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_JOURNAL_MODE": (
+        "workflow_persistence",
+        "sqlite",
+        "journal_mode",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_AUTO_CHECKPOINT": (
+        "workflow_persistence",
+        "general",
+        "auto_checkpoint",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_CHECKPOINT_INTERVAL": (
+        "workflow_persistence",
+        "general",
+        "checkpoint_interval",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_MAX_CHECKPOINTS_PER_SESSION": (
+        "workflow_persistence",
+        "general",
+        "max_checkpoints_per_session",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_ENABLE_COMPRESSION": (
+        "workflow_persistence",
+        "general",
+        "enable_compression",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_ENABLE_ENCRYPTION": (
+        "workflow_persistence",
+        "general",
+        "enable_encryption",
+    ),
     f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_HOST": ("workflow_persistence", "redis", "host"),
     f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_PORT": ("workflow_persistence", "redis", "port"),
     f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_DB": ("workflow_persistence", "redis", "db"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_SESSION_TTL": ("workflow_persistence", "redis", "session_ttl"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_STORAGE_DIRECTORY": ("workflow_persistence", "file", "storage_directory"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_COMPRESSION": ("workflow_persistence", "file", "compression"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_ENCRYPTION": ("workflow_persistence", "file", "encryption"),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_SESSION_TTL": (
+        "workflow_persistence",
+        "redis",
+        "session_ttl",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_STORAGE_DIRECTORY": (
+        "workflow_persistence",
+        "file",
+        "storage_directory",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_COMPRESSION": (
+        "workflow_persistence",
+        "file",
+        "compression",
+    ),
+    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_ENCRYPTION": (
+        "workflow_persistence",
+        "file",
+        "encryption",
+    ),
 }
 
 # Required environment variables for minimal configuration
@@ -329,22 +413,17 @@ def _load_config_from_env() -> Dict[str, Any]:
 
     # Provide defaults for missing required sections
     if not config.get("redis"):
-        config["redis"] = {
-            "host": "localhost",
-            "port": 6379,
-            "db": 0,
-            "password": None
-        }
-        logger.warning("Redis configuration not found in environment variables. Using defaults: redis://localhost:6379/0")
-    
+        config["redis"] = {"host": "localhost", "port": 6379, "db": 0, "password": None}
+        logger.warning(
+            "Redis configuration not found in environment variables. Using defaults: redis://localhost:6379/0"
+        )
+
     if not config.get("llm"):
-        config["llm"] = {
-            "preferred_provider": "openai",
-            "temperature": 0.7,
-            "max_tokens": 4000
-        }
-        logger.warning("LLM configuration not found in environment variables. Using defaults (API keys still required)")
-    
+        config["llm"] = {"preferred_provider": "openai", "temperature": 0.7, "max_tokens": 4000}
+        logger.warning(
+            "LLM configuration not found in environment variables. Using defaults (API keys still required)"
+        )
+
     # Note: This allows the system to start with defaults even if API keys aren't set,
     # but the agents will fail gracefully when actually trying to use missing API keys
 
@@ -426,7 +505,7 @@ def _get_minimal_defaults() -> Dict[str, Any]:
             },
             "web_scraper": {
                 "enabled": True,  # WebScraperAgent enabled by default when Docker available
-            }
+            },
         },
         "moderator": {"default_enabled_agents": ["assistant"]},
         "docker": {
@@ -459,23 +538,19 @@ def _set_nested_value(config: Dict[str, Any], path: tuple, value: Any) -> None:
 
         # Docker agent subdirs handling (comma-separated lists)
         elif (
-            path[0] == "docker" 
-            and len(path) >= 3 
-            and path[1] == "agent_subdirs" 
+            path[0] == "docker"
+            and len(path) >= 3
+            and path[1] == "agent_subdirs"
             and isinstance(value, str)
         ):
             current[final_key] = [subdir.strip() for subdir in value.split(",")]
             return
 
         # Workflow file formats handling (comma-separated lists)
-        elif (
-            path[0] == "workflows"
-            and final_key == "file_formats"
-            and isinstance(value, str)
-        ):
+        elif path[0] == "workflows" and final_key == "file_formats" and isinstance(value, str):
             current[final_key] = [fmt.strip() for fmt in value.split(",")]
             return
-            
+
         # Database agent supported types handling (comma-separated lists)
         elif (
             path[0] == "database_agent"
@@ -484,7 +559,7 @@ def _set_nested_value(config: Dict[str, Any], path: tuple, value: Any) -> None:
         ):
             current[final_key] = [db_type.strip() for db_type in value.split(",")]
             return
-            
+
         # Security restricted directories handling (comma-separated lists)
         elif (
             path[0] == "security"
@@ -582,7 +657,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         kb.setdefault("default_collection_prefix", "")
         kb.setdefault("max_file_size_mb", 50)
 
-    # Set web scraping defaults with Docker-accessible directories  
+    # Set web scraping defaults with Docker-accessible directories
     if "web_scraping" in config:
         ws = config["web_scraping"]
         ws.setdefault("timeout", 120)
@@ -604,8 +679,8 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     # Set media editor defaults with Docker-accessible directories
     if "media_editor" in config:
         me = config["media_editor"]
-        me.setdefault("input_dir", "./media_input")   # Docker-accessible with shared volume
-        me.setdefault("output_dir", "./media_output") # Docker-accessible with shared volume
+        me.setdefault("input_dir", "./media_input")  # Docker-accessible with shared volume
+        me.setdefault("output_dir", "./media_output")  # Docker-accessible with shared volume
         me.setdefault("timeout", 300)
         me.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
         me.setdefault("work_dir", "/opt/ambivo/work_dir")
@@ -614,39 +689,52 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     # Set agents defaults - ensure all agents are enabled by default when Docker available
     if "agents" not in config:
         config["agents"] = {}
-    
+
     agents = config["agents"]
     agents.setdefault("moderator", {}).setdefault("enabled", True)
-    agents.setdefault("analytics", {}).setdefault("enabled", True)  # Default to True when Docker available
-    agents.setdefault("code_executor", {}).setdefault("enabled", True)  # Default to True when Docker available
-    agents.setdefault("youtube_download", {}).setdefault("enabled", True)  # Default to True when Docker available
-    agents.setdefault("media_editor", {}).setdefault("enabled", True)  # Default to True when Docker available
-    agents.setdefault("web_scraper", {}).setdefault("enabled", True)  # Default to True when Docker available
+    agents.setdefault("analytics", {}).setdefault(
+        "enabled", True
+    )  # Default to True when Docker available
+    agents.setdefault("code_executor", {}).setdefault(
+        "enabled", True
+    )  # Default to True when Docker available
+    agents.setdefault("youtube_download", {}).setdefault(
+        "enabled", True
+    )  # Default to True when Docker available
+    agents.setdefault("media_editor", {}).setdefault(
+        "enabled", True
+    )  # Default to True when Docker available
+    agents.setdefault("web_scraper", {}).setdefault(
+        "enabled", True
+    )  # Default to True when Docker available
 
     # Set security defaults - file access restrictions
     if "security" not in config:
         config["security"] = {}
-    
+
     security = config["security"]
     if "file_access" not in security:
         security["file_access"] = {}
-    
+
     file_access = security["file_access"]
     # Default restricted directories - common sensitive locations
-    file_access.setdefault("restricted_directories", [
-        "/etc",           # System configuration files
-        "/root",          # Root user home directory  
-        "/var/log",       # System logs
-        "/proc",          # Process filesystem
-        "/sys",           # System filesystem
-        "/dev",           # Device files
-        "/boot",          # Boot files
-        "~/.ssh",         # SSH keys
-        "~/.aws",         # AWS credentials
-        "~/.config",      # User configuration files
-        "/usr/bin",       # System binaries
-        "/usr/sbin",      # System admin binaries
-    ])
+    file_access.setdefault(
+        "restricted_directories",
+        [
+            "/etc",  # System configuration files
+            "/root",  # Root user home directory
+            "/var/log",  # System logs
+            "/proc",  # Process filesystem
+            "/sys",  # System filesystem
+            "/dev",  # Device files
+            "/boot",  # Boot files
+            "~/.ssh",  # SSH keys
+            "~/.aws",  # AWS credentials
+            "~/.config",  # User configuration files
+            "/usr/bin",  # System binaries
+            "/usr/sbin",  # System admin binaries
+        ],
+    )
 
     # Set Docker defaults
     if "docker" in config:
@@ -656,13 +744,15 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         docker.setdefault("work_dir", "/opt/ambivo/work_dir")
         if "images" not in docker:
             docker["images"] = ["sgosain/amb-ubuntu-python-public-pod"]
-        
+
         # Consolidated Docker structure defaults
         docker.setdefault("shared_base_dir", "./docker_shared")
-        docker.setdefault("legacy_fallback_dirs", ["docker_shared/input", "docker_shared"])  # Use docker_shared structure consistently
+        docker.setdefault(
+            "legacy_fallback_dirs", ["docker_shared/input", "docker_shared"]
+        )  # Use docker_shared structure consistently
         docker.setdefault("network_disabled", True)
         docker.setdefault("auto_remove", True)
-        
+
         # Container mounts defaults
         if "container_mounts" not in docker:
             docker["container_mounts"] = {}
@@ -672,13 +762,18 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         container_mounts.setdefault("temp", "/docker_shared/temp")
         container_mounts.setdefault("handoff", "/docker_shared/handoff")
         container_mounts.setdefault("work", "/docker_shared/work")
-        
+
         # Agent subdirs defaults
         if "agent_subdirs" not in docker:
             docker["agent_subdirs"] = {}
         agent_subdirs = docker["agent_subdirs"]
-        agent_subdirs.setdefault("analytics", ["input/analytics", "output/analytics", "temp/analytics", "handoff/analytics"])
-        agent_subdirs.setdefault("media", ["input/media", "output/media", "temp/media", "handoff/media"])
+        agent_subdirs.setdefault(
+            "analytics",
+            ["input/analytics", "output/analytics", "temp/analytics", "handoff/analytics"],
+        )
+        agent_subdirs.setdefault(
+            "media", ["input/media", "output/media", "temp/media", "handoff/media"]
+        )
         agent_subdirs.setdefault("code", ["input/code", "output/code", "temp/code", "handoff/code"])
         agent_subdirs.setdefault("database", ["handoff/database"])
         agent_subdirs.setdefault("scraper", ["output/scraper", "temp/scraper", "handoff/scraper"])
@@ -768,12 +863,12 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     if "database_agent" not in config:
         config["database_agent"] = {}
     db_agent = config["database_agent"]
-    
+
     # Use configured docker shared base directory for exports
     docker_config = config.get("docker", {})
     shared_base_dir = docker_config.get("shared_base_dir", "./docker_shared")
     default_export_dir = f"{shared_base_dir}/output/database"
-    
+
     db_agent.setdefault("local_export_dir", default_export_dir)
     db_agent.setdefault("handoff_subdir", "database")
     db_agent.setdefault("auto_copy_to_shared", True)
@@ -786,7 +881,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     # Set Workflow defaults
     if "workflows" in config:
         workflows = config["workflows"]
-        
+
         # Database to Analytics workflow
         if "database_to_analytics" not in workflows:
             workflows["database_to_analytics"] = {}
@@ -796,7 +891,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         db_analytics.setdefault("target_path", "database")
         db_analytics.setdefault("auto_trigger", True)
         db_analytics.setdefault("file_formats", [".csv", ".xlsx", ".json"])
-        
+
         # Code Executor fallback workflow
         if "code_executor_fallback" not in workflows:
             workflows["code_executor_fallback"] = {}
@@ -823,10 +918,10 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     # Set workflow persistence defaults
     if "workflow_persistence" not in config:
         config["workflow_persistence"] = {}
-    
+
     workflow_persistence = config["workflow_persistence"]
     workflow_persistence.setdefault("backend", "sqlite")
-    
+
     # SQLite defaults
     if "sqlite" not in workflow_persistence:
         workflow_persistence["sqlite"] = {}
@@ -836,7 +931,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     sqlite_config.setdefault("timeout", 30.0)
     sqlite_config.setdefault("auto_vacuum", True)
     sqlite_config.setdefault("journal_mode", "WAL")
-    
+
     # Tables defaults
     if "tables" not in sqlite_config:
         sqlite_config["tables"] = {}
@@ -845,16 +940,16 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     tables.setdefault("steps", "workflow_steps")
     tables.setdefault("checkpoints", "workflow_checkpoints")
     tables.setdefault("sessions", "workflow_sessions")
-    
+
     # Retention defaults
     if "retention" not in sqlite_config:
         sqlite_config["retention"] = {}
     retention = sqlite_config["retention"]
     retention.setdefault("conversation_ttl", 2592000)  # 30 days
-    retention.setdefault("checkpoint_ttl", 604800)     # 7 days
-    retention.setdefault("session_ttl", 86400)         # 24 hours
-    retention.setdefault("cleanup_interval", 3600)     # 1 hour
-    
+    retention.setdefault("checkpoint_ttl", 604800)  # 7 days
+    retention.setdefault("session_ttl", 86400)  # 24 hours
+    retention.setdefault("cleanup_interval", 3600)  # 1 hour
+
     # Redis defaults
     if "redis" not in workflow_persistence:
         workflow_persistence["redis"] = {}
@@ -865,7 +960,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     redis_config.setdefault("password", None)
     redis_config.setdefault("ssl", False)
     redis_config.setdefault("session_ttl", 3600)
-    
+
     # File storage defaults
     if "file" not in workflow_persistence:
         workflow_persistence["file"] = {}
@@ -874,7 +969,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     file_config.setdefault("compression", True)
     file_config.setdefault("encryption", False)
     file_config.setdefault("max_file_size", 10485760)  # 10MB
-    
+
     # General persistence defaults
     if "general" not in workflow_persistence:
         workflow_persistence["general"] = {}
@@ -1061,9 +1156,7 @@ def validate_agent_capabilities(config: Dict[str, Any] = None) -> Dict[str, bool
         agent_caps.get("enable_youtube_download", False) and "youtube_download" in config
     )
 
-    capabilities["gather"] = (
-        agent_caps.get("enable_gather", False) and "gather" in config
-    )
+    capabilities["gather"] = agent_caps.get("enable_gather", False) and "gather" in config
 
     return capabilities
 

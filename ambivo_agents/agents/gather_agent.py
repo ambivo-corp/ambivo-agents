@@ -5,16 +5,26 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..core.base import AgentMessage, AgentRole, BaseAgent, ExecutionContext, MessageType, StreamChunk, StreamSubType
+from ..core.base import (
+    AgentMessage,
+    AgentRole,
+    BaseAgent,
+    ExecutionContext,
+    MessageType,
+    StreamChunk,
+    StreamSubType,
+)
 
 try:
     import aiohttp
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
 
 try:
     import requests
+
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
@@ -87,7 +97,14 @@ class GatherAgent(BaseAgent):
         "When all relevant questions are answered or user requests to finish, say you will submit."
     )
 
-    def __init__(self, agent_id: str = None, memory_manager=None, llm_service=None, system_message: str = None, **kwargs):
+    def __init__(
+        self,
+        agent_id: str = None,
+        memory_manager=None,
+        llm_service=None,
+        system_message: str = None,
+        **kwargs,
+    ):
         super().__init__(
             agent_id=agent_id,
             role=AgentRole.ASSISTANT,
@@ -105,13 +122,19 @@ class GatherAgent(BaseAgent):
         self.submission_headers: Dict[str, str] = cfg.get("submission_headers") or {}
         self.memory_ttl_seconds: int = int(cfg.get("memory_ttl_seconds") or 3600)
         # LLM-based answer validation settings
-        self.enable_llm_answer_validation: bool = bool(cfg.get("enable_llm_answer_validation", False))
+        self.enable_llm_answer_validation: bool = bool(
+            cfg.get("enable_llm_answer_validation", False)
+        )
         self.answer_validation_cfg: Dict[str, Any] = cfg.get("answer_validation") or {}
-        self.default_min_answer_length: int = int(self.answer_validation_cfg.get("default_min_length", 1))
+        self.default_min_answer_length: int = int(
+            self.answer_validation_cfg.get("default_min_length", 1)
+        )
         # Control whether to use LLM to rephrase question prompts (disabled by default for predictability)
         self.enable_llm_prompt_rewrite: bool = bool(cfg.get("enable_llm_prompt_rewrite", False))
         # NEW: Enable natural language parsing for conversational responses
-        self.enable_natural_language_parsing: bool = bool(cfg.get("enable_natural_language_parsing", False))
+        self.enable_natural_language_parsing: bool = bool(
+            cfg.get("enable_natural_language_parsing", False)
+        )
 
     # -------- State Management --------
     def _state_key(self, session_id: str) -> str:
@@ -171,10 +194,10 @@ class GatherAgent(BaseAgent):
             "answer_option_dict_list": q.get("answer_option_dict_list") or q.get("choices") or [],
             # New: optional trigger list for conditional logic on dependent questions
             "condition_trigger_values": q.get("condition_trigger_values")
-                or q.get("trigger_values")
-                or q.get("condition_values")
-                or q.get("condition_triggers")
-                or [],
+            or q.get("trigger_values")
+            or q.get("condition_values")
+            or q.get("condition_triggers")
+            or [],
             # New: optional per-question answer quality hints/constraints
             "answer_requirements": q.get("answer_requirements") or q.get("requirements") or "",
             "min_answer_length": q.get("min_answer_length"),
@@ -192,7 +215,9 @@ class GatherAgent(BaseAgent):
         norm = [GatherAgent._normalize_question(q) for q in questions]
         return {"questions": norm}
 
-    async def _try_parse_questionnaire_from_message(self, user_text: str) -> Optional[Dict[str, Any]]:
+    async def _try_parse_questionnaire_from_message(
+        self, user_text: str
+    ) -> Optional[Dict[str, Any]]:
         # Try JSON in message
         try:
             maybe_json = user_text.strip()
@@ -224,7 +249,9 @@ class GatherAgent(BaseAgent):
         return None
 
     # -------- Question Progression --------
-    def _is_condition_met(self, parent_answer: Any, parent_type: str, child_q: Optional[Dict[str, Any]] = None) -> bool:
+    def _is_condition_met(
+        self, parent_answer: Any, parent_type: str, child_q: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """
         Evaluate whether a conditional (dependent) question should be asked based on
         the parent answer/type and optional child-level trigger values.
@@ -270,7 +297,7 @@ class GatherAgent(BaseAgent):
                 return _norm_text(parent_answer) in triggers
             if t == "multi-select":
                 try:
-                    pvals = [ _norm_text(x) for x in (parent_answer or []) ]
+                    pvals = [_norm_text(x) for x in (parent_answer or [])]
                     return any(p in triggers for p in pvals)
                 except Exception:
                     return False
@@ -296,7 +323,9 @@ class GatherAgent(BaseAgent):
         # free-text
         return _norm_text(parent_answer) != ""
 
-    def _get_next_question(self, questionnaire: Dict[str, Any], answers: Dict[str, Any], asked: set) -> Optional[Dict[str, Any]]:
+    def _get_next_question(
+        self, questionnaire: Dict[str, Any], answers: Dict[str, Any], asked: set
+    ) -> Optional[Dict[str, Any]]:
         for q in questionnaire.get("questions", []):
             qid = q.get("question_id")
             if qid in asked:
@@ -309,7 +338,14 @@ class GatherAgent(BaseAgent):
                 if parent_id not in answers:
                     continue
                 # Find parent type
-                parent = next((x for x in questionnaire["questions"] if str(x.get("question_id")) == str(parent_id)), None)
+                parent = next(
+                    (
+                        x
+                        for x in questionnaire["questions"]
+                        if str(x.get("question_id")) == str(parent_id)
+                    ),
+                    None,
+                )
                 parent_type = parent.get("type") if parent else "free-text"
                 if not self._is_condition_met(answers.get(parent_id), parent_type, q):
                     asked.add(qid)  # considered not applicable
@@ -332,15 +368,17 @@ class GatherAgent(BaseAgent):
         else:
             return qtext
 
-    async def _extract_answer_with_llm(self, q: Dict[str, Any], user_text: str) -> Tuple[bool, Any, str]:
+    async def _extract_answer_with_llm(
+        self, q: Dict[str, Any], user_text: str
+    ) -> Tuple[bool, Any, str]:
         """Use LLM to extract structured answer from natural language response"""
         if not self.llm_service:
             return False, None, "LLM service not available for natural language parsing"
-        
+
         qtype = (q.get("type") or "free-text").lower()
         qtext = q.get("text", "")
         choices = q.get("answer_option_dict_list") or []
-        
+
         # Build prompt based on question type
         if qtype == "yes-no":
             prompt = f"""Extract a yes/no answer from the user's response.
@@ -353,9 +391,11 @@ Examples:
 - "Absolutely!" -> {{"answer": "Yes"}}
 - "I don't think so" -> {{"answer": "No"}}
 - "Yeah, we use that" -> {{"answer": "Yes"}}"""
-        
+
         elif qtype == "single-select":
-            choices_str = "\n".join([f"- {c.get('label', c.get('value'))}: {c.get('value')}" for c in choices])
+            choices_str = "\n".join(
+                [f"- {c.get('label', c.get('value'))}: {c.get('value')}" for c in choices]
+            )
             prompt = f"""Extract the selected option from the user's natural language response.
 Question asked: "{qtext}"
 Available options:
@@ -368,9 +408,11 @@ Match the user's intent to ONE option and respond with ONLY: {{"answer": "exact_
 Examples:
 - "I'd prefer the first one" -> match to first option's value
 - "The blue option sounds good" -> match to the option mentioning blue"""
-        
+
         elif qtype == "multi-select":
-            choices_str = "\n".join([f"- {c.get('label', c.get('value'))}: {c.get('value')}" for c in choices])
+            choices_str = "\n".join(
+                [f"- {c.get('label', c.get('value'))}: {c.get('value')}" for c in choices]
+            )
             prompt = f"""Extract multiple selected options from the user's natural language response.
 Question asked: "{qtext}"
 Available options:
@@ -383,27 +425,28 @@ Match the user's intent to one or more options and respond with ONLY: {{"answer"
 Examples:
 - "Both the first and third options" -> match to first and third option values
 - "I'll take email and SMS" -> match options mentioning email and SMS"""
-        
+
         else:  # free-text
             return True, user_text, ""
-        
+
         try:
             response = await self.llm_service.generate_response(
                 prompt,
                 context={"conversation_history": []},
-                system_message="You are a precise data extraction assistant. Extract structured answers from natural language. Respond only with JSON."
+                system_message="You are a precise data extraction assistant. Extract structured answers from natural language. Respond only with JSON.",
             )
-            
+
             # Parse LLM response
             if response:
                 import json as _json
+
                 response_str = str(response)
                 # Try to find JSON in response
                 start = response_str.find("{")
                 end = response_str.rfind("}")
                 if start != -1 and end != -1:
                     try:
-                        parsed = _json.loads(response_str[start:end+1])
+                        parsed = _json.loads(response_str[start : end + 1])
                         answer = parsed.get("answer")
                         if answer is not None:
                             # Validate the answer matches expected format
@@ -421,15 +464,17 @@ Examples:
                                     return True, answer, ""
                     except Exception:
                         pass
-            
+
             # If LLM parsing failed, return false to fall back to strict parsing
             return False, None, None
-            
+
         except Exception as e:
             self.logger.warning(f"LLM answer extraction failed: {e}")
             return False, None, None
 
-    def _validate_and_parse_answer(self, q: Dict[str, Any], user_text: str) -> Tuple[bool, Any, str]:
+    def _validate_and_parse_answer(
+        self, q: Dict[str, Any], user_text: str
+    ) -> Tuple[bool, Any, str]:
         qtype = (q.get("type") or "free-text").lower()
         user_text = (user_text or "").strip()
         if qtype == "free-text":
@@ -467,7 +512,9 @@ Examples:
         # fallback
         return True, user_text, ""
 
-    async def _evaluate_answer_sufficiency(self, q: Dict[str, Any], answer: Any) -> Tuple[bool, str]:
+    async def _evaluate_answer_sufficiency(
+        self, q: Dict[str, Any], answer: Any
+    ) -> Tuple[bool, str]:
         """
         Evaluate if a parsed answer satisfies the question requirements using LLM (if enabled),
         with heuristics fallback. Returns (sufficient, feedback).
@@ -499,7 +546,7 @@ Examples:
             f"Question: {qtext}\n"
             f"Requirements: {req}\n"
             f"Answer: {text_answer}\n\n"
-            "Return JSON like: {\"sufficient\": true/false, \"feedback\": \"...\"}."
+            'Return JSON like: {"sufficient": true/false, "feedback": "..."}.'
         )
 
         try:
@@ -544,28 +591,49 @@ Examples:
                 async with aiohttp.ClientSession() as session:
                     method = self.submission_method
                     if method == "POST":
-                        async with session.post(self.submission_endpoint, json=payload, headers=self.submission_headers) as resp:
+                        async with session.post(
+                            self.submission_endpoint, json=payload, headers=self.submission_headers
+                        ) as resp:
                             data = await resp.text()
                             ok = 200 <= resp.status < 300
                             return {"success": ok, "status": resp.status, "response": data}
                     else:
-                        async with session.get(self.submission_endpoint, params=payload, headers=self.submission_headers) as resp:
+                        async with session.get(
+                            self.submission_endpoint,
+                            params=payload,
+                            headers=self.submission_headers,
+                        ) as resp:
                             data = await resp.text()
                             ok = 200 <= resp.status < 300
                             return {"success": ok, "status": resp.status, "response": data}
             elif REQUESTS_AVAILABLE:
                 if self.submission_method == "POST":
-                    r = requests.post(self.submission_endpoint, json=payload, headers=self.submission_headers, timeout=15)
+                    r = requests.post(
+                        self.submission_endpoint,
+                        json=payload,
+                        headers=self.submission_headers,
+                        timeout=15,
+                    )
                 else:
-                    r = requests.get(self.submission_endpoint, params=payload, headers=self.submission_headers, timeout=15)
+                    r = requests.get(
+                        self.submission_endpoint,
+                        params=payload,
+                        headers=self.submission_headers,
+                        timeout=15,
+                    )
                 return {"success": r.ok, "status": r.status_code, "response": r.text}
             else:
-                return {"success": False, "error": "No HTTP client available (install aiohttp or requests)"}
+                return {
+                    "success": False,
+                    "error": "No HTTP client available (install aiohttp or requests)",
+                }
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     # -------- Main message processing --------
-    async def process_message(self, message: AgentMessage, context: ExecutionContext = None) -> AgentMessage:
+    async def process_message(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AgentMessage:
         if context is None:
             context = self.get_execution_context()
 
@@ -582,9 +650,19 @@ Examples:
         lower = user_text.strip().lower()
         if lower in ("finish", "submit", "done"):
             # Decide result status
-            required_ids = [q.get("question_id") for q in (questionnaire or {}).get("questions", []) if q.get("required", True)] if questionnaire else []
+            required_ids = (
+                [
+                    q.get("question_id")
+                    for q in (questionnaire or {}).get("questions", [])
+                    if q.get("required", True)
+                ]
+                if questionnaire
+                else []
+            )
             all_required_answered = all(qid in answers for qid in required_ids)
-            result_status = "successfully_collected" if all_required_answered else "partially_collected"
+            result_status = (
+                "successfully_collected" if all_required_answered else "partially_collected"
+            )
             payload = {
                 "session_id": self.context.session_id,
                 "conversation_id": self.context.conversation_id,
@@ -598,7 +676,13 @@ Examples:
                 f"Submitting your responses now. Status: {result_status}. "
                 f"Submission: {submit_result.get('status') or submit_result.get('error')}"
             )
-            return self.create_response(content=content, recipient_id=message.sender_id, message_type=MessageType.AGENT_RESPONSE, session_id=message.session_id, conversation_id=message.conversation_id)
+            return self.create_response(
+                content=content,
+                recipient_id=message.sender_id,
+                message_type=MessageType.AGENT_RESPONSE,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id,
+            )
 
         if lower in ("cancel", "abort", "stop"):
             payload = {
@@ -610,10 +694,14 @@ Examples:
             }
             submit_result = await self._submit(payload)
             await self._clear_state()
-            content = (
-                f"Okay, aborting the gathering. Submission status: {submit_result.get('status') or submit_result.get('error')}"
+            content = f"Okay, aborting the gathering. Submission status: {submit_result.get('status') or submit_result.get('error')}"
+            return self.create_response(
+                content=content,
+                recipient_id=message.sender_id,
+                message_type=MessageType.AGENT_RESPONSE,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id,
             )
-            return self.create_response(content=content, recipient_id=message.sender_id, message_type=MessageType.AGENT_RESPONSE, session_id=message.session_id, conversation_id=message.conversation_id)
 
         # If questionnaire not loaded, try to parse from message
         if not questionnaire:
@@ -630,15 +718,28 @@ Examples:
                 prompt = (
                     "I can help gather information by asking a set of questions. "
                     "Please upload or paste your questionnaire as JSON/YAML, or provide a file path/URL to it. "
-                    "For example, you can paste: {\"questions\":[{\"question_id\":\"10000100\",\"text\":\"Are network perimeter defense tools used?\",\"type\":\"single-select\",\"answer_option_dict_list\":[{\"value\":\"Yes\"},{\"value\":\"No\"}]}]}"
+                    'For example, you can paste: {"questions":[{"question_id":"10000100","text":"Are network perimeter defense tools used?","type":"single-select","answer_option_dict_list":[{"value":"Yes"},{"value":"No"}]}]}'
                 )
-                return self.create_response(content=prompt, recipient_id=message.sender_id, message_type=MessageType.AGENT_RESPONSE, session_id=message.session_id, conversation_id=message.conversation_id)
+                return self.create_response(
+                    content=prompt,
+                    recipient_id=message.sender_id,
+                    message_type=MessageType.AGENT_RESPONSE,
+                    session_id=message.session_id,
+                    conversation_id=message.conversation_id,
+                )
 
         # If we have a questionnaire but no current question tracked, pick next
         current_qid = state.get("current_qid")
         current_q: Optional[Dict[str, Any]] = None
         if current_qid:
-            current_q = next((q for q in questionnaire.get("questions", []) if str(q.get("question_id")) == str(current_qid)), None)
+            current_q = next(
+                (
+                    q
+                    for q in questionnaire.get("questions", [])
+                    if str(q.get("question_id")) == str(current_qid)
+                ),
+                None,
+            )
 
         if current_q is None:
             next_q = self._get_next_question(questionnaire, answers, asked)
@@ -646,7 +747,11 @@ Examples:
                 # No more questions needed; auto-submit
                 result_status = "successfully_collected"
                 # If some required missing, mark partial
-                required_ids = [q.get("question_id") for q in questionnaire.get("questions", []) if q.get("required", True)]
+                required_ids = [
+                    q.get("question_id")
+                    for q in questionnaire.get("questions", [])
+                    if q.get("required", True)
+                ]
                 if not all(qid in answers for qid in required_ids):
                     result_status = "partially_collected"
                 payload = {
@@ -662,32 +767,56 @@ Examples:
                     f"We have reached the end of the questionnaire. Status: {result_status}. "
                     f"Submission: {submit_result.get('status') or submit_result.get('error')}"
                 )
-                return self.create_response(content=content, recipient_id=message.sender_id, message_type=MessageType.AGENT_RESPONSE, session_id=message.session_id, conversation_id=message.conversation_id)
+                return self.create_response(
+                    content=content,
+                    recipient_id=message.sender_id,
+                    message_type=MessageType.AGENT_RESPONSE,
+                    session_id=message.session_id,
+                    conversation_id=message.conversation_id,
+                )
             # Ask next question
             state["current_qid"] = next_q.get("question_id")
             await self._save_state(state)
             q_prompt = self._format_question_prompt(next_q)
             # Optionally use LLM to phrase better (gated by config)
             if self.llm_service and self.enable_llm_prompt_rewrite:
-                llm_out = await self.llm_service.generate_response(q_prompt, context={"conversation_history": []}, system_message=self.get_system_message_for_llm(context={}))
+                llm_out = await self.llm_service.generate_response(
+                    q_prompt,
+                    context={"conversation_history": []},
+                    system_message=self.get_system_message_for_llm(context={}),
+                )
                 q_prompt = llm_out or q_prompt
-            return self.create_response(content=q_prompt, recipient_id=message.sender_id, message_type=MessageType.AGENT_RESPONSE, session_id=message.session_id, conversation_id=message.conversation_id)
+            return self.create_response(
+                content=q_prompt,
+                recipient_id=message.sender_id,
+                message_type=MessageType.AGENT_RESPONSE,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id,
+            )
 
         # We have a current question and a user answer
         # First try standard parsing
         ok, parsed_answer, error_msg = self._validate_and_parse_answer(current_q, user_text)
-        
+
         # If standard parsing failed and natural language parsing is enabled, try LLM extraction
         if not ok and self.enable_natural_language_parsing and self.llm_service:
-            llm_ok, llm_answer, llm_error = await self._extract_answer_with_llm(current_q, user_text)
+            llm_ok, llm_answer, llm_error = await self._extract_answer_with_llm(
+                current_q, user_text
+            )
             if llm_ok:
                 ok, parsed_answer, error_msg = True, llm_answer, ""
-        
+
         if not ok:
             # Re-ask with guidance
             guidance = error_msg or "Please provide a valid answer."
             q_prompt = self._format_question_prompt(current_q)
-            return self.create_response(content=f"{guidance}\n{q_prompt}", recipient_id=message.sender_id, message_type=MessageType.AGENT_RESPONSE, session_id=message.session_id, conversation_id=message.conversation_id)
+            return self.create_response(
+                content=f"{guidance}\n{q_prompt}",
+                recipient_id=message.sender_id,
+                message_type=MessageType.AGENT_RESPONSE,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id,
+            )
 
         # Optional LLM sufficiency check for free-text answers
         try:
@@ -720,7 +849,11 @@ Examples:
         if next_q is None:
             # End
             result_status = "successfully_collected"
-            required_ids = [q.get("question_id") for q in questionnaire.get("questions", []) if q.get("required", True)]
+            required_ids = [
+                q.get("question_id")
+                for q in questionnaire.get("questions", [])
+                if q.get("required", True)
+            ]
             if not all(qid in answers for qid in required_ids):
                 result_status = "partially_collected"
             payload = {
@@ -736,17 +869,32 @@ Examples:
                 f"Thanks, that's all I needed. Status: {result_status}. "
                 f"Submission: {submit_result.get('status') or submit_result.get('error')}"
             )
-            return self.create_response(content=content, recipient_id=message.sender_id, message_type=MessageType.AGENT_RESPONSE, session_id=message.session_id, conversation_id=message.conversation_id)
+            return self.create_response(
+                content=content,
+                recipient_id=message.sender_id,
+                message_type=MessageType.AGENT_RESPONSE,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id,
+            )
         else:
             # Ask the next question
             state["current_qid"] = next_q.get("question_id")
             await self._save_state(state)
             q_prompt = self._format_question_prompt(next_q)
             if self.llm_service and self.enable_llm_prompt_rewrite:
-                llm_out = await self.llm_service.generate_response(q_prompt, context={"conversation_history": []}, system_message=self.get_system_message_for_llm(context={}))
+                llm_out = await self.llm_service.generate_response(
+                    q_prompt,
+                    context={"conversation_history": []},
+                    system_message=self.get_system_message_for_llm(context={}),
+                )
                 q_prompt = llm_out or q_prompt
-            return self.create_response(content=q_prompt, recipient_id=message.sender_id, message_type=MessageType.AGENT_RESPONSE, session_id=message.session_id, conversation_id=message.conversation_id)
-
+            return self.create_response(
+                content=q_prompt,
+                recipient_id=message.sender_id,
+                message_type=MessageType.AGENT_RESPONSE,
+                session_id=message.session_id,
+                conversation_id=message.conversation_id,
+            )
 
     async def process_message_stream(self, message: AgentMessage, context: ExecutionContext = None):
         """Simple streaming wrapper: processes message and yields one chunk."""

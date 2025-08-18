@@ -5,4 +5,4 @@ Workflow persistence backends for ambivo_agents.
 
 from .sqlite_backend import SQLiteWorkflowPersistence
 
-__all__ = ['SQLiteWorkflowPersistence']
+__all__ = ["SQLiteWorkflowPersistence"]
