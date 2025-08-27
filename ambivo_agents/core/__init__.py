@@ -1,5 +1,6 @@
 # ambivo_agents/core/__init__.py
 from .base import (
+    AgentContext,
     AgentMessage,
     AgentRole,
     AgentSession,
@@ -16,6 +17,7 @@ from .workflow import AmbivoWorkflow, WorkflowBuilder, WorkflowPatterns, Workflo
 from .docker_shared import DockerSharedManager, get_shared_manager, reset_shared_manager
 
 __all__ = [
+    "AgentContext",
     "AgentRole",
     "MessageType",
     "AgentMessage",
