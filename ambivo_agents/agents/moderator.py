@@ -88,6 +88,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     - code_executor: Writing and executing Python/bash code, programming tasks, debugging
     - web_search: Finding information online, research queries, current events, fact-checking
     - knowledge_base: Document storage, retrieval, semantic search, document ingestion
+    - knowledge_synthesis: Multi-source information synthesis for comprehensive answers when query doesn't clearly fit single agent
     - media_editor: Video/audio processing and conversion using FFmpeg tools
     - youtube_download: Downloading content from YouTube (video/audio formats)
     - web_scraper: Extracting data from websites and web crawling operations
@@ -175,6 +176,8 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
             if self.capabilities.get("enable_knowledge_base", False):
                 enabled.append("knowledge_base")
+            if self.capabilities.get("enable_knowledge_synthesis", False):
+                enabled.append("knowledge_synthesis")
             if self.capabilities.get("enable_web_search", False):
                 enabled.append("web_search")
             if self.capabilities.get("enable_code_execution", False):
@@ -206,6 +209,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         # Double-check against capabilities config
         capability_map = {
             "knowledge_base": "enable_knowledge_base",
+            "knowledge_synthesis": "enable_knowledge_synthesis",
             "web_search": "enable_web_search",
             "code_executor": "enable_code_execution",
             "media_editor": "enable_media_editor",
@@ -236,6 +240,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 AssistantAgent,
                 CodeExecutorAgent,
                 KnowledgeBaseAgent,
+                KnowledgeSynthesisAgent,
                 MediaEditorAgent,
                 WebScraperAgent,
                 WebSearchAgent,
@@ -259,6 +264,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             for agent_type, module_path in [
                 ("assistant", ".assistant"),
                 ("knowledge_base", ".knowledge_base"),
+                ("knowledge_synthesis", ".knowledge_synthesis"),
                 ("web_search", ".web_search"),
                 ("code_executor", ".code_executor"),
                 ("media_editor", ".media_editor"),
@@ -277,6 +283,10 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                         from .knowledge_base import KnowledgeBaseAgent
 
                         agent_imports["knowledge_base"] = KnowledgeBaseAgent
+                    elif agent_type == "knowledge_synthesis":
+                        from .knowledge_synthesis import KnowledgeSynthesisAgent
+
+                        agent_imports["knowledge_synthesis"] = KnowledgeSynthesisAgent
                     elif agent_type == "web_search":
                         from .web_search import WebSearchAgent
 
@@ -318,6 +328,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             # Use the imported classes
             AssistantAgent = agent_imports.get("assistant")
             KnowledgeBaseAgent = agent_imports.get("knowledge_base")
+            KnowledgeSynthesisAgent = agent_imports.get("knowledge_synthesis")
             WebSearchAgent = agent_imports.get("web_search")
             CodeExecutorAgent = agent_imports.get("code_executor")
             MediaEditorAgent = agent_imports.get("media_editor")
@@ -335,6 +346,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
         agent_classes = {
             "knowledge_base": KnowledgeBaseAgent,
+            "knowledge_synthesis": KnowledgeSynthesisAgent,
             "web_search": WebSearchAgent,
             "code_executor": CodeExecutorAgent,
             "media_editor": MediaEditorAgent,
@@ -595,6 +607,29 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     "query",
                 ],
                 "priority": 2,
+            },
+            "knowledge_synthesis": {
+                "keywords": [
+                    "synthesize",
+                    "combine information",
+                    "multiple sources",
+                    "comprehensive answer",
+                    "research thoroughly",
+                ],
+                "patterns": [
+                    r"(?:synthesize|combine|gather)\s+(?:information|data|knowledge)",
+                    r"(?:research|investigate)\s+(?:thoroughly|comprehensively)",
+                    r"(?:get|provide)\s+(?:comprehensive|detailed)\s+(?:information|answer)",
+                    r"(?:check|search)\s+(?:multiple|all)\s+sources",
+                ],
+                "indicators": [
+                    "comprehensive",
+                    "thorough",
+                    "multiple",
+                    "synthesis",
+                    "detailed",
+                ],
+                "priority": 3,
             },
             "web_search": {
                 "keywords": [
@@ -932,6 +967,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         - Route to youtube_download for: YouTube URLs, video/audio downloads
         - Route to media_editor for: video/audio processing, conversion, editing
         - Route to knowledge_base for: document storage, semantic search, Q&A, file ingestion to knowledge base (when "knowledge base", "knowledgebase", or "kb" is mentioned)
+        - Route to knowledge_synthesis for: queries that don't clearly fit a single agent, need comprehensive multi-source answers, or require synthesis of information
         - Route to web_scraper for: data extraction, crawling websites
         - Route to analytics for: CSV/Excel files, data analysis, SQL queries, charts, DuckDB, statistics
         - Route to code_executor for: code execution, programming tasks

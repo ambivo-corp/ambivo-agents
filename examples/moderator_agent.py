@@ -50,7 +50,7 @@ class SimpleModeratorTest:
             ]
 
         self.enabled_agents = enabled_agents
-        self.moderator = None
+        self.moderator: ModeratorAgent | None = None  # Type hint for IDE
         self.context = None
 
     async def setup(self):
