@@ -75,7 +75,6 @@ class IntelligentConversationSystem:
         self.moderator, self.context = KnowledgeSynthesisAgent.create(
             user_id=self.user_id,
             config=self.config,
-            auto_configure=True,
             quality_threshold=self.quality_threshold,
             max_iterations=3,
             enable_auto_scraping=True,
@@ -245,9 +244,9 @@ class IntelligentConversationSystem:
         print("\n🔄 Processing your query...")
         print("  1️⃣ Analyzing query to determine optimal search strategy...")
         
-        result = await self.moderator.process_message(
+        result = await self.moderator.process_with_quality_assessment(
             message,
-            user_preferences=user_preferences
+            user_preferences
         )
         
         # Display progress information

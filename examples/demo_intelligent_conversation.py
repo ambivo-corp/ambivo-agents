@@ -84,7 +84,6 @@ class ConversationDemo:
         # Create enhanced moderator
         self.moderator, self.context = KnowledgeSynthesisAgent.create(
             user_id=self.user_id,
-            auto_configure=True,
             quality_threshold=QualityLevel.GOOD,
             max_iterations=3,
             enable_auto_scraping=True,
@@ -122,8 +121,8 @@ class ConversationDemo:
         start_time = datetime.now()
         
         try:
-            # Process the query
-            result = await self.moderator.process_message(query, user_preferences=user_preferences)
+            # Process the query using the process_with_quality_assessment method directly
+            result = await self.moderator.process_with_quality_assessment(query, user_preferences)
             
             end_time = datetime.now()
             processing_time = (end_time - start_time).total_seconds()

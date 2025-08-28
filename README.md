@@ -75,6 +75,86 @@ async def main():
 asyncio.run(main())
 ```
 
+### KnowledgeSynthesisAgent Example
+
+The **KnowledgeSynthesisAgent** combines multiple knowledge sources with quality assessment:
+
+```python
+from ambivo_agents.agents.knowledge_synthesis import KnowledgeSynthesisAgent
+from ambivo_agents.agents.response_quality_assessor import QualityLevel
+import asyncio
+
+async def main():
+    # Create synthesis agent directly (NOT through ModeratorAgent)
+    synthesis_agent, context = KnowledgeSynthesisAgent.create(
+        user_id="researcher",
+        quality_threshold=QualityLevel.GOOD,
+        max_iterations=3,
+        enable_auto_scraping=True
+    )
+    
+    print(f"Session: {context.session_id}")
+    
+    # Multi-source synthesis examples using process_with_quality_assessment
+    response1 = await synthesis_agent.process_with_quality_assessment(
+        "search across knowledge bases: kb1, kb2 for: AI trends"
+    )
+    
+    response2 = await synthesis_agent.process_with_quality_assessment(
+        "prioritize web search - latest developments in robotics 2025"
+    )
+    
+    response3 = await synthesis_agent.process_with_quality_assessment(
+        "comprehensive search - research blockchain technology"
+    )
+    
+    # Check quality assessment
+    print(f"Quality: {response1.get('quality_assessment', {}).get('quality_level', 'unknown')}")
+    print(f"Sources: {response1.get('quality_assessment', {}).get('sources_used', [])}")
+    
+    # Cleanup
+    await synthesis_agent.cleanup_session()
+
+asyncio.run(main())
+```
+
+### Simple KnowledgeSynthesisAgent with Specific Knowledge Bases
+
+For targeted knowledge base queries with automatic collection detection:
+
+```python
+from ambivo_agents.agents.knowledge_synthesis import KnowledgeSynthesisAgent
+import asyncio
+
+async def simple_example():
+    # Setup - Create agent and configure knowledge bases
+    agent, context = KnowledgeSynthesisAgent.create(user_id="user123")
+    agent.update_context_metadata(available_knowledge_bases=[
+        'research_trends_in_cryptocurrency_20250816_193439',
+        'research_trends_in_robotics_tech_2025_20250812_172007'
+    ])
+    agent._load_available_collections()  # Required after setting knowledge bases
+    
+    try:
+        # Method 1: Full quality assessment (recommended)
+        result = await agent.process_with_quality_assessment(
+            "What are cryptocurrency trends?"
+        )
+        print(f"Response: {result['response']}")
+        print(f"Quality: {result['quality_assessment']['quality_level']}")
+        print(f"Sources: {result['quality_assessment']['sources_used']}")
+        
+        # Method 2: Simple chat interface
+        response = await agent.chat("Tell me about robotics developments")
+        print(f"Chat response: {response}")
+        
+    finally:
+        # Always cleanup
+        await agent.cleanup_session()
+
+asyncio.run(simple_example())
+```
+
 ### Command Line Usage
 
 ```bash
@@ -163,6 +243,311 @@ await agent.cleanup_session()
 - ✨ **Smart Skill Routing** - Assigned skills are checked first, then falls back to normal agent routing
 - ✨ **Unified Interface** - Single agent that can handle both assigned skills and general orchestration
 - 🎯 **Use Cases**: Custom integrations with existing agent orchestration, priority skill handling
+
+### KnowledgeSynthesisAgent 🧠
+**Advanced Multi-Source Orchestrator with Quality Assessment**
+
+**🚨 IMPORTANT**: KnowledgeSynthesisAgent is **NOT** a specialized agent that gets routed to by ModeratorAgent. It **IS** an enhanced ModeratorAgent that you use **directly** as your primary orchestrator.
+
+**Key Capabilities:**
+- 🔗 **Multi-Source Synthesis** - Intelligently combines knowledge bases, web search, and web scraping
+- 📊 **Quality Assessment** - Built-in ResponseQualityAssessor evaluates and improves responses
+- 🎯 **Adaptive Strategy** - Automatically selects optimal search strategy based on query analysis
+- 📚 **Multiple Knowledge Base Support** - Query across multiple knowledge bases simultaneously
+- 🌐 **Web Search Integration** - Supplements knowledge with real-time web search results
+- 🕷️ **Smart Web Scraping** - Automatically scrapes relevant URLs for deeper information
+- ⚡ **Iterative Improvement** - Refines responses until quality threshold is met
+- 🧠 **Intelligent Routing** - Inherits all ModeratorAgent capabilities plus synthesis features
+
+**Architecture:**
+```
+KnowledgeSynthesisAgent extends ModeratorAgent
+├── Inherits: Agent routing, session management, workflows
+└── Adds: Multi-source synthesis, quality assessment, intelligent orchestration
+```
+
+**Key Differences:**
+| Feature | ModeratorAgent | KnowledgeSynthesisAgent |
+|---------|----------------|------------------------|
+| **Purpose** | Routes queries to specialized agents | Multi-source information synthesis |
+| **Response** | Simple agent routing | Quality-assessed, synthesized responses |
+| **Sources** | Single agent per query | Multiple sources per query |
+| **Quality Control** | Basic agent responses | Built-in quality assessment & iteration |
+| **Use Case** | General orchestration | Research & information synthesis |
+| **Usage Pattern** | Router/orchestrator | Direct primary agent |
+
+**❌ Wrong Usage Pattern:**
+```python
+# DON'T DO THIS - Won't work!
+moderator = ModeratorAgent.create(...)
+# Expecting to route to KnowledgeSynthesisAgent - this fails
+response = await moderator.chat("synthesize information...")  # ❌ Fails
+```
+
+**✅ Correct Usage Pattern:**
+```python
+# DO THIS - Works correctly!
+from ambivo_agents.agents.knowledge_synthesis import KnowledgeSynthesisAgent
+
+# Use KnowledgeSynthesisAgent directly as your orchestrator
+synthesis_agent, context = KnowledgeSynthesisAgent.create(
+    user_id="user123",
+    quality_threshold=QualityLevel.GOOD,
+    max_iterations=3,
+    enable_auto_scraping=True
+)
+
+# Multi-knowledge base query
+response = await synthesis_agent.process_with_quality_assessment(
+    "search across knowledge bases: kb1, kb2 for: AI trends"
+)
+
+# Web-supplemented query  
+response = await synthesis_agent.process_with_quality_assessment(
+    "prioritize web search - latest developments in robotics 2025"
+)
+
+# Comprehensive research
+response = await synthesis_agent.process_with_quality_assessment(
+    "comprehensive search - research blockchain technology trends"
+)
+
+await synthesis_agent.cleanup_session()
+```
+
+**Quality-Assessed Response Format:**
+```python
+{
+    'success': True,
+    'response': 'Synthesized answer from multiple sources...',
+    'quality_assessment': {
+        'quality_level': 'good',           # excellent|good|fair|poor|unacceptable
+        'confidence_score': 0.85,         # 0.0 - 1.0
+        'sources_used': ['knowledge_base', 'web_search'],
+        'strengths': ['Comprehensive coverage', 'Current information'],
+        'weaknesses': ['Could use more specific examples']
+    },
+    'query_analysis': {
+        'query_type': 'current_events',
+        'strategy_used': 'web_first',
+        'sources_consulted': 2
+    },
+    'metadata': {
+        'iterations': 1,
+        'total_sources_consulted': 2,
+        'user_preferences': {}
+    }
+}
+```
+
+**Query Patterns:**
+- `"search across knowledge bases: kb1, kb2, kb3 for: [query]"` - Multi-KB search
+- `"prioritize web search - [query]"` - Web-first strategy
+- `"check knowledge base first - [query]"` - KB-first strategy  
+- `"comprehensive search - [query]"` - Use all sources
+- `"synthesize information about [topic]"` - Full synthesis mode
+
+**🎯 Use Cases:**
+- Research across multiple knowledge bases
+- Web-supplemented knowledge queries
+- Quality-assured information synthesis
+- Multi-source fact checking
+- Comprehensive topic research
+
+**📋 Configuration:**
+- **Enabled by default** (inherits from ModeratorAgent)
+- **Environment Control**: `AMBIVO_AGENTS_MODERATOR_ENABLED=true/false`
+- **No separate enablement needed** - uses existing ModeratorAgent configuration
+
+---
+
+## 📚 Multi-Knowledge Base Processing Logic
+
+Understanding how multiple knowledge bases are handled across different agents:
+
+### **ModeratorAgent - Simple Routing**
+```
+User Query → Intent Analysis → Route to KnowledgeBaseAgent → Return Result
+```
+- **No multi-KB logic** - simply routes to KnowledgeBaseAgent
+- **Single hop** - passes query through without modification
+- **Fallback routing** - falls back to AssistantAgent if KB agent fails
+
+### **KnowledgeBaseAgent - Advanced Multi-KB Selection**
+```
+Query → Normalize KB List → Score KBs → Select Top 2 → Query Each → Pick Best by Source Count → Return
+```
+
+**🔍 Detailed Flow (Single-Pass, No Iteration):**
+
+**Step 1: KB Input Normalization**
+```python
+# Accepts multiple input formats:
+kb_names = ["kb1", "kb2"]                           # List of strings
+kb_names = [{"kb_name": "kb1", "description": "..."}, ...] # List of objects
+kb_names = '["kb1", "kb2"]'                         # JSON string
+
+# Normalizes to: [{"kb_name": "kb1", "description": None}, ...]
+```
+
+**Step 2: KB Scoring Algorithm**
+```python
+def score_kb_for_query(kb_entry, user_message, topics):
+    # Extract meaningful keywords (>3 chars, no stopwords)
+    keywords = extract_keywords(user_message + topics)
+    
+    score = 0.0
+    kb_text = f"{kb_name} {kb_description}".lower()
+    
+    # Base scoring: keyword overlap
+    for keyword in keywords:
+        if keyword in kb_text:
+            score += 1.0
+    
+    # Domain bonuses
+    if "legal" in kb_text and legal_keywords_present:
+        score += 1.5
+    if "finance" in kb_text and finance_keywords_present:  
+        score += 1.0
+    
+    return score
+
+# Example scoring:
+# Query: "blockchain technology trends"
+# - crypto_research_kb: score = 2.0 (matches "blockchain", "technology")
+# - legal_documents_kb: score = 0.0 (no matches)
+# - tech_trends_kb: score = 2.0 (matches "technology", "trends")
+```
+
+**Step 3: KB Selection (Performance Optimization)**
+```python
+# Sort by score and select top 2 candidates
+scored_kbs = [(kb, score) for kb, score in kb_scores]
+scored_kbs.sort(key=lambda x: x[1], reverse=True)
+
+# Select top 2 with positive scores
+top_kbs = [kb for kb, score in scored_kbs if score > 0][:2]
+
+# Fallback: use first 2 if no positive scores
+if not top_kbs:
+    top_kbs = original_kb_list[:2]
+```
+
+**Step 4: Multi-KB Querying (Single Pass - No Iteration Loop)**
+```python
+async def query_multiple_kbs(selected_kbs, query):
+    results = {}
+    best_answer = None
+    best_source_count = -1
+    
+    # Process each KB exactly once (no retries or iterations)
+    for kb in selected_kbs:  # Usually 2 KBs
+        # Single attempt per KB
+        result = await query_single_kb(kb.name, query)
+        results[kb.name] = result
+        
+        if result.success:
+            source_count = len(result.source_details)
+            # Winner = KB with most document sources
+            if source_count > best_source_count:
+                best_answer = result.answer
+                best_source_count = source_count
+                best_kb = kb.name
+    
+    return best_answer, full_metadata
+```
+
+**Step 5: Best Answer Selection**
+- **Criteria**: Number of source documents (not quality assessment)
+- **Winner takes all**: Returns single best answer (no synthesis)
+- **Metadata**: Includes results from all queried KBs
+
+**🚨 Important Characteristics:**
+- ❌ **No iteration loops** - each KB queried exactly once
+- ❌ **No quality assessment** - purely source count based
+- ❌ **No answer synthesis** - returns single best answer
+- ✅ **Performance optimized** - maximum 2 KBs processed
+- ✅ **Deterministic** - same query always produces same KB selection
+
+### **KnowledgeSynthesisAgent - Multi-Source with Quality Iteration**
+```
+Query → Analyze Strategy → Gather from All Sources → Quality Assessment → [Iterate if Needed] → Synthesize Final Answer
+```
+
+**🔄 Detailed Flow (Iterative with Quality Control):**
+
+**Step 1: Query Analysis & Strategy**
+```python
+analysis = await analyze_query(query)
+# Determines: knowledge_first, web_first, parallel, or adaptive strategy
+# Based on: query type, time sensitivity, complexity
+```
+
+**Step 2: Multi-Source Gathering**
+```python
+# Parallel execution across all source types
+sources = await asyncio.gather(
+    gather_from_knowledge_base(query),    # Routes to KnowledgeBaseAgent
+    gather_from_web_search(query),        # Routes to WebSearchAgent  
+    gather_from_web_scraping(query)       # Routes to WebScraperAgent
+)
+```
+
+**Step 3: Quality Assessment & Iteration Loop**
+```python
+for iteration in range(max_iterations):  # Usually 3 iterations max
+    assessment = await quality_assessor.assess_response(sources, query)
+    
+    # Check if quality meets threshold
+    if assessment.quality_level >= quality_threshold:
+        break  # Success - exit iteration loop
+        
+    # If quality insufficient, gather additional sources
+    if assessment.needs_additional_sources:
+        for suggested_source in assessment.suggested_sources:
+            additional_response = await gather_from_source(suggested_source, query)
+            sources.append(additional_response)
+
+# Final synthesis of all gathered information
+final_answer = await synthesize_responses(sources, query)
+```
+
+**Step 4: Quality-Driven Source Integration**
+- **Quality metrics**: accuracy, completeness, relevance, currency
+- **Iterative refinement**: adds sources until quality threshold met
+- **Intelligent synthesis**: combines information from all sources
+- **Source attribution**: tracks which sources contributed to answer
+
+### **Comparison Summary**
+
+| **Aspect** | **ModeratorAgent** | **KnowledgeBaseAgent** | **KnowledgeSynthesisAgent** |
+|------------|-------------------|------------------------|----------------------------|
+| **Multi-KB Handling** | None (routes only) | Advanced selection logic | Routes to KB + other sources |
+| **KB Selection** | No selection | Score-based top 2 selection | Uses KB agent's selection |
+| **Iteration** | No | No (single-pass) | Yes (quality-driven) |
+| **Answer Selection** | First response | Most sources wins | Quality assessment |
+| **Synthesis** | None | None (single answer) | Multi-source synthesis |
+| **Performance** | Fast (single route) | Fast (max 2 KBs) | Slower (comprehensive) |
+| **Quality Control** | Basic | Source count based | Advanced quality assessment |
+| **Use Case** | General routing | Multi-KB queries | Research & comprehensive answers |
+
+### **When to Use Which Agent**
+
+**Use ModeratorAgent when:**
+- Simple routing to appropriate agents
+- General-purpose applications
+- Fast response times needed
+
+**Use KnowledgeBaseAgent directly when:**  
+- Specifically need to query multiple knowledge bases
+- Want deterministic KB selection logic
+- Need metadata about which KBs were used
+
+**Use KnowledgeSynthesisAgent when:**
+- Need comprehensive, high-quality answers
+- Want information from multiple source types
+- Quality assessment and iteration is important
+- Research-oriented tasks requiring synthesis
 
 ### Database Agent (Optional)
 **Best for: Database connections, data exploration, and basic queries**

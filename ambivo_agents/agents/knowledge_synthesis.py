@@ -85,12 +85,29 @@ Quality Standards:
             'web_scrape': 30
         })
         
+        # Available KB collections (will be populated from metadata)
+        self.available_collections = []
+        
         # Initialize parent ModeratorAgent
         super().__init__(**kwargs)
         
         # Initialize response quality assessor
         self.assessor = None
         self.assessor_initialized = False
+        
+        # Load available collections from context metadata if available
+        self._load_available_collections()
+    
+    def _load_available_collections(self):
+        """Load available KB collections from context metadata"""
+        if hasattr(self, 'context') and self.context:
+            metadata = self.context.metadata or {}
+            self.available_collections = metadata.get('available_knowledge_bases', [])
+            
+            if self.available_collections:
+                self.logger.info(f"Loaded {len(self.available_collections)} collections from metadata")
+            else:
+                self.logger.info("No collections found in metadata")
     
     async def _ensure_assessor(self):
         """Ensure the response assessor is initialized"""
@@ -102,6 +119,103 @@ Quality Standards:
                 context=self.context
             )
             self.assessor_initialized = True
+    
+    def detect_target_collections(self, query: str) -> List[Tuple[str, float]]:
+        """Intelligently detect which KB collections to target based on query content
+        
+        This method analyzes the query and matches it against available collection names
+        by extracting keywords from the collection names themselves.
+        """
+        query_lower = query.lower()
+        collection_scores = {}
+        
+        # Extract meaningful words from query (remove common stop words)
+        stop_words = {'what', 'is', 'the', 'of', 'in', 'for', 'and', 'or', 'to', 'a', 'an', 'about', 'tell', 'me', 'are', 'how', "what's"}
+        query_words = set(word for word in query_lower.replace("?", "").split() if word not in stop_words and len(word) > 2)
+        
+        for collection in self.available_collections:
+            score = 0.0
+            collection_lower = collection.lower()
+            
+            # Extract meaningful parts from collection name
+            # Example: "research_trends_in_cryptocurrency_20250816_193439" -> cryptocurrency, trends, research
+            collection_parts = collection_lower.replace('_', ' ').split()
+            
+            # Filter out dates and common words
+            meaningful_parts = []
+            for part in collection_parts:
+                # Skip dates (8+ digit numbers) and common prefixes
+                if not part.isdigit() and part not in ['research', 'trends', 'in', 'the', 'of'] and len(part) > 2:
+                    meaningful_parts.append(part)
+            
+            # Calculate relevance score based on matches
+            for query_word in query_words:
+                for collection_part in meaningful_parts:
+                    # Check for exact match or substring match
+                    if query_word == collection_part:
+                        score += 1.0  # Exact match gets full point
+                    elif query_word in collection_part or collection_part in query_word:
+                        score += 0.5  # Partial match gets half point
+                    
+                    # Check for related terms
+                    # Cryptocurrency related
+                    if (query_word in ['crypto', 'bitcoin', 'blockchain', 'defi', 'nft', 'ethereum', 'token'] and 
+                        collection_part in ['cryptocurrency', 'crypto', 'blockchain']):
+                        score += 0.7
+                    # Robotics related  
+                    elif (query_word in ['robot', 'robots', 'robotic', 'automation', 'ai', 'ml', 'artificial', 'intelligence'] and
+                          collection_part in ['robotics', 'robot', 'automation']):
+                        score += 0.7
+                    # Tech/Market related
+                    elif (query_word in ['technology', 'tech', 'market', 'industry', 'forecast', 'analysis'] and
+                          collection_part in ['tech', 'technology', 'market']):
+                        score += 0.7
+            
+            # Normalize score to 0-1 range
+            if score > 0:
+                normalized_score = min(1.0, score / max(len(query_words), 1))
+                collection_scores[collection] = normalized_score
+        
+        # Sort by score and return collections with confidence > 0.2
+        sorted_collections = sorted(collection_scores.items(), key=lambda x: x[1], reverse=True)
+        return [(col, score) for col, score in sorted_collections if score > 0.2]
+    
+    def optimize_search_query(self, original_query: str) -> str:
+        """Optimize search query for better results"""
+        query = original_query.lower()
+        
+        # Remove redundant terms
+        redundant_terms = ['latest', 'current', 'recent', 'new', 'tell me about', 'what is', "what's", 'happening with', "what are"]
+        for term in redundant_terms:
+            query = query.replace(term, '')
+        
+        # Expand abbreviations
+        expansions = {
+            ' ai ': ' artificial intelligence ',
+            ' ml ': ' machine learning ',
+            ' dl ': ' deep learning ',
+            ' nft ': ' non-fungible token ',
+            ' defi ': ' decentralized finance '
+        }
+        for abbr, expansion in expansions.items():
+            query = query.replace(abbr, expansion)
+        
+        # Add time context for trend queries
+        if any(word in query for word in ['trend', 'development', 'advancement', 'progress', 'emerging']):
+            if '2024' not in query and '2025' not in query:
+                query += ' 2025'
+        
+        # Split conflicting concepts
+        if ' and ' in query:
+            parts = query.split(' and ')
+            if len(parts) == 2 and len(parts[0].split()) > 2 and len(parts[1].split()) > 2:
+                # Two distinct concepts - take the first one for focused search
+                query = parts[0].strip()
+        
+        # Clean up extra spaces
+        query = ' '.join(query.split())
+        
+        return query.strip()
     
     async def analyze_query(self, query: str) -> QueryAnalysis:
         """Analyze user query to determine optimal search strategy"""
@@ -152,35 +266,100 @@ Please provide analysis in JSON format:
         )
     
     async def gather_from_knowledge_base(self, query: str) -> Optional[SourceResponse]:
-        """Gather information from knowledge base"""
+        """Gather information from knowledge bases - queries multiple KBs and aggregates results"""
         try:
-            # Check if the query should target a specific collection
-            # For tech market queries, use the research trends collection
-            if any(term in query.lower() for term in ['tech market', 'technology trend', 'market trend', 'significant trend']):
-                kb_query = f"collection:research_trends_in_tech_market_2025_20250814_172410 {query}"
-            else:
-                kb_query = query
+            # Reload collections in case they were updated after initialization
+            self._load_available_collections()
             
-            # Route to knowledge base agent
-            kb_response = await self._route_to_agent_with_context('knowledge_base', kb_query)
+            if not self.available_collections:
+                self.logger.info("No knowledge bases available, trying general query")
+                # Try a general query anyway
+                kb_response = await self._route_to_agent_with_context('knowledge_base', query)
+                if (kb_response.success and kb_response.content and 
+                    "Please specify: `Query [kb_name]:" not in kb_response.content):
+                    return SourceResponse(
+                        source=ResponseSource.KNOWLEDGE_BASE,
+                        content=kb_response.content,
+                        confidence=0.5,
+                        metadata={'original_query': query, 'kb_used': 'general'}
+                    )
+                return None
             
-            if kb_response.success and kb_response.content and kb_response.content.strip():
-                return SourceResponse(
-                    source=ResponseSource.KNOWLEDGE_BASE,
-                    content=kb_response.content,
-                    confidence=0.9,  # High confidence for KB
-                    metadata={
-                        'agent_response': kb_response,
-                        'collection_used': 'research_trends_in_tech_market_2025_20250814_172410' if 'collection:' in kb_query else 'default',
-                        'original_query': query,
-                        'kb_query_used': kb_query,
-                        'content_length': len(kb_response.content)
-                    }
-                )
-            else:
-                self.logger.warning(f"Knowledge base returned no useful content for query: {query}")
-                if kb_response.content:
-                    self.logger.warning(f"Content preview: {kb_response.content[:100]}...")
+            # Detect which collections might be relevant based on query content
+            target_collections = self.detect_target_collections(query)
+            
+            # If no specific collections matched, query ALL available KBs
+            if not target_collections:
+                self.logger.info(f"No specific KB match, will query all {len(self.available_collections)} available KBs")
+                target_collections = [(kb, 0.5) for kb in self.available_collections]
+            
+            # Query multiple knowledge bases in parallel
+            all_kb_responses = []
+            kb_tasks = []
+            
+            for kb_name, confidence in target_collections:
+                self.logger.info(f"Querying KB: {kb_name} (relevance: {confidence:.2f})")
+                # Format query for the specific KB
+                kb_query = f"Query {kb_name}: {query}"
+                # Create async task for this KB query
+                kb_tasks.append(self._route_to_agent_with_context('knowledge_base', kb_query))
+            
+            # Execute all KB queries in parallel
+            if kb_tasks:
+                kb_results = await asyncio.gather(*kb_tasks, return_exceptions=True)
+                
+                # Process results
+                valid_responses = []
+                for i, result in enumerate(kb_results):
+                    kb_name, confidence = target_collections[i]
+                    
+                    if isinstance(result, Exception):
+                        self.logger.error(f"Error querying {kb_name}: {result}")
+                        continue
+                        
+                    if (result and result.success and result.content and 
+                        result.content.strip() and
+                        "Please specify: `Query [kb_name]:" not in result.content and
+                        "I can query knowledge bases, but I need to know which one" not in result.content):
+                        
+                        valid_responses.append({
+                            'kb_name': kb_name,
+                            'content': result.content,
+                            'confidence': confidence,
+                            'response': result
+                        })
+                        self.logger.info(f"Got valid response from {kb_name}")
+                    else:
+                        self.logger.warning(f"KB {kb_name} returned no useful content")
+                
+                # If we got valid responses, combine them
+                if valid_responses:
+                    # Combine content from all successful KBs
+                    combined_content = []
+                    sources_used = []
+                    avg_confidence = 0
+                    
+                    for resp in valid_responses:
+                        combined_content.append(f"**From {resp['kb_name']}:**\n{resp['content']}")
+                        sources_used.append(resp['kb_name'])
+                        avg_confidence += resp['confidence']
+                    
+                    avg_confidence = avg_confidence / len(valid_responses) if valid_responses else 0
+                    
+                    return SourceResponse(
+                        source=ResponseSource.KNOWLEDGE_BASE,
+                        content="\n\n---\n\n".join(combined_content),
+                        confidence=min(0.9, avg_confidence + 0.2),  # Boost confidence for multiple sources
+                        metadata={
+                            'kbs_queried': len(target_collections),
+                            'kbs_responded': len(valid_responses),
+                            'collections_used': sources_used,
+                            'original_query': query,
+                            'aggregated': True
+                        }
+                    )
+            
+            self.logger.warning(f"No knowledge bases returned useful content for query: {query}")
         except Exception as e:
             self.logger.error(f"Error querying knowledge base: {e}")
             import traceback
@@ -189,10 +368,15 @@ Please provide analysis in JSON format:
         return None
     
     async def gather_from_web_search(self, query: str) -> Optional[SourceResponse]:
-        """Gather information from web search"""
+        """Gather information from web search with query optimization"""
         try:
-            # Route to web search agent
-            search_response = await self._route_to_agent_with_context('web_search', query)
+            # Optimize the search query for better results
+            optimized_query = self.optimize_search_query(query)
+            if optimized_query != query:
+                self.logger.info(f"Optimized search query: '{query}' -> '{optimized_query}'")
+            
+            # Route to web search agent with optimized query
+            search_response = await self._route_to_agent_with_context('web_search', optimized_query)
             
             if search_response.success:
                 # Ensure we have content

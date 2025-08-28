@@ -176,8 +176,8 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
             if self.capabilities.get("enable_knowledge_base", False):
                 enabled.append("knowledge_base")
-            if self.capabilities.get("enable_knowledge_synthesis", False):
-                enabled.append("knowledge_synthesis")
+            # Knowledge synthesis is always enabled by default
+            enabled.append("knowledge_synthesis")
             if self.capabilities.get("enable_web_search", False):
                 enabled.append("web_search")
             if self.capabilities.get("enable_code_execution", False):
