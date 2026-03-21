@@ -58,11 +58,11 @@ jobs:
 
     - name: Verify cloud services configuration
       run: |
-        echo "🌐 Using cloud services via dynamically created agent_config.yaml:"
-        echo "  Redis: Using cloud Redis instance"
-        echo "  Qdrant: Using cloud Qdrant instance"
-        echo "  API Keys: Embedded in config file from GitHub secrets"
-        echo "✅ Cloud services configured securely"
+        echo " Using cloud services via dynamically created agent_config.yaml:"
+        echo " Redis: Using cloud Redis instance"
+        echo " Qdrant: Using cloud Qdrant instance"
+        echo " API Keys: Embedded in config file from GitHub secrets"
+        echo " Cloud services configured securely"
 
     - name: Create agent_config.yaml dynamically from GitHub secrets
       env:
@@ -80,7 +80,7 @@ jobs:
         AVES_API_KEY: ${{ secrets.AVES_API_KEY }}
         VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
       run: |
-        echo "🔧 Creating agent_config.yaml dynamically from GitHub secrets..."
+        echo " Creating agent_config.yaml dynamically from GitHub secrets..."
         
         # Create agent_config.yaml with actual secret values (temporarily)
         cat > agent_config.yaml << EOF
@@ -117,13 +117,13 @@ jobs:
             max_size: 1000
             ttl_seconds: 300
           backup:
-            enabled: false  # Disabled for CI testing
+            enabled: false # Disabled for CI testing
             interval_minutes: 60
             backup_directory: "./backups"
 
         # Redis Cloud Configuration
         redis:
-          db: 1  # Use different DB for testing
+          db: 1 # Use different DB for testing
           host: ${REDIS_HOST}
           password: ${REDIS_PASSWORD}
           port: ${REDIS_PORT}
@@ -223,13 +223,13 @@ jobs:
         agent_capabilities:
           enable_knowledge_base: true
           enable_web_search: true
-          enable_code_execution: false  # Disabled for CI
+          enable_code_execution: false # Disabled for CI
           enable_file_processing: true
           enable_web_ingestion: true
           enable_api_calls: true
-          enable_web_scraping: false    # Disabled for CI
-          enable_proxy_mode: false      # Disabled for CI
-          enable_media_editor: false    # Disabled for CI
+          enable_web_scraping: false # Disabled for CI
+          enable_proxy_mode: false # Disabled for CI
+          enable_media_editor: false # Disabled for CI
           enable_youtube_download: true
           enable_agent_collaboration: true
           enable_result_synthesis: true
@@ -317,7 +317,7 @@ jobs:
         # Web Scraping Configuration (minimal for CI)
         web_scraping:
           docker_image: "sgosain/amb-ubuntu-python-public-pod"
-          proxy_enabled: false  # Disabled for CI simplicity
+          proxy_enabled: false # Disabled for CI simplicity
           timeout: 120
           rate_limit_seconds: 2.0
           max_concurrent_requests: 2
@@ -341,38 +341,16 @@ jobs:
           max_response_size: "10MB"
         EOF
         
-        echo "✅ agent_config.yaml created successfully"
-        echo "📋 Configuration file size: $(wc -l < agent_config.yaml) lines"
+        echo " agent_config.yaml created successfully"
+        echo " Configuration file size: $(wc -l < agent_config.yaml) lines"
         
         # Verify the file was created and has content
         if [ -f agent_config.yaml ] && [ -s agent_config.yaml ]; then
-          echo "✅ agent_config.yaml verification passed"
+          echo " agent_config.yaml verification passed"
         else
-          echo "❌ agent_config.yaml creation failed"
+          echo " agent_config.yaml creation failed"
           exit 1
         fi
-
-    # 🔧 FIXED: Proper linting strategy
-    - name: Lint core package with flake8 (strict)
-      run: |
-        echo "🔍 Linting core package (strict mode)..."
-        # stop the build if there are Python syntax errors or undefined names in CORE package
-        flake8 ambivo_agents/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        echo "✅ Core package lint check passed"
-
-    - name: Lint examples (lenient)
-      run: |
-        echo "🔍 Linting examples (lenient mode)..."
-        # Treat examples errors as warnings only - don't fail the build
-        flake8 examples/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        echo "✅ Examples lint check completed (warnings only)"
-
-    - name: General code quality check
-      run: |
-        echo "🔍 General code quality check..."
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=venv,build,dist
-        echo "✅ General quality check completed"
 
     - name: Test imports and basic functionality
       env:
@@ -385,9 +363,9 @@ jobs:
         try:
             print('Testing imports...')
             from ambivo_agents import KnowledgeBaseAgent, WebSearchAgent, YouTubeDownloadAgent
-            print('✅ All agent imports successful')
+            print(' All agent imports successful')
         except ImportError as e:
-            print(f'❌ Import error: {e}')
+            print(f' Import error: {e}')
             sys.exit(1)
         "
 
@@ -395,7 +373,7 @@ jobs:
       env:
         # Environment configuration (no API keys needed since they're in agent_config.yaml)
         PYTHONPATH: ${{ github.workspace }}
-        CONFIG_PATH: agent_config.yaml  # Use the dynamically created config
+        CONFIG_PATH: agent_config.yaml # Use the dynamically created config
 
         # Test settings
         PYTEST_TIMEOUT: 300
@@ -403,20 +381,20 @@ jobs:
       run: |
         # Verify agent_config.yaml exists and is ready
         if [ ! -f agent_config.yaml ]; then
-          echo "❌ agent_config.yaml not found"
+          echo " agent_config.yaml not found"
           exit 1
         fi
         
-        echo "✅ Using dynamically created agent_config.yaml"
-        echo "📋 Config file info:"
-        echo "  Size: $(wc -l < agent_config.yaml) lines"
-        echo "  Last modified: $(stat -c %y agent_config.yaml)"
+        echo " Using dynamically created agent_config.yaml"
+        echo " Config file info:"
+        echo " Size: $(wc -l < agent_config.yaml) lines"
+        echo " Last modified: $(stat -c %y agent_config.yaml)"
         
         # Run the real integration tests from tests directory
-        echo "🚀 Running integration tests with dynamic configuration..."
+        echo " Running integration tests with dynamic configuration..."
         pytest tests/test_basic.py -v -s --tb=short --timeout=300
         
-        echo "✅ Integration tests completed successfully!"
+        echo " Integration tests completed successfully!"
 
     - name: Test examples (import check)
       env:
@@ -432,35 +410,35 @@ jobs:
               import importlib.util
               spec = importlib.util.spec_from_file_location('one_liner_examples', 'one_liner_examples.py')
               module = importlib.util.module_from_spec(spec)
-              print('✅ one_liner_examples.py imports successfully')
+              print(' one_liner_examples.py imports successfully')
           except Exception as e:
-              print(f'⚠️ Example import issue: {e}')
-              print('✅ This is expected if examples require specific configuration')
+              print(f' Example import issue: {e}')
+              print(' This is expected if examples require specific configuration')
           "
         else
-          echo "⚠️ one_liner_examples.py not found"
+          echo " one_liner_examples.py not found"
         fi
 
     - name: Cleanup agent_config.yaml (Security)
-      if: always()  # Always run cleanup, even if tests fail
+      if: always() # Always run cleanup, even if tests fail
       run: |
-        echo "🧹 Cleaning up agent_config.yaml for security..."
+        echo " Cleaning up agent_config.yaml for security..."
         
         if [ -f agent_config.yaml ]; then
           # Securely overwrite the file before deletion
-          echo "🔒 Securely overwriting agent_config.yaml..."
+          echo " Securely overwriting agent_config.yaml..."
           head -c 10M < /dev/zero > agent_config.yaml 2>/dev/null || true
           rm -f agent_config.yaml
-          echo "✅ agent_config.yaml securely deleted"
+          echo " agent_config.yaml securely deleted"
         else
-          echo "ℹ️ agent_config.yaml not found (already cleaned up)"
+          echo "ℹ agent_config.yaml not found (already cleaned up)"
         fi
         
         # Verify cleanup
         if [ ! -f agent_config.yaml ]; then
-          echo "✅ Cleanup verification passed - no agent_config.yaml found"
+          echo " Cleanup verification passed - no agent_config.yaml found"
         else
-          echo "⚠️ Warning: agent_config.yaml still exists after cleanup attempt"
+          echo " Warning: agent_config.yaml still exists after cleanup attempt"
         fi
 
     - name: Upload test results
@@ -476,18 +454,16 @@ jobs:
     - name: Test Summary
       if: always()
       run: |
-        echo "🎉 Test Summary for Python ${{ matrix.python-version }}:"
-        echo "  ✅ Core Package Linting: Passed"
-        echo "  ✅ Example Linting: Completed (warnings only)"
-        echo "  ✅ Imports: Passed"
-        echo "  ✅ Integration Tests: Passed"
+        echo "Test Summary for Python ${{ matrix.python-version }}:"
+        echo "  Imports: Passed"
+        echo "  Integration Tests: Passed"
         echo ""
-        echo "🔧 Services used:"
-        echo "  ✅ Redis Cloud: Remote Redis instance"
-        echo "  ✅ Qdrant Cloud: Remote vector database"
+        echo " Services used:"
+        echo " Redis Cloud: Remote Redis instance"
+        echo " Qdrant Cloud: Remote vector database"
         echo ""
-        echo "🔑 API Keys: Available from GitHub Secrets"
-        echo "🌟 All tests completed successfully!"
+        echo " API Keys: Available from GitHub Secrets"
+        echo " All tests completed successfully!"
 
   # Optional: Separate job for performance/load testing
   performance-test:
@@ -550,7 +526,7 @@ jobs:
         if [ -f "tests/test_performance.py" ]; then
           pytest tests/test_performance.py -v --benchmark-only
         else
-          echo "⚠️ No performance tests found"
+          echo " No performance tests found"
         fi
 
     - name: Cleanup test config

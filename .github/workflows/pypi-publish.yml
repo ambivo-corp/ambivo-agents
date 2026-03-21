@@ -3,10 +3,10 @@ name: Publish to PyPI
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags like v1.0.0, v1.0.0-beta, etc.
+      - 'v*' # Trigger on version tags like v1.0.0, v1.0.0-beta, etc.
   release:
     types: [published]
-  workflow_dispatch:  # Allow manual triggering
+  workflow_dispatch: # Allow manual triggering
     inputs:
       tag:
         description: 'Tag to publish (e.g., v1.0.0)'
@@ -54,21 +54,21 @@ jobs:
         echo "is_prerelease=true" >> $GITHUB_OUTPUT
         echo "install_cmd=pip install -i https://test.pypi.org/simple/ ambivo-agents==${TAG}" >> $GITHUB_OUTPUT
         
-        echo "🎯 Target: Test PyPI (Pre-release Testing)"
-        echo "🏷️ Version: ${TAG}"
-        echo "🌍 Environment: testpypi"
-        echo "🌐 Repository URL: https://test.pypi.org/legacy/"
+        echo " Target: Test PyPI (Pre-release Testing)"
+        echo " Version: ${TAG}"
+        echo " Environment: testpypi"
+        echo " Repository URL: https://test.pypi.org/legacy/"
 
     - name: Verify version tag
       run: |
         TAG="${{ steps.target.outputs.tag }}"
-        echo "🏷️ Publishing pre-release version: ${TAG}"
+        echo " Publishing pre-release version: ${TAG}"
         
         # Check if this is a valid pre-release version tag
         if [[ ${TAG} =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
-          echo "✅ Valid pre-release version tag detected"
+          echo " Valid pre-release version tag detected"
         else
-          echo "❌ Invalid version tag format: ${TAG}"
+          echo " Invalid version tag format: ${TAG}"
           echo "Expected format: v1.0.0-beta, v1.0.0-alpha, v1.0.0-rc1"
           exit 1
         fi
@@ -82,41 +82,41 @@ jobs:
         # Remove 'v' prefix for PyPI version check
         VERSION="${TAG#v}"
         
-        echo "🔍 Checking if version ${VERSION} already exists on Test PyPI..."
+        echo " Checking if version ${VERSION} already exists on Test PyPI..."
         
         # Check Test PyPI
         if pip index versions ${PACKAGE_NAME} --index-url https://test.pypi.org/simple/ 2>/dev/null | grep -q "${VERSION}"; then
-          echo "⚠️ Version ${VERSION} already exists on Test PyPI"
+          echo " Version ${VERSION} already exists on Test PyPI"
           echo "skip_upload=true" >> $GITHUB_OUTPUT
           echo "reason=Version already exists - this is normal for Test PyPI during development" >> $GITHUB_OUTPUT
         else
-          echo "✅ Version ${VERSION} is new on Test PyPI"
+          echo " Version ${VERSION} is new on Test PyPI"
           echo "skip_upload=false" >> $GITHUB_OUTPUT
           echo "reason=New version, proceeding with upload" >> $GITHUB_OUTPUT
         fi
 
     - name: Build package
       run: |
-        echo "🔧 Building package for Test PyPI..."
+        echo " Building package for Test PyPI..."
         python -m build
-        echo "✅ Package built successfully"
+        echo " Package built successfully"
         
         # Show what was built
         ls -la dist/
-        echo "📦 Built files:"
+        echo " Built files:"
         for file in dist/*; do
-          echo "  - $(basename $file) ($(du -h $file | cut -f1))"
+          echo " - $(basename $file) ($(du -h $file | cut -f1))"
         done
 
     - name: Verify package
       run: |
-        echo "🔍 Verifying package contents..."
+        echo " Verifying package contents..."
         twine check dist/*
-        echo "✅ Package verification passed"
+        echo " Package verification passed"
 
     - name: Test installation (dry run)
       run: |
-        echo "🧪 Testing package installation..."
+        echo " Testing package installation..."
         
         # Create a temporary virtual environment to test installation
         python -m venv test_env
@@ -129,20 +129,20 @@ jobs:
         python -c "
         try:
             import ambivo_agents
-            print('✅ Package imports successfully')
+            print(' Package imports successfully')
             version = getattr(ambivo_agents, '__version__', 'unknown')
-            print(f'📦 Package version: {version}')
+            print(f' Package version: {version}')
             
             # Test basic agent creation (without API keys)
             try:
                 from ambivo_agents import KnowledgeBaseAgent
-                print('✅ Agent classes import successfully')
+                print(' Agent classes import successfully')
             except Exception as e:
-                print(f'⚠️ Agent import issue: {e}')
-                print('ℹ️ This is expected without configuration')
+                print(f' Agent import issue: {e}')
+                print('ℹ This is expected without configuration')
                 
         except ImportError as e:
-            print(f'❌ Import test failed: {e}')
+            print(f' Import test failed: {e}')
             exit(1)
         "
         
@@ -154,70 +154,70 @@ jobs:
       if: steps.version_check.outputs.skip_upload == 'false'
       env:
         TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}  # Direct secret access
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }} # Direct secret access
         TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
       run: |
-        echo "🚀 Publishing to Test PyPI..."
-        echo "🔑 Using token from 'testpypi' environment"
-        echo "🌐 Repository: https://test.pypi.org/legacy/"
+        echo " Publishing to Test PyPI..."
+        echo " Using token from 'testpypi' environment"
+        echo " Repository: https://test.pypi.org/legacy/"
         
         # Verify we have the token
         if [ -z "$TWINE_PASSWORD" ]; then
-          echo "❌ TWINE_PASSWORD is empty!"
-          echo "💡 Make sure you have the correct secret configured:"
-          echo "   - Secret name: TEST_PYPI_API_TOKEN"
-          echo "   - Environment: testpypi"
+          echo " TWINE_PASSWORD is empty!"
+          echo " Make sure you have the correct secret configured:"
+          echo " - Secret name: TEST_PYPI_API_TOKEN"
+          echo " - Environment: testpypi"
           exit 1
         fi
         
         # Upload to Test PyPI
         twine upload dist/* --verbose
         
-        echo "✅ Package published to Test PyPI successfully!"
+        echo " Package published to Test PyPI successfully!"
 
     - name: Skip Test PyPI upload (version exists)
       if: steps.version_check.outputs.skip_upload == 'true'
       run: |
-        echo "⏭️ SKIPPING Test PyPI upload"
-        echo "📦 Version: ${{ steps.target.outputs.tag }}"
-        echo "💡 Reason: ${{ steps.version_check.outputs.reason }}"
-        echo "🔗 Existing package: https://test.pypi.org/project/ambivo-agents/"
+        echo "⏭ SKIPPING Test PyPI upload"
+        echo " Version: ${{ steps.target.outputs.tag }}"
+        echo " Reason: ${{ steps.version_check.outputs.reason }}"
+        echo " Existing package: https://test.pypi.org/project/ambivo-agents/"
         echo ""
-        echo "ℹ️ This is normal for Test PyPI during development."
-        echo "🚀 To publish a new version:"
-        echo "   1. Update version in your code (e.g., 1.3.1)"
-        echo "   2. Create new tag: git tag v1.3.1-beta"
-        echo "   3. Push tag: git push origin v1.3.1-beta"
+        echo "ℹ This is normal for Test PyPI during development."
+        echo " To publish a new version:"
+        echo " 1. Update version in your code (e.g., 1.3.1)"
+        echo " 2. Create new tag: git tag v1.3.1-beta"
+        echo " 3. Push tag: git push origin v1.3.1-beta"
 
     - name: Verify Test PyPI publication
       run: |
         if [ "${{ steps.version_check.outputs.skip_upload }}" = "true" ]; then
-          echo "⏭️ Skipped upload - version already exists on Test PyPI"
-          echo "🔗 Existing package: https://test.pypi.org/project/ambivo-agents/"
+          echo "⏭ Skipped upload - version already exists on Test PyPI"
+          echo " Existing package: https://test.pypi.org/project/ambivo-agents/"
         else
-          echo "🔍 Verifying package was published to Test PyPI..."
-          echo "✅ Package upload completed successfully (twine upload succeeded)"
-          echo "🔗 Check package at: https://test.pypi.org/project/ambivo-agents/"
+          echo " Verifying package was published to Test PyPI..."
+          echo " Package upload completed successfully (twine upload succeeded)"
+          echo " Check package at: https://test.pypi.org/project/ambivo-agents/"
           echo ""
-          echo "ℹ️ Note: It may take a few minutes for the package to appear in pip index"
-          echo "💡 You can verify manually at: https://test.pypi.org/project/ambivo-agents/"
+          echo "ℹ Note: It may take a few minutes for the package to appear in pip index"
+          echo " You can verify manually at: https://test.pypi.org/project/ambivo-agents/"
           
           # Optional: Try to verify with pip index (but don't fail if it's not ready)
           TAG="${{ steps.target.outputs.tag }}"
           VERSION="${TAG#v}"
           
-          echo "🔍 Attempting to verify with pip index..."
+          echo " Attempting to verify with pip index..."
           if pip index versions ambivo-agents --index-url https://test.pypi.org/simple/ 2>/dev/null | grep -q "${VERSION}"; then
-            echo "✅ Package immediately visible in pip index"
+            echo " Package immediately visible in pip index"
           else
             echo "⏳ Package not yet visible in pip index (normal - can take 1-5 minutes)"
-            echo "✅ Upload was successful based on twine response"
+            echo " Upload was successful based on twine response"
           fi
         fi
 
     - name: Create GitHub Release (Pre-release)
       uses: softprops/action-gh-release@v1
-      continue-on-error: true  # Don't fail the workflow if release creation fails
+      continue-on-error: true # Don't fail the workflow if release creation fails
       id: create_release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -225,34 +225,34 @@ jobs:
         tag_name: ${{ steps.target.outputs.tag }}
         name: Release ${{ steps.target.outputs.tag }} (Test)
         body: |
-          ## 🧪 Ambivo Agents ${{ steps.target.outputs.tag }} (Test Release)
+          ## Ambivo Agents ${{ steps.target.outputs.tag }} (Test Release)
           
           **Published to: Test PyPI**
           
-          ### 📦 Installation
+          ### Installation
           
           ```bash
           ${{ steps.target.outputs.install_cmd }}
           ```
           
-          ### 📊 Publication Status
+          ### Publication Status
           
-          ${{ steps.version_check.outputs.skip_upload == 'true' && '⏭️ **Version already existed on Test PyPI** - skipped duplicate upload' || '✅ **Successfully published to Test PyPI**' }}
+          ${{ steps.version_check.outputs.skip_upload == 'true' && '⏭ **Version already existed on Test PyPI** - skipped duplicate upload' || ' **Successfully published to Test PyPI**' }}
           
-          ### ⚠️ Important
+          ### Important
           
           This is a **test release** published to Test PyPI for validation.
           - Use this for testing and validation only
           - Production installations should wait for the stable release
           - This version is NOT available on Production PyPI
           
-          ### 🔧 What's New
+          ### What's New
           
           - Package available on Test PyPI for testing
           - All integration tests passed
           - See [commit history](https://github.com/ambivo-corp/ambivo-agents/commits/${{ steps.target.outputs.tag }}) for detailed changes
           
-          ### 🚀 Quick Start
+          ### Quick Start
           
           ```python
           from ambivo_agents import KnowledgeBaseAgent
@@ -265,14 +265,14 @@ jobs:
           await agent.cleanup_session()
           ```
           
-          ### 🔗 Links
+          ### Links
           
           - **Test PyPI Package**: https://test.pypi.org/project/ambivo-agents/
           - **Environment**: `testpypi` (testing only)
           
-          ### ➡️ Next Steps
+          ### Next Steps
           
-          ${{ steps.version_check.outputs.skip_upload == 'true' && 'This version already exists. To publish a new version:\n  1. Update version in your code (e.g., 1.3.1)\n  2. Create new tag: `git tag v1.3.1-beta`\n  3. Push tag: `git push origin v1.3.1-beta`' || 'After testing this version, create a stable release tag (e.g., `v1.0.0`) to publish to Production PyPI.' }}
+          ${{ steps.version_check.outputs.skip_upload == 'true' && 'This version already exists. To publish a new version:\n 1. Update version in your code (e.g., 1.3.1)\n 2. Create new tag: `git tag v1.3.1-beta`\n 3. Push tag: `git push origin v1.3.1-beta`' || 'After testing this version, create a stable release tag (e.g., `v1.0.0`) to publish to Production PyPI.' }}
           
           ---
           
@@ -283,43 +283,43 @@ jobs:
     - name: Handle GitHub Release Result
       run: |
         if [ "${{ steps.create_release.outcome }}" = "success" ]; then
-          echo "✅ GitHub release created successfully"
-          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.target.outputs.tag }}"
+          echo " GitHub release created successfully"
+          echo " Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.target.outputs.tag }}"
         else
-          echo "⚠️ GitHub release creation failed (this doesn't affect PyPI publishing)"
-          echo "💡 Possible causes:"
-          echo "   - GITHUB_TOKEN lacks 'contents: write' permission"
-          echo "   - Branch protection rules preventing release creation"
-          echo "   - Repository settings restricting release creation"
+          echo " GitHub release creation failed (this doesn't affect PyPI publishing)"
+          echo " Possible causes:"
+          echo " - GITHUB_TOKEN lacks 'contents: write' permission"
+          echo " - Branch protection rules preventing release creation"
+          echo " - Repository settings restricting release creation"
           echo ""
-          echo "🔧 To fix this:"
-          echo "   1. Go to repo Settings → Actions → General"
-          echo "   2. Set 'Workflow permissions' to 'Read and write permissions'"
-          echo "   3. Or manually create the release at: https://github.com/${{ github.repository }}/releases/new?tag=${{ steps.target.outputs.tag }}"
+          echo " To fix this:"
+          echo " 1. Go to repo Settings → Actions → General"
+          echo " 2. Set 'Workflow permissions' to 'Read and write permissions'"
+          echo " 3. Or manually create the release at: https://github.com/${{ github.repository }}/releases/new?tag=${{ steps.target.outputs.tag }}"
           echo ""
-          echo "✅ PyPI publishing was successful regardless of this issue"
+          echo " PyPI publishing was successful regardless of this issue"
         fi
 
     - name: Test release notification
       run: |
         if [ "${{ steps.version_check.outputs.skip_upload }}" = "true" ]; then
-          echo "⏭️ TEST RELEASE SKIPPED!"
-          echo "📦 Package: ambivo-agents ${{ steps.target.outputs.tag }}"
-          echo "💡 Reason: Version already exists on Test PyPI"
-          echo "🔗 Existing package: https://test.pypi.org/project/ambivo-agents/"
+          echo "⏭ TEST RELEASE SKIPPED!"
+          echo " Package: ambivo-agents ${{ steps.target.outputs.tag }}"
+          echo " Reason: Version already exists on Test PyPI"
+          echo " Existing package: https://test.pypi.org/project/ambivo-agents/"
           echo ""
-          echo "🚀 To publish a new version:"
-          echo "   1. Update version in your code (e.g., 1.3.1)"
-          echo "   2. Create new tag: git tag v1.3.1-beta"
-          echo "   3. Push tag: git push origin v1.3.1-beta"
+          echo " To publish a new version:"
+          echo " 1. Update version in your code (e.g., 1.3.1)"
+          echo " 2. Create new tag: git tag v1.3.1-beta"
+          echo " 3. Push tag: git push origin v1.3.1-beta"
         else
-          echo "🧪 TEST RELEASE PUBLISHED!"
-          echo "📦 Package: ambivo-agents ${{ steps.target.outputs.tag }}"
-          echo "🔗 Test PyPI: https://test.pypi.org/project/ambivo-agents/"
-          echo "💡 Test with: ${{ steps.target.outputs.install_cmd }}"
+          echo " TEST RELEASE PUBLISHED!"
+          echo " Package: ambivo-agents ${{ steps.target.outputs.tag }}"
+          echo " Test PyPI: https://test.pypi.org/project/ambivo-agents/"
+          echo " Test with: ${{ steps.target.outputs.install_cmd }}"
           echo ""
-          echo "⚠️ This is a TEST RELEASE - not available on Production PyPI"
-          echo "🚀 Create a stable tag (e.g., v1.0.0) for Production PyPI"
+          echo " This is a TEST RELEASE - not available on Production PyPI"
+          echo " Create a stable tag (e.g., v1.0.0) for Production PyPI"
         fi
 
   # Job 2: Production PyPI (for stable releases ONLY)
@@ -362,23 +362,23 @@ jobs:
         echo "is_prerelease=false" >> $GITHUB_OUTPUT
         echo "install_cmd=pip install ambivo-agents==${TAG}" >> $GITHUB_OUTPUT
         
-        echo "🎯 Target: Production PyPI (Stable Release)"
-        echo "🏷️ Version: ${TAG}"
-        echo "🌍 Environment: pypi"
-        echo "🌐 Repository URL: https://upload.pypi.org/legacy/"
+        echo " Target: Production PyPI (Stable Release)"
+        echo " Version: ${TAG}"
+        echo " Environment: pypi"
+        echo " Repository URL: https://upload.pypi.org/legacy/"
 
     - name: Verify version tag
       run: |
         TAG="${{ steps.target.outputs.tag }}"
-        echo "🏷️ Publishing stable version: ${TAG}"
+        echo " Publishing stable version: ${TAG}"
         
         # Check if this is a valid stable version tag (no pre-release suffixes)
         if [[ ${TAG} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "✅ Valid stable version tag detected"
+          echo " Valid stable version tag detected"
         else
-          echo "❌ Invalid stable version tag format: ${TAG}"
+          echo " Invalid stable version tag format: ${TAG}"
           echo "Expected format: v1.0.0 (no pre-release suffixes like -beta, -alpha, -rc)"
-          echo "💡 Use tags like v1.0.0-beta for Test PyPI, v1.0.0 for Production PyPI"
+          echo " Use tags like v1.0.0-beta for Test PyPI, v1.0.0 for Production PyPI"
           exit 1
         fi
 
@@ -390,40 +390,40 @@ jobs:
         # Remove 'v' prefix for PyPI version check
         VERSION="${TAG#v}"
         
-        echo "🔍 Checking if version ${VERSION} already exists on Production PyPI..."
+        echo " Checking if version ${VERSION} already exists on Production PyPI..."
         
         # Check Production PyPI (fail if version exists)
         if pip index versions ${PACKAGE_NAME} 2>/dev/null | grep -q "${VERSION}"; then
-          echo "❌ Version ${VERSION} already exists on Production PyPI"
-          echo "💡 You need to increment the version number"
-          echo "🔗 Existing versions: https://pypi.org/project/ambivo-agents/#history"
+          echo " Version ${VERSION} already exists on Production PyPI"
+          echo " You need to increment the version number"
+          echo " Existing versions: https://pypi.org/project/ambivo-agents/#history"
           exit 1
         else
-          echo "✅ Version ${VERSION} is new on Production PyPI"
+          echo " Version ${VERSION} is new on Production PyPI"
         fi
 
     - name: Build package
       run: |
-        echo "🔧 Building package for Production PyPI..."
+        echo " Building package for Production PyPI..."
         python -m build
-        echo "✅ Package built successfully"
+        echo " Package built successfully"
         
         # Show what was built
         ls -la dist/
-        echo "📦 Built files:"
+        echo " Built files:"
         for file in dist/*; do
-          echo "  - $(basename $file) ($(du -h $file | cut -f1))"
+          echo " - $(basename $file) ($(du -h $file | cut -f1))"
         done
 
     - name: Verify package
       run: |
-        echo "🔍 Verifying package contents..."
+        echo " Verifying package contents..."
         twine check dist/*
-        echo "✅ Package verification passed"
+        echo " Package verification passed"
 
     - name: Test installation (dry run)
       run: |
-        echo "🧪 Testing package installation..."
+        echo " Testing package installation..."
         
         # Create a temporary virtual environment to test installation
         python -m venv test_env
@@ -436,20 +436,20 @@ jobs:
         python -c "
         try:
             import ambivo_agents
-            print('✅ Package imports successfully')
+            print(' Package imports successfully')
             version = getattr(ambivo_agents, '__version__', 'unknown')
-            print(f'📦 Package version: {version}')
+            print(f' Package version: {version}')
             
             # Test basic agent creation (without API keys)
             try:
                 from ambivo_agents import KnowledgeBaseAgent
-                print('✅ Agent classes import successfully')
+                print(' Agent classes import successfully')
             except Exception as e:
-                print(f'⚠️ Agent import issue: {e}')
-                print('ℹ️ This is expected without configuration')
+                print(f' Agent import issue: {e}')
+                print('ℹ This is expected without configuration')
                 
         except ImportError as e:
-            print(f'❌ Import test failed: {e}')
+            print(f' Import test failed: {e}')
             exit(1)
         "
         
@@ -459,62 +459,62 @@ jobs:
 
     - name: Wait for approval (Production only)
       run: |
-        echo "🛡️ Production deployment detected"
-        echo "⏸️ Waiting for manual approval..."
-        echo "👥 Reviewers will be notified to approve this deployment"
-        echo "🏷️ Version: ${{ steps.target.outputs.tag }}"
-        echo "🎯 Target: Production PyPI"
+        echo " Production deployment detected"
+        echo "⏸ Waiting for manual approval..."
+        echo " Reviewers will be notified to approve this deployment"
+        echo " Version: ${{ steps.target.outputs.tag }}"
+        echo " Target: Production PyPI"
         echo ""
-        echo "ℹ️ This is a STABLE RELEASE that will be publicly available"
+        echo "ℹ This is a STABLE RELEASE that will be publicly available"
 
     - name: Publish to Production PyPI
       env:
         TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}  # Direct secret access
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }} # Direct secret access
         TWINE_REPOSITORY_URL: https://upload.pypi.org/legacy/
       run: |
-        echo "🚀 Publishing to Production PyPI..."
-        echo "🔑 Using token from 'pypi' environment"
-        echo "🌐 Repository: https://upload.pypi.org/legacy/"
+        echo " Publishing to Production PyPI..."
+        echo " Using token from 'pypi' environment"
+        echo " Repository: https://upload.pypi.org/legacy/"
         
         # Verify we have the token
         if [ -z "$TWINE_PASSWORD" ]; then
-          echo "❌ TWINE_PASSWORD is empty!"
-          echo "💡 Make sure you have the correct secret configured:"
-          echo "   - Secret name: PYPI_API_TOKEN"
-          echo "   - Environment: pypi"
+          echo " TWINE_PASSWORD is empty!"
+          echo " Make sure you have the correct secret configured:"
+          echo " - Secret name: PYPI_API_TOKEN"
+          echo " - Environment: pypi"
           exit 1
         fi
         
         # Upload to Production PyPI
         twine upload dist/* --verbose
         
-        echo "✅ Package published to Production PyPI successfully!"
+        echo " Package published to Production PyPI successfully!"
 
     - name: Verify Production PyPI publication
       run: |
-        echo "🔍 Verifying package was published to Production PyPI..."
-        echo "✅ Package upload completed successfully (twine upload succeeded)"
-        echo "🔗 Check package at: https://pypi.org/project/ambivo-agents/"
+        echo " Verifying package was published to Production PyPI..."
+        echo " Package upload completed successfully (twine upload succeeded)"
+        echo " Check package at: https://pypi.org/project/ambivo-agents/"
         echo ""
-        echo "ℹ️ Note: It may take a few minutes for the package to appear in pip index"
-        echo "💡 You can verify manually at: https://pypi.org/project/ambivo-agents/"
+        echo "ℹ Note: It may take a few minutes for the package to appear in pip index"
+        echo " You can verify manually at: https://pypi.org/project/ambivo-agents/"
         
         # Optional: Try to verify with pip index (but don't fail if it's not ready)
         TAG="${{ steps.target.outputs.tag }}"
         VERSION="${TAG#v}"
         
-        echo "🔍 Attempting to verify with pip index..."
+        echo " Attempting to verify with pip index..."
         if pip index versions ambivo-agents 2>/dev/null | grep -q "${VERSION}"; then
-          echo "✅ Package immediately visible in pip index"
+          echo " Package immediately visible in pip index"
         else
           echo "⏳ Package not yet visible in pip index (normal - can take 1-5 minutes)"
-          echo "✅ Upload was successful based on twine response"
+          echo " Upload was successful based on twine response"
         fi
 
     - name: Create GitHub Release (Stable)
       uses: softprops/action-gh-release@v1
-      continue-on-error: true  # Don't fail the workflow if release creation fails
+      continue-on-error: true # Don't fail the workflow if release creation fails
       id: create_production_release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -522,30 +522,30 @@ jobs:
         tag_name: ${{ steps.target.outputs.tag }}
         name: Release ${{ steps.target.outputs.tag }} (Stable)
         body: |
-          ## 🎉 Ambivo Agents ${{ steps.target.outputs.tag }} (Stable Release)
+          ## Ambivo Agents ${{ steps.target.outputs.tag }} (Stable Release)
           
           **Published to: Production PyPI**
           
-          ### 📦 Installation
+          ### Installation
           
           ```bash
           ${{ steps.target.outputs.install_cmd }}
           ```
           
-          ### ✅ Production Ready
+          ### Production Ready
           
           This is a **stable release** published to Production PyPI.
           - Ready for production use
           - Fully tested and validated
           - Available worldwide via standard pip install
           
-          ### 🔧 What's New
+          ### What's New
           
           - Package published to Production PyPI
           - All integration tests passed
           - See [commit history](https://github.com/ambivo-corp/ambivo-agents/commits/${{ steps.target.outputs.tag }}) for detailed changes
           
-          ### 🚀 Quick Start
+          ### Quick Start
           
           ```python
           from ambivo_agents import KnowledgeBaseAgent
@@ -558,12 +558,12 @@ jobs:
           await agent.cleanup_session()
           ```
           
-          ### 📚 Documentation
+          ### Documentation
           
           - [README](https://github.com/ambivo-corp/ambivo-agents#readme)
           - [Examples](https://github.com/ambivo-corp/ambivo-agents/blob/main/one_liner_examples.py)
           
-          ### 🔗 Links
+          ### Links
           
           - **PyPI Package**: https://pypi.org/project/ambivo-agents/
           - **Environment**: `pypi` (production)
@@ -577,30 +577,30 @@ jobs:
     - name: Handle Production GitHub Release Result
       run: |
         if [ "${{ steps.create_production_release.outcome }}" = "success" ]; then
-          echo "✅ GitHub release created successfully"
-          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.target.outputs.tag }}"
+          echo " GitHub release created successfully"
+          echo " Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.target.outputs.tag }}"
         else
-          echo "⚠️ GitHub release creation failed (this doesn't affect PyPI publishing)"
-          echo "💡 Possible causes:"
-          echo "   - GITHUB_TOKEN lacks 'contents: write' permission"
-          echo "   - Branch protection rules preventing release creation"
-          echo "   - Repository settings restricting release creation"
+          echo " GitHub release creation failed (this doesn't affect PyPI publishing)"
+          echo " Possible causes:"
+          echo " - GITHUB_TOKEN lacks 'contents: write' permission"
+          echo " - Branch protection rules preventing release creation"
+          echo " - Repository settings restricting release creation"
           echo ""
-          echo "🔧 To fix this:"
-          echo "   1. Go to repo Settings → Actions → General"
-          echo "   2. Set 'Workflow permissions' to 'Read and write permissions'"
-          echo "   3. Or manually create the release at: https://github.com/${{ github.repository }}/releases/new?tag=${{ steps.target.outputs.tag }}"
+          echo " To fix this:"
+          echo " 1. Go to repo Settings → Actions → General"
+          echo " 2. Set 'Workflow permissions' to 'Read and write permissions'"
+          echo " 3. Or manually create the release at: https://github.com/${{ github.repository }}/releases/new?tag=${{ steps.target.outputs.tag }}"
           echo ""
-          echo "✅ PyPI publishing was successful regardless of this issue"
+          echo " PyPI publishing was successful regardless of this issue"
         fi
 
     - name: Production notification
       run: |
-        echo "🎉 STABLE RELEASE PUBLISHED TO PRODUCTION!"
-        echo "📦 Package: ambivo-agents ${{ steps.target.outputs.tag }}"
-        echo "🔗 Production PyPI: https://pypi.org/project/ambivo-agents/"
-        echo "🌟 This is now available worldwide for installation!"
-        echo "💡 Install with: ${{ steps.target.outputs.install_cmd }}"
+        echo " STABLE RELEASE PUBLISHED TO PRODUCTION!"
+        echo " Package: ambivo-agents ${{ steps.target.outputs.tag }}"
+        echo " Production PyPI: https://pypi.org/project/ambivo-agents/"
+        echo " This is now available worldwide for installation!"
+        echo " Install with: ${{ steps.target.outputs.install_cmd }}"
 
   # Summary job (runs after either job completes)
   summary:
@@ -611,33 +611,33 @@ jobs:
     steps:
     - name: Workflow Summary
       run: |
-        echo "📊 Publish Workflow Summary:"
+        echo " Publish Workflow Summary:"
         echo ""
         
         if [ "${{ needs.publish-testpypi.result }}" = "success" ]; then
-          echo "✅ Test PyPI: Published successfully"
-          echo "   🔗 https://test.pypi.org/project/ambivo-agents/"
-          echo "   📝 Pre-release testing completed"
+          echo " Test PyPI: Published successfully"
+          echo " https://test.pypi.org/project/ambivo-agents/"
+          echo " Pre-release testing completed"
         elif [ "${{ needs.publish-testpypi.result }}" = "skipped" ]; then
-          echo "⏭️ Test PyPI: Skipped (stable release tag)"
+          echo "⏭ Test PyPI: Skipped (stable release tag)"
         else
-          echo "❌ Test PyPI: Failed"
+          echo " Test PyPI: Failed"
         fi
         
         if [ "${{ needs.publish-pypi.result }}" = "success" ]; then
-          echo "✅ Production PyPI: Published successfully"
-          echo "   🔗 https://pypi.org/project/ambivo-agents/"
-          echo "   📝 Stable release available worldwide"
+          echo " Production PyPI: Published successfully"
+          echo " https://pypi.org/project/ambivo-agents/"
+          echo " Stable release available worldwide"
         elif [ "${{ needs.publish-pypi.result }}" = "skipped" ]; then
-          echo "⏭️ Production PyPI: Skipped (pre-release tag)"
+          echo "⏭ Production PyPI: Skipped (pre-release tag)"
         else
-          echo "❌ Production PyPI: Failed"
+          echo " Production PyPI: Failed"
         fi
         
         echo ""
-        echo "ℹ️ Publishing Strategy (Option 1 - Safer):"
-        echo "   • Pre-release tags (beta/alpha/rc): Test PyPI ONLY"
-        echo "   • Stable tags (v1.0.0): Production PyPI ONLY"
-        echo "   • Test first, then promote to production"
+        echo "ℹ Publishing Strategy (Option 1 - Safer):"
+        echo " • Pre-release tags (beta/alpha/rc): Test PyPI ONLY"
+        echo " • Stable tags (v1.0.0): Production PyPI ONLY"
+        echo " • Test first, then promote to production"
         echo ""
-        echo "🎉 Workflow complete!"
+        echo " Workflow complete!"

@@ -381,7 +381,7 @@ Create a synthesized response that:
         
         return suggestions
     
-    async def process_message(self, message, context=None) -> "AgentMessage":
+    async def process_message(self, message, context=None):
         """
         Process a message conforming to the BaseAgent interface.
         In production, this agent is typically called via assess_response() directly.
