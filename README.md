@@ -584,11 +584,67 @@ final_answer = await synthesize_responses(sources, query)
 - General purpose conversational AI with intelligent skill routing
 - Context-aware responses and multi-turn conversations
 - Customizable system messages
-- **NEW: Skill Assignment** - Assign external capabilities like API specs, databases, and knowledge bases
-- **Smart Intent Detection** - Automatically detects when to use assigned skills vs normal conversation
-- **Dynamic Agent Spawning** - Internally creates specialized agents (APIAgent, DatabaseAgent, etc.) on-demand
-- **Natural Language Translation** - Converts technical responses to conversational language
-- **Use Cases**: Custom API integration, database access, document search, while maintaining conversational interface
+
+#### Skill Assignment
+
+Instead of manually routing to specialized agents, you **assign skills** to AssistantAgent or ModeratorAgent. They automatically detect when to use these skills and handle the technical details internally.
+
+```python
+from ambivo_agents import AssistantAgent
+
+assistant = AssistantAgent.create_simple(user_id="user123")
+
+# Assign an API skill from an OpenAPI spec
+await assistant.assign_api_skill(
+    api_spec_path="/path/to/openapi.yaml",
+    base_url="https://api.example.com/v1",
+    api_token="your-token"
+)
+
+# Natural language requests now route to the API automatically
+response = await assistant.chat("create a lead for John Doe")
+# Agent: detects intent -> spawns APIAgent -> makes API call -> returns natural response
+
+await assistant.cleanup_session()
+```
+
+**Available skill types:**
+
+```python
+# 1. API Skills -- triggers on: "create lead", "call api", "list contacts", etc.
+await agent.assign_api_skill(
+    api_spec_path="path/to/openapi.yaml",
+    base_url="https://api.example.com",
+    api_token="your-token",
+    skill_name="my_api"                    # optional
+)
+
+# 2. Database Skills -- triggers on: "query database", "show data", "recent sales", etc.
+await agent.assign_database_skill(
+    connection_string="postgresql://user:pass@host:5432/db",
+    skill_name="main_db",
+    description="Customer database"
+)
+
+# 3. Knowledge Base Skills -- triggers on: "search docs", "company policy", etc.
+await agent.assign_kb_skill(
+    documents_path="/path/to/docs/",
+    collection_name="company_docs",
+    skill_name="knowledge",
+    temporary=True,              # use temp KB with TTL lifecycle (default: True)
+    ttl_hours=24,                # TTL for temporary KBs
+    vectordb_api_url=None,       # override vectordb-api URL (default: from config)
+    vectordb_api_token=None,     # override auth token for vectordb-api
+)
+```
+
+**Priority:** Skills are checked **before** normal routing. In AssistantAgent, skills run before conversation processing. In ModeratorAgent, skills take priority over agent routing. If no skills match, normal behavior continues.
+
+```python
+# List assigned skills
+skills = agent.list_assigned_skills()
+# {'api_skills': ['my_api'], 'database_skills': ['main_db'], 'kb_skills': [], 'total_skills': 2}
+```
 
 ### Code Executor Agent
 - Secure Python and Bash execution in Docker
