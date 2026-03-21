@@ -905,12 +905,18 @@ async def advanced_workflow():
 
 ### Workflow Patterns
 
-- **Sequential Workflows**: Execute agents in order, passing results between them
-- **Parallel Workflows**: Execute multiple agents simultaneously
-- **Consensus Workflows**: Agents collaborate to reach agreement
-- **Debate Workflows**: Structured multi-agent discussions
-- **Error Recovery**: Automatic fallback to backup agents
-- **Map-Reduce**: Parallel processing with result aggregation
+All patterns are implemented in `ambivo_agents/core/workflow.py` and `enhanced_workflow.py`:
+
+| Pattern | Factory Method | Implementation |
+|---------|---------------|----------------|
+| **Sequential** | `WorkflowBuilder` + `execute()` | Iterates nodes in order, passes each response as input to the next agent |
+| **Parallel** | `WorkflowBuilder` + `execute_parallel()` | Groups nodes into execution levels, runs each level with `asyncio.gather()` |
+| **Consensus** | `AdvancedWorkflowPatterns.create_consensus_workflow()` | Loops agents up to 5 iterations; checks agreement via keyword scoring (agree/yes/correct vs disagree/no/wrong). Consensus detection is keyword-based, not LLM-based. |
+| **Debate** | `AdvancedWorkflowPatterns.create_debate_workflow()` | Multi-round structured debate between debater agents with a moderator agent at start and end |
+| **Error Recovery** | `AdvancedWorkflowPatterns.create_error_recovery_workflow()` | Conditional routing: primary agent runs first; on error (message type or keyword), falls back through a chain of backup agents |
+| **Map-Reduce** | `AdvancedWorkflowBuilder.add_map_reduce_pattern()` | Parallel mapper agents all feed into a single reducer agent |
+
+**Concurrency model:** All async concurrency uses `asyncio` (no Celery or external task queues). Parallel workflows use `asyncio.gather()` for concurrent agent execution within a single process.
 
 ## System Messages
 
