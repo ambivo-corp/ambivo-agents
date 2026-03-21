@@ -2,7 +2,7 @@
 
 We welcome contributions to the Ambivo Agents multi-agent AI system. This document provides guidelines for contributing to the project.
 
-## ⚠️ Alpha Release Notice
+## Alpha Release Notice
 
 **Ambivo Agents is currently in alpha stage.** Contributions are welcome as we work toward production readiness. Contributors should be aware that:
 
@@ -31,32 +31,32 @@ Before contributing, ensure you have:
 ### Development Setup
 
 1. **Fork and Clone**
-   ```bash
-   git clone https://github.com/your-username/ambivo-agents.git
-   cd ambivo-agents
-   ```
+ ```bash
+ git clone https://github.com/your-username/ambivo-agents.git
+ cd ambivo-agents
+ ```
 
 2. **Install Dependencies**
-   ```bash
-   pip install -e .
-   pip install -r requirements.txt
-   ```
+ ```bash
+ pip install -e .
+ pip install -r requirements.txt
+ ```
 
 3. **Setup Configuration**
-   - Copy `agent_config.yaml.example` to `agent_config.yaml`
-   - Add your API keys and configuration settings
-   - **Recommended**: Use cloud Redis and Qdrant for development
-   - **Alternative**: Local services: `docker run -d -p 6379:6379 redis` and Qdrant locally
+ - Copy `agent_config.yaml.example` to `agent_config.yaml`
+ - Add your API keys and configuration settings
+ - **Recommended**: Use cloud Redis and Qdrant for development
+ - **Alternative**: Local services: `docker run -d -p 6379:6379 redis` and Qdrant locally
 
 4. **Run Tests**
-   ```bash
-   python -m pytest tests/
-   ```
+ ```bash
+ python -m pytest tests/
+ ```
 
 5. **Verify Installation**
-   ```bash
-   python examples/basic_chat.py
-   ```
+ ```bash
+ python examples/basic_chat.py
+ ```
 
 ## Contribution Guidelines
 
@@ -168,34 +168,34 @@ When adding new tools to agents:
 ### Pull Request Process
 
 1. **Create Feature Branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+ ```bash
+ git checkout -b feature/your-feature-name
+ ```
 
 2. **Make Changes**
-   - Write code following our standards
-   - Add tests for new functionality
-   - Update documentation
+ - Write code following our standards
+ - Add tests for new functionality
+ - Update documentation
 
 3. **Test Thoroughly**
-   ```bash
-   python -m pytest tests/
-   python examples/your-example.py
-   ```
+ ```bash
+ python -m pytest tests/
+ python examples/your-example.py
+ ```
 
 4. **Commit Changes**
-   ```bash
-   git add .
-   git commit -m "Add: brief description of changes"
-   ```
+ ```bash
+ git add .
+ git commit -m "Add: brief description of changes"
+ ```
 
 5. **Push and Create PR**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-   - Open pull request on GitHub
-   - Fill out PR template completely
-   - Link any related issues
+ ```bash
+ git push origin feature/your-feature-name
+ ```
+ - Open pull request on GitHub
+ - Fill out PR template completely
+ - Link any related issues
 
 ### Review Process
 
@@ -236,7 +236,7 @@ When adding new tools to agents:
 All configuration is managed through `agent_config.yaml` in your project root. The system automatically loads:
 
 - **LLM Provider Settings**: API keys, models, temperature
-- **Redis Configuration**: Host, port, database settings  
+- **Redis Configuration**: Host, port, database settings 
 - **Agent Capabilities**: Enable/disable specific features
 - **Service Settings**: Timeouts, memory limits, Docker images
 
@@ -244,24 +244,24 @@ Example minimal configuration:
 ```yaml
 # Redis Configuration (Cloud recommended)
 redis:
-  host: "your-redis-cloud-endpoint.redis.cloud"
-  port: 6379
-  password: "your-redis-password"
+ host: "your-redis-cloud-endpoint.redis.cloud"
+ port: 6379
+ password: "your-redis-password"
 
-# LLM Configuration (Required)  
+# LLM Configuration (Required) 
 llm:
-  preferred_provider: "openai"
-  openai_api_key: "your-openai-key"
+ preferred_provider: "openai"
+ openai_api_key: "your-openai-key"
 
 # Knowledge Base (Cloud Qdrant recommended)
 knowledge_base:
-  qdrant_url: "https://your-cluster.qdrant.tech"
-  qdrant_api_key: "your-qdrant-api-key"
+ qdrant_url: "https://your-cluster.qdrant.tech"
+ qdrant_api_key: "your-qdrant-api-key"
 
 # Agent Capabilities
 agent_capabilities:
-  enable_knowledge_base: true
-  enable_web_search: true
+ enable_knowledge_base: true
+ enable_web_search: true
 ```
 
 The system automatically sets environment variables internally from your YAML configuration.
@@ -270,26 +270,26 @@ The system automatically sets environment variables internally from your YAML co
 
 ```
 ambivo_agents/
-├── agents/          # Agent implementations
-│   ├── assistant.py
-│   ├── code_executor.py
-│   ├── knowledge_base.py
-│   ├── media_editor.py
-│   ├── simple_web_search.py
-│   ├── web_scraper.py
-│   ├── web_search.py
-│   └── youtube_download.py
-├── config/          # Configuration management
-├── core/            # Core functionality (base classes, LLM, memory)
-│   ├── base.py
-│   ├── llm.py
-│   └── memory.py
-├── executors/       # Execution environments
-├── services/        # Service layer
-├── __init__.py      # Package initialization
-├── cli.py          # Command line interface
-├── examples/        # Usage examples
-└── tests/           # Test suite
+ agents/ # Agent implementations
+  assistant.py
+  code_executor.py
+  knowledge_base.py
+  media_editor.py
+  simple_web_search.py
+  web_scraper.py
+  web_search.py
+  youtube_download.py
+ config/ # Configuration management
+ core/ # Core functionality (base classes, LLM, memory)
+  base.py
+  llm.py
+  memory.py
+ executors/ # Execution environments
+ services/ # Service layer
+ __init__.py # Package initialization
+ cli.py # Command line interface
+ examples/ # Usage examples
+ tests/ # Test suite
 ```
 
 ## Release Process

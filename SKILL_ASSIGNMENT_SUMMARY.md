@@ -51,7 +51,11 @@ await agent.assign_database_skill(
 await agent.assign_kb_skill(
     documents_path="/path/to/docs/",
     collection_name="company_docs",
-    skill_name="knowledge"
+    skill_name="knowledge",
+    temporary=True,              # Use temp KB with TTL lifecycle (default: True)
+    ttl_hours=24,                # TTL for temporary KBs (default: from config or 24h)
+    vectordb_api_url=None,       # Override vectordb-api URL (default: from agent_config.yaml)
+    vectordb_api_token=None,     # Override auth token for vectordb-api
 )
 ```
 **Triggers:** "what do docs say", "search documentation", "company policy", etc.
@@ -92,13 +96,13 @@ print(status['assigned_skills'])  # Details of assigned skills
 
 ## Use Cases
 
-**✅ Perfect For:**
+**Good For:**
 - Custom API integrations with conversational interface
 - Database access through natural language
 - Document search with chat interface
 - Adding external capabilities to existing agents
 
-**❌ Not Ideal For:**
+**Not Ideal For:**
 - Simple one-off API calls (use APIAgent directly)
 - Complex multi-step workflows (use ModeratorAgent routing)
 - When you need full control over agent selection
@@ -121,7 +125,7 @@ response = await api_agent.chat("create lead...")
 
 # New way  
 assistant = AssistantAgent.create_simple(user_id="user")
-await assistant.assign_api_skill(api_spec_path, base_url, token)
+await assistant.assign_api_skill(api_spec_path, base_url, api_token)
 response = await assistant.chat("create lead...")  # Same result, more natural
 ```
 
@@ -133,7 +137,7 @@ response = await moderator.chat("call the API")  # May or may not route to APIAg
 
 # New way - explicit skill assignment takes priority
 moderator = ModeratorAgent.create_simple(user_id="user") 
-await moderator.assign_api_skill(api_spec_path, base_url, token)
+await moderator.assign_api_skill(api_spec_path, base_url, api_token)
 response = await moderator.chat("call the API")  # Guaranteed to use assigned API skill
 ```
 

@@ -133,7 +133,7 @@ async def simple_example():
         'research_trends_in_cryptocurrency_20250816_193439',
         'research_trends_in_robotics_tech_2025_20250812_172007'
     ])
-    agent._load_available_collections()  # Required after setting knowledge bases
+    agent._load_available_collections() # Required after setting knowledge bases
     
     try:
         # Method 1: Full quality assessment (recommended)
@@ -239,31 +239,31 @@ await agent.cleanup_session()
 - Automatic agent selection based on query analysis
 - Session management and cleanup
 - Workflow execution and coordination
-- ✨ **NEW: Skill Assignment** - Assign external capabilities that take priority over agent routing
-- ✨ **Smart Skill Routing** - Assigned skills are checked first, then falls back to normal agent routing
-- ✨ **Unified Interface** - Single agent that can handle both assigned skills and general orchestration
-- 🎯 **Use Cases**: Custom integrations with existing agent orchestration, priority skill handling
+- **NEW: Skill Assignment** - Assign external capabilities that take priority over agent routing
+- **Smart Skill Routing** - Assigned skills are checked first, then falls back to normal agent routing
+- **Unified Interface** - Single agent that can handle both assigned skills and general orchestration
+- **Use Cases**: Custom integrations with existing agent orchestration, priority skill handling
 
-### KnowledgeSynthesisAgent 🧠
+### KnowledgeSynthesisAgent 
 **Advanced Multi-Source Orchestrator with Quality Assessment**
 
-**🚨 IMPORTANT**: KnowledgeSynthesisAgent is **NOT** a specialized agent that gets routed to by ModeratorAgent. It **IS** an enhanced ModeratorAgent that you use **directly** as your primary orchestrator.
+** IMPORTANT**: KnowledgeSynthesisAgent is **NOT** a specialized agent that gets routed to by ModeratorAgent. It **IS** an enhanced ModeratorAgent that you use **directly** as your primary orchestrator.
 
 **Key Capabilities:**
-- 🔗 **Multi-Source Synthesis** - Intelligently combines knowledge bases, web search, and web scraping
-- 📊 **Quality Assessment** - Built-in ResponseQualityAssessor evaluates and improves responses
-- 🎯 **Adaptive Strategy** - Automatically selects optimal search strategy based on query analysis
-- 📚 **Multiple Knowledge Base Support** - Query across multiple knowledge bases simultaneously
-- 🌐 **Web Search Integration** - Supplements knowledge with real-time web search results
-- 🕷️ **Smart Web Scraping** - Automatically scrapes relevant URLs for deeper information
-- ⚡ **Iterative Improvement** - Refines responses until quality threshold is met
-- 🧠 **Intelligent Routing** - Inherits all ModeratorAgent capabilities plus synthesis features
+- **Multi-Source Synthesis** - Intelligently combines knowledge bases, web search, and web scraping
+- **Quality Assessment** - Built-in ResponseQualityAssessor evaluates and improves responses
+- **Adaptive Strategy** - Automatically selects optimal search strategy based on query analysis
+- **Multiple Knowledge Base Support** - Query across multiple knowledge bases simultaneously
+- **Web Search Integration** - Supplements knowledge with real-time web search results
+- **Smart Web Scraping** - Automatically scrapes relevant URLs for deeper information
+- **Iterative Improvement** - Refines responses until quality threshold is met
+- **Intelligent Routing** - Inherits all ModeratorAgent capabilities plus synthesis features
 
 **Architecture:**
 ```
 KnowledgeSynthesisAgent extends ModeratorAgent
-├── Inherits: Agent routing, session management, workflows
-└── Adds: Multi-source synthesis, quality assessment, intelligent orchestration
+ Inherits: Agent routing, session management, workflows
+ Adds: Multi-source synthesis, quality assessment, intelligent orchestration
 ```
 
 **Key Differences:**
@@ -276,15 +276,15 @@ KnowledgeSynthesisAgent extends ModeratorAgent
 | **Use Case** | General orchestration | Research & information synthesis |
 | **Usage Pattern** | Router/orchestrator | Direct primary agent |
 
-**❌ Wrong Usage Pattern:**
+** Wrong Usage Pattern:**
 ```python
 # DON'T DO THIS - Won't work!
 moderator = ModeratorAgent.create(...)
 # Expecting to route to KnowledgeSynthesisAgent - this fails
-response = await moderator.chat("synthesize information...")  # ❌ Fails
+response = await moderator.chat("synthesize information...") # Fails
 ```
 
-**✅ Correct Usage Pattern:**
+** Correct Usage Pattern:**
 ```python
 # DO THIS - Works correctly!
 from ambivo_agents.agents.knowledge_synthesis import KnowledgeSynthesisAgent
@@ -302,7 +302,7 @@ response = await synthesis_agent.process_with_quality_assessment(
     "search across knowledge bases: kb1, kb2 for: AI trends"
 )
 
-# Web-supplemented query  
+# Web-supplemented query 
 response = await synthesis_agent.process_with_quality_assessment(
     "prioritize web search - latest developments in robotics 2025"
 )
@@ -321,8 +321,8 @@ await synthesis_agent.cleanup_session()
     'success': True,
     'response': 'Synthesized answer from multiple sources...',
     'quality_assessment': {
-        'quality_level': 'good',           # excellent|good|fair|poor|unacceptable
-        'confidence_score': 0.85,         # 0.0 - 1.0
+        'quality_level': 'good', # excellent|good|fair|poor|unacceptable
+        'confidence_score': 0.85, # 0.0 - 1.0
         'sources_used': ['knowledge_base', 'web_search'],
         'strengths': ['Comprehensive coverage', 'Current information'],
         'weaknesses': ['Could use more specific examples']
@@ -343,25 +343,25 @@ await synthesis_agent.cleanup_session()
 **Query Patterns:**
 - `"search across knowledge bases: kb1, kb2, kb3 for: [query]"` - Multi-KB search
 - `"prioritize web search - [query]"` - Web-first strategy
-- `"check knowledge base first - [query]"` - KB-first strategy  
+- `"check knowledge base first - [query]"` - KB-first strategy 
 - `"comprehensive search - [query]"` - Use all sources
 - `"synthesize information about [topic]"` - Full synthesis mode
 
-**🎯 Use Cases:**
+** Use Cases:**
 - Research across multiple knowledge bases
 - Web-supplemented knowledge queries
 - Quality-assured information synthesis
 - Multi-source fact checking
 - Comprehensive topic research
 
-**📋 Configuration:**
+** Configuration:**
 - **Enabled by default** (inherits from ModeratorAgent)
 - **Environment Control**: `AMBIVO_AGENTS_MODERATOR_ENABLED=true/false`
 - **No separate enablement needed** - uses existing ModeratorAgent configuration
 
 ---
 
-## 📚 Multi-Knowledge Base Processing Logic
+## Multi-Knowledge Base Processing Logic
 
 Understanding how multiple knowledge bases are handled across different agents:
 
@@ -378,14 +378,14 @@ User Query → Intent Analysis → Route to KnowledgeBaseAgent → Return Result
 Query → Normalize KB List → Score KBs → Select Top 2 → Query Each → Pick Best by Source Count → Return
 ```
 
-**🔍 Detailed Flow (Single-Pass, No Iteration):**
+** Detailed Flow (Single-Pass, No Iteration):**
 
 **Step 1: KB Input Normalization**
 ```python
 # Accepts multiple input formats:
-kb_names = ["kb1", "kb2"]                           # List of strings
+kb_names = ["kb1", "kb2"] # List of strings
 kb_names = [{"kb_name": "kb1", "description": "..."}, ...] # List of objects
-kb_names = '["kb1", "kb2"]'                         # JSON string
+kb_names = '["kb1", "kb2"]' # JSON string
 
 # Normalizes to: [{"kb_name": "kb1", "description": None}, ...]
 ```
@@ -407,7 +407,7 @@ def score_kb_for_query(kb_entry, user_message, topics):
     # Domain bonuses
     if "legal" in kb_text and legal_keywords_present:
         score += 1.5
-    if "finance" in kb_text and finance_keywords_present:  
+    if "finance" in kb_text and finance_keywords_present: 
         score += 1.0
     
     return score
@@ -441,7 +441,7 @@ async def query_multiple_kbs(selected_kbs, query):
     best_source_count = -1
     
     # Process each KB exactly once (no retries or iterations)
-    for kb in selected_kbs:  # Usually 2 KBs
+    for kb in selected_kbs: # Usually 2 KBs
         # Single attempt per KB
         result = await query_single_kb(kb.name, query)
         results[kb.name] = result
@@ -462,19 +462,19 @@ async def query_multiple_kbs(selected_kbs, query):
 - **Winner takes all**: Returns single best answer (no synthesis)
 - **Metadata**: Includes results from all queried KBs
 
-**🚨 Important Characteristics:**
-- ❌ **No iteration loops** - each KB queried exactly once
-- ❌ **No quality assessment** - purely source count based
-- ❌ **No answer synthesis** - returns single best answer
-- ✅ **Performance optimized** - maximum 2 KBs processed
-- ✅ **Deterministic** - same query always produces same KB selection
+** Important Characteristics:**
+- **No iteration loops** - each KB queried exactly once
+- **No quality assessment** - purely source count based
+- **No answer synthesis** - returns single best answer
+- **Performance optimized** - maximum 2 KBs processed
+- **Deterministic** - same query always produces same KB selection
 
 ### **KnowledgeSynthesisAgent - Multi-Source with Quality Iteration**
 ```
 Query → Analyze Strategy → Gather from All Sources → Quality Assessment → [Iterate if Needed] → Synthesize Final Answer
 ```
 
-**🔄 Detailed Flow (Iterative with Quality Control):**
+** Detailed Flow (Iterative with Quality Control):**
 
 **Step 1: Query Analysis & Strategy**
 ```python
@@ -487,20 +487,20 @@ analysis = await analyze_query(query)
 ```python
 # Parallel execution across all source types
 sources = await asyncio.gather(
-    gather_from_knowledge_base(query),    # Routes to KnowledgeBaseAgent
-    gather_from_web_search(query),        # Routes to WebSearchAgent  
-    gather_from_web_scraping(query)       # Routes to WebScraperAgent
+    gather_from_knowledge_base(query), # Routes to KnowledgeBaseAgent
+    gather_from_web_search(query), # Routes to WebSearchAgent 
+    gather_from_web_scraping(query) # Routes to WebScraperAgent
 )
 ```
 
 **Step 3: Quality Assessment & Iteration Loop**
 ```python
-for iteration in range(max_iterations):  # Usually 3 iterations max
+for iteration in range(max_iterations): # Usually 3 iterations max
     assessment = await quality_assessor.assess_response(sources, query)
     
     # Check if quality meets threshold
     if assessment.quality_level >= quality_threshold:
-        break  # Success - exit iteration loop
+        break # Success - exit iteration loop
         
     # If quality insufficient, gather additional sources
     if assessment.needs_additional_sources:
@@ -538,7 +538,7 @@ final_answer = await synthesize_responses(sources, query)
 - General-purpose applications
 - Fast response times needed
 
-**Use KnowledgeBaseAgent directly when:**  
+**Use KnowledgeBaseAgent directly when:** 
 - Specifically need to query multiple knowledge bases
 - Want deterministic KB selection logic
 - Need metadata about which KBs were used
@@ -551,29 +551,29 @@ final_answer = await synthesize_responses(sources, query)
 
 ### Database Agent (Optional)
 **Best for: Database connections, data exploration, and basic queries**
-- ✅ **Multi-Database Support**: MongoDB, MySQL, and PostgreSQL connections
-- ✅ **Schema Analysis**: Automatic database structure discovery and exploration  
-- ✅ **Natural Language Queries**: Convert conversational requests to SQL/MongoDB queries
-- ✅ **File Ingestion**: Direct JSON/CSV import into database tables
-- ✅ **Safety-First Design**: Read-only mode by default, simple SELECT queries only
-- ✅ **Export Integration**: Seamless handoff to AnalyticsAgent for complex analysis
-- ⚠️ **Intentionally Limited**: Simple queries only (no JOINs, window functions, CTEs)
-- 📋 **Use Cases**: Data exploration, basic queries, file imports, database connections
+- **Multi-Database Support**: MongoDB, MySQL, and PostgreSQL connections
+- **Schema Analysis**: Automatic database structure discovery and exploration 
+- **Natural Language Queries**: Convert conversational requests to SQL/MongoDB queries
+- **File Ingestion**: Direct JSON/CSV import into database tables
+- **Safety-First Design**: Read-only mode by default, simple SELECT queries only
+- **Export Integration**: Seamless handoff to AnalyticsAgent for complex analysis
+- **Intentionally Limited**: Simple queries only (no JOINs, window functions, CTEs)
+- **Use Cases**: Data exploration, basic queries, file imports, database connections
 - **Note**: Requires installation with `pip install ambivo-agents[database]`
 
-### Analytics Agent  
+### Analytics Agent 
 **Best for: Complex data analysis, advanced SQL, and statistical operations**
-- 🚀 **Advanced SQL Engine**: Full DuckDB support with complex operations
-- ✅ **Complex JOINs**: INNER, LEFT, RIGHT, OUTER joins across multiple datasets
-- ✅ **Window Functions**: ROW_NUMBER(), RANK(), SUM() OVER(), statistical analysis
-- ✅ **Advanced Aggregations**: GROUP BY with HAVING, complex statistical functions
-- ✅ **CTEs & Subqueries**: WITH clauses, correlated subqueries, complex logic
-- ✅ **UNION Operations**: Combine result sets with UNION/UNION ALL
-- ✅ **Multi-File Analysis**: Load and join multiple CSV/XLSX files simultaneously
-- ✅ **Statistical Functions**: Percentiles, correlations, trend analysis, outlier detection
-- ✅ **Visualization**: Text-based charts and intelligent chart recommendations
-- ✅ **Docker Security**: All operations run in isolated containers
-- 📊 **Use Cases**: Business intelligence, complex analytics, statistical modeling, data science
+- **Advanced SQL Engine**: Full DuckDB support with complex operations
+- **Complex JOINs**: INNER, LEFT, RIGHT, OUTER joins across multiple datasets
+- **Window Functions**: ROW_NUMBER(), RANK(), SUM() OVER(), statistical analysis
+- **Advanced Aggregations**: GROUP BY with HAVING, complex statistical functions
+- **CTEs & Subqueries**: WITH clauses, correlated subqueries, complex logic
+- **UNION Operations**: Combine result sets with UNION/UNION ALL
+- **Multi-File Analysis**: Load and join multiple CSV/XLSX files simultaneously
+- **Statistical Functions**: Percentiles, correlations, trend analysis, outlier detection
+- **Visualization**: Text-based charts and intelligent chart recommendations
+- **Docker Security**: All operations run in isolated containers
+- **Use Cases**: Business intelligence, complex analytics, statistical modeling, data science
 
 **When to Use Which Agent:**
 - **DatabaseAgent**: Simple queries, database connections, data exploration
@@ -584,11 +584,11 @@ final_answer = await synthesize_responses(sources, query)
 - General purpose conversational AI with intelligent skill routing
 - Context-aware responses and multi-turn conversations
 - Customizable system messages
-- ✨ **NEW: Skill Assignment** - Assign external capabilities like API specs, databases, and knowledge bases
-- ✨ **Smart Intent Detection** - Automatically detects when to use assigned skills vs normal conversation
-- ✨ **Dynamic Agent Spawning** - Internally creates specialized agents (APIAgent, DatabaseAgent, etc.) on-demand
-- ✨ **Natural Language Translation** - Converts technical responses to conversational language
-- 🎯 **Use Cases**: Custom API integration, database access, document search, while maintaining conversational interface
+- **NEW: Skill Assignment** - Assign external capabilities like API specs, databases, and knowledge bases
+- **Smart Intent Detection** - Automatically detects when to use assigned skills vs normal conversation
+- **Dynamic Agent Spawning** - Internally creates specialized agents (APIAgent, DatabaseAgent, etc.) on-demand
+- **Natural Language Translation** - Converts technical responses to conversational language
+- **Use Cases**: Custom API integration, database access, document search, while maintaining conversational interface
 
 ### Code Executor Agent
 - Secure Python and Bash execution in Docker
@@ -622,24 +622,24 @@ final_answer = await synthesize_responses(sources, query)
 
 ### Gather Agent
 **Intelligent conversational form-filling with natural language understanding**
-- ✅ **Conversational Interface**: Ask questions one at a time with natural flow
-- ✅ **Multiple Question Types**: free-text, yes-no, single-select, multi-select
-- ✅ **Smart Questionnaire Loading**: JSON/YAML from chat, files, or URLs
-- ✅ **Conditional Logic**: Advanced dependent question workflows
-- 🚀 **Natural Language Parsing** (NEW): Understand conversational responses
+- **Conversational Interface**: Ask questions one at a time with natural flow
+- **Multiple Question Types**: free-text, yes-no, single-select, multi-select
+- **Smart Questionnaire Loading**: JSON/YAML from chat, files, or URLs
+- **Conditional Logic**: Advanced dependent question workflows
+- **Natural Language Parsing** (NEW): Understand conversational responses
   - "Absolutely!" → "Yes" for yes/no questions
   - "I'd prefer email" → maps to email option in single-select
   - "Both AWS and Azure" → maps to multiple selections
   - "We have about 4 people" → maps to "3-5 people" range
-- ✅ **Graceful Fallback**: Standard exact matching when NLP is disabled
-- ✅ **Session Persistence**: Remember answers across conversation (~1 hour)
-- ✅ **API Submission**: Configurable endpoint with collection status tracking
+- **Graceful Fallback**: Standard exact matching when NLP is disabled
+- **Session Persistence**: Remember answers across conversation (~1 hour)
+- **API Submission**: Configurable endpoint with collection status tracking
 
 **Configuration:**
 ```yaml
 # Enable natural language understanding (requires LLM)
 gather:
-  enable_natural_language_parsing: true  # Default: false
+  enable_natural_language_parsing: true # Default: false
   
 # Or via environment variable:
 # export AMBIVO_AGENTS_GATHER_ENABLE_NATURAL_LANGUAGE_PARSING=true
@@ -699,13 +699,13 @@ The API Agent supports configurable timeout settings for different use cases:
 
 ```bash
 # Environment variable configuration
-export AMBIVO_AGENTS_API_AGENT_TIMEOUT_SECONDS=46  # Custom timeout in seconds
+export AMBIVO_AGENTS_API_AGENT_TIMEOUT_SECONDS=46 # Custom timeout in seconds
 
 # Or in agent_config.yaml
 api_agent:
-  timeout_seconds: 46                    # Request timeout
-  max_safe_timeout: 8                    # Requests above this use Docker for safety
-  force_docker_above_timeout: true       # Enable Docker for long-running requests
+  timeout_seconds: 46 # Request timeout
+  max_safe_timeout: 8 # Requests above this use Docker for safety
+  force_docker_above_timeout: true # Enable Docker for long-running requests
 ```
 
 **Localhost and Domain Access:**
@@ -715,7 +715,7 @@ For testing with local services or specific domain restrictions:
 ```bash
 # Allow localhost access (disabled by default for security)
 export AMBIVO_AGENTS_API_AGENT_ALLOWED_DOMAINS="127.0.0.1,localhost,api.example.com"
-export AMBIVO_AGENTS_API_AGENT_BLOCKED_DOMAINS=""  # Clear default blocks
+export AMBIVO_AGENTS_API_AGENT_BLOCKED_DOMAINS="" # Clear default blocks
 
 # Or in agent_config.yaml
 api_agent:
@@ -723,16 +723,16 @@ api_agent:
     - "127.0.0.1"
     - "localhost" 
     - "api.example.com"
-    - "*.trusted-domain.com"     # Wildcards supported
-  blocked_domains: []            # Override default localhost blocks
+    - "*.trusted-domain.com" # Wildcards supported
+  blocked_domains: [] # Override default localhost blocks
   
   # Default security settings (recommended for production)
-  # allowed_domains: null        # Allows all except blocked
+  # allowed_domains: null # Allows all except blocked
   # blocked_domains:
-  #   - "localhost"
-  #   - "127.0.0.1"
-  #   - "0.0.0.0"
-  #   - "169.254.169.254"        # AWS metadata service
+  # - "localhost"
+  # - "127.0.0.1"
+  # - "0.0.0.0"
+  # - "169.254.169.254" # AWS metadata service
 ```
 
 **Usage Examples:**
@@ -748,7 +748,7 @@ async def test_local_api():
     response = await agent.chat("""
     Make a POST request to http://127.0.0.1:8002/kh/transcribe with:
     - Authorization: Bearer your-jwt-token
-    - Content-Type: application/json  
+    - Content-Type: application/json 
     - Body: {"s3_url": "https://your-bucket.s3.amazonaws.com/audio.wav"}
     """)
     
@@ -768,7 +768,7 @@ async def direct_api_call():
             "Content-Type": "application/json"
         },
         json_data={"s3_url": "https://your-bucket.s3.amazonaws.com/audio.wav"},
-        timeout=46  # Custom timeout in seconds
+        timeout=46 # Custom timeout in seconds
     )
     
     response = await agent.make_api_request(request)
@@ -1144,29 +1144,29 @@ services:
 
 ```
 ambivo_agents/
-├── agents/          # Agent implementations
-│   ├── analytics.py     # Analytics Agent (DuckDB data analysis)
-│   ├── api_agent.py     # API Agent (HTTP/REST integration)
-│   ├── assistant.py     # Assistant Agent (general conversation)
-│   ├── code_executor.py # Code Executor Agent (Docker-based execution)
-│   ├── database_agent.py # Database Agent (MongoDB, MySQL, PostgreSQL)
-│   ├── knowledge_base.py # Knowledge Base Agent (Qdrant vector search)
-│   ├── media_editor.py  # Media Editor Agent (FFmpeg processing)
-│   ├── moderator.py     # ModeratorAgent (main orchestrator)
-│   ├── web_scraper.py   # Web Scraper Agent (Playwright-based)
-│   ├── web_search.py    # Web Search Agent (Brave/AVES search)
-│   └── youtube_download.py # YouTube Download Agent (pytubefix)
-├── config/          # Configuration management
-├── core/            # Core functionality
-│   ├── base.py
-│   ├── llm.py
-│   ├── memory.py
-│   ├── workflow.py       # Basic workflow system
-│   └── enhanced_workflow.py  # Advanced workflow patterns
-├── executors/       # Execution environments
-├── services/        # Service layer
-├── __init__.py      # Package initialization
-└── cli.py          # Command line interface
+ agents/ # Agent implementations
+    analytics.py # Analytics Agent (DuckDB data analysis)
+    api_agent.py # API Agent (HTTP/REST integration)
+    assistant.py # Assistant Agent (general conversation)
+    code_executor.py # Code Executor Agent (Docker-based execution)
+    database_agent.py # Database Agent (MongoDB, MySQL, PostgreSQL)
+    knowledge_base.py # Knowledge Base Agent (Qdrant vector search)
+    media_editor.py # Media Editor Agent (FFmpeg processing)
+    moderator.py # ModeratorAgent (main orchestrator)
+    web_scraper.py # Web Scraper Agent (Playwright-based)
+    web_search.py # Web Search Agent (Brave/AVES search)
+    youtube_download.py # YouTube Download Agent (pytubefix)
+ config/ # Configuration management
+ core/ # Core functionality
+    base.py
+    llm.py
+    memory.py
+    workflow.py # Basic workflow system
+    enhanced_workflow.py # Advanced workflow patterns
+ executors/ # Execution environments
+ services/ # Service layer
+ __init__.py # Package initialization
+ cli.py # Command line interface
 ```
 
 ## Skill Assignment System
@@ -1175,11 +1175,11 @@ ambivo_agents/
 The **Skill Assignment System** allows AssistantAgent and ModeratorAgent to be "assigned" external capabilities like API specifications, database connections, and knowledge bases. The agents then intelligently detect when to use these skills and internally spawn specialized agents on-demand.
 
 ### Key Features
-- 🎯 **Intelligent Intent Detection** - Automatically detects when user requests should use assigned skills
-- 🚀 **Dynamic Agent Spawning** - Creates APIAgent, DatabaseAgent, KnowledgeBaseAgent internally as needed
-- 🌟 **Natural Language Translation** - Converts technical responses to conversational language
-- 🔄 **Graceful Fallback** - Falls back to normal agent behavior when no skills match
-- 🎛️ **Priority System** - Assigned skills take precedence over normal agent routing
+- **Intelligent Intent Detection** - Automatically detects when user requests should use assigned skills
+- **Dynamic Agent Spawning** - Creates APIAgent, DatabaseAgent, KnowledgeBaseAgent internally as needed
+- **Natural Language Translation** - Converts technical responses to conversational language
+- **Graceful Fallback** - Falls back to normal agent behavior when no skills match
+- **Priority System** - Assigned skills take precedence over normal agent routing
 
 ### API Skill Assignment
 ```python
@@ -1201,7 +1201,7 @@ async def api_skill_example():
     response = await assistant.chat("create a lead for John Doe")
     # Agent automatically:
     # 1. Detects API intent
-    # 2. Spawns APIAgent internally  
+    # 2. Spawns APIAgent internally 
     # 3. Makes the API call
     # 4. Returns natural language response
     
@@ -1260,10 +1260,10 @@ async def multiple_skills_example():
     await moderator.assign_kb_skill("/docs/", skill_name="knowledge")
     
     # Skills take priority over agent routing
-    response1 = await moderator.chat("create a lead")           # → Uses API skill
-    response2 = await moderator.chat("query the database")     # → Uses DB skill  
-    response3 = await moderator.chat("search documentation")   # → Uses KB skill
-    response4 = await moderator.chat("what's the weather?")    # → Normal routing
+    response1 = await moderator.chat("create a lead") # → Uses API skill
+    response2 = await moderator.chat("query the database") # → Uses DB skill 
+    response3 = await moderator.chat("search documentation") # → Uses KB skill
+    response4 = await moderator.chat("what's the weather?") # → Normal routing
     
     await moderator.cleanup_session()
 ```
@@ -1304,7 +1304,7 @@ async def basic_moderator():
     # Auto-routing examples
     examples = [
         "Download audio from https://youtube.com/watch?v=example",
-        "Search for latest artificial intelligence news",  
+        "Search for latest artificial intelligence news", 
         "Load data from sales.csv and analyze trends",
         "Extract audio from video.mp4 as high quality MP3",
         "What is machine learning and how does it work?",
@@ -1325,7 +1325,7 @@ asyncio.run(basic_moderator())
 async def context_conversation():
     moderator, context = ModeratorAgent.create(user_id="context_demo")
     
-    # Initial request  
+    # Initial request 
     response1 = await moderator.chat("Download audio from https://youtube.com/watch?v=example")
     
     # Follow-up using context
@@ -1379,16 +1379,16 @@ async def database_exploration_demo():
     structure = await agent.chat("describe the users table structure")
     
     # Simple natural language queries (safety-limited)
-    users = await agent.chat("show me all users")  # → SELECT * FROM users LIMIT 10
-    count = await agent.chat("count total orders")  # → SELECT COUNT(*) FROM orders
-    recent = await agent.chat("show recent sales")  # → SELECT * FROM sales ORDER BY date DESC LIMIT 10
+    users = await agent.chat("show me all users") # → SELECT * FROM users LIMIT 10
+    count = await agent.chat("count total orders") # → SELECT COUNT(*) FROM orders
+    recent = await agent.chat("show recent sales") # → SELECT * FROM sales ORDER BY date DESC LIMIT 10
     
     # File ingestion into database
     await agent.chat("ingest users.csv into users table")
     await agent.chat("load sales.json into MongoDB sales collection")
     
     # Export data for complex analysis
-    await agent.chat("export sales data for analytics")  # → Hands off to AnalyticsAgent
+    await agent.chat("export sales data for analytics") # → Hands off to AnalyticsAgent
     
     await agent.cleanup_session()
 ```
@@ -1411,18 +1411,18 @@ async def advanced_analytics_demo():
     JOIN sales with customers and calculate total revenue per customer
     """)
     # → Generates: SELECT c.name, c.email, SUM(s.amount) as total_revenue, COUNT(s.id) as order_count
-    #              FROM customers c JOIN sales s ON c.id = s.customer_id 
-    #              GROUP BY c.id, c.name, c.email ORDER BY total_revenue DESC LIMIT 10
+    # FROM customers c JOIN sales s ON c.id = s.customer_id 
+    # GROUP BY c.id, c.name, c.email ORDER BY total_revenue DESC LIMIT 10
     
     # Window functions for advanced analytics
     trends = await agent.chat("""
     Calculate monthly sales trends with running totals and growth rates
     """)
     # → Generates: SELECT month, sales, 
-    #              SUM(sales) OVER (ORDER BY month) as running_total,
-    #              LAG(sales) OVER (ORDER BY month) as prev_month,
-    #              (sales - LAG(sales) OVER (ORDER BY month)) / LAG(sales) OVER (ORDER BY month) * 100 as growth_rate
-    #              FROM monthly_sales ORDER BY month
+    # SUM(sales) OVER (ORDER BY month) as running_total,
+    # LAG(sales) OVER (ORDER BY month) as prev_month,
+    # (sales - LAG(sales) OVER (ORDER BY month)) / LAG(sales) OVER (ORDER BY month) * 100 as growth_rate
+    # FROM monthly_sales ORDER BY month
     
     # Common Table Expressions (CTEs) for complex logic
     cohort = await agent.chat("""
@@ -1440,7 +1440,7 @@ async def advanced_analytics_demo():
     Group customers by purchase behavior and find high-value segments
     """)
     # → Generates: SELECT segment, COUNT(*) as customers, AVG(total_spent) as avg_spent
-    #              FROM customer_segments GROUP BY segment HAVING AVG(total_spent) > 1000
+    # FROM customer_segments GROUP BY segment HAVING AVG(total_spent) > 1000
     
     # UNION operations for combining datasets
     combined = await agent.chat("combine Q1 and Q2 sales data and analyze trends")
@@ -1465,14 +1465,14 @@ async def complete_data_workflow():
     await moderator.chat("Connect to MySQL localhost:3306 database ecommerce user admin password secret")
     schema = await moderator.chat("show me the database schema and table relationships")
     
-    # Step 2: DatabaseAgent - Export data for complex analysis  
+    # Step 2: DatabaseAgent - Export data for complex analysis 
     await moderator.chat("export sales data joined with customer data for advanced analytics")
     
     # Step 3: AnalyticsAgent - Advanced analysis (automatic routing)
     analysis = await moderator.chat("""
     Analyze the exported sales data:
     1. Calculate customer lifetime value using window functions
-    2. Identify seasonal trends with time series analysis  
+    2. Identify seasonal trends with time series analysis 
     3. Find correlations between customer demographics and purchase behavior
     4. Create customer segmentation using statistical clustering
     """)
@@ -1487,15 +1487,15 @@ async def complete_data_workflow():
 
 | **Capability** | **DatabaseAgent** | **AnalyticsAgent** |
 |----------------|------------------|-------------------|
-| **Database Connections** | ✅ MySQL, PostgreSQL, MongoDB | ❌ File-based only |
-| **Schema Discovery** | ✅ Full database exploration | ✅ File schema analysis |
-| **Simple Queries** | ✅ Basic SELECT, COUNT, etc. | ✅ All SQL operations |
-| **Complex JOINs** | ❌ Safety-limited | ✅ Full JOIN support |
-| **Window Functions** | ❌ Not supported | ✅ Complete support |
-| **CTEs & Subqueries** | ❌ Not supported | ✅ Advanced SQL |
-| **Statistical Analysis** | ❌ Basic only | ✅ Advanced statistics |
-| **Multi-File Analysis** | ❌ Single connection | ✅ Load multiple files |
-| **File Ingestion** | ✅ Direct to database | ✅ In-memory processing |
+| **Database Connections** | MySQL, PostgreSQL, MongoDB | File-based only |
+| **Schema Discovery** | Full database exploration | File schema analysis |
+| **Simple Queries** | Basic SELECT, COUNT, etc. | All SQL operations |
+| **Complex JOINs** | Safety-limited | Full JOIN support |
+| **Window Functions** | Not supported | Complete support |
+| **CTEs & Subqueries** | Not supported | Advanced SQL |
+| **Statistical Analysis** | Basic only | Advanced statistics |
+| **Multi-File Analysis** | Single connection | Load multiple files |
+| **File Ingestion** | Direct to database | In-memory processing |
 | **Best Use Case** | Database exploration & connection | Complex analysis & business intelligence |
 
 ### File Reading and Database Ingestion
@@ -1513,12 +1513,12 @@ async def read_file_and_insert_to_database():
     
     result = await agent.read_and_parse_file("./data/users.json")
     if not result['success']:
-        print(f"❌ Failed to read file: {result.get('error', 'Unknown error')}")
+        print(f" Failed to read file: {result.get('error', 'Unknown error')}")
         await agent.cleanup_session()
         return
     
     json_data = result['parse_result']['data']
-    print(f"✅ Successfully loaded {len(json_data)} records from users.json")
+    print(f" Successfully loaded {len(json_data)} records from users.json")
     
     # Step 2: Attempt database insertion
     try:
@@ -1532,22 +1532,22 @@ async def read_file_and_insert_to_database():
         
         # Insert the data
         response = await db_agent.chat(f"insert this data into users collection: {json_data}")
-        print(f"✅ Successfully inserted data into MongoDB: {response}")
+        print(f" Successfully inserted data into MongoDB: {response}")
         
         await db_agent.cleanup_session()
         
     except ImportError:
         # DatabaseAgent not available - provide polite warning and alternatives
-        print("\n⚠️  Database insertion not available")
-        print("💡 To enable database features, install with: pip install ambivo-agents[database]")
-        print("\n📁 Available alternatives:")
-        print("   • File successfully read and parsed")
-        print("   • Data can be transformed to other formats")
+        print("\n Database insertion not available")
+        print(" To enable database features, install with: pip install ambivo-agents[database]")
+        print("\n Available alternatives:")
+        print(" • File successfully read and parsed")
+        print(" • Data can be transformed to other formats")
         
         # Show what we can still do
         csv_result = await agent.convert_json_to_csv(json_data)
         if csv_result['success']:
-            print("   • ✅ Converted to CSV format (available for export)")
+            print(" • Converted to CSV format (available for export)")
     
     await agent.cleanup_session()
 
@@ -1562,7 +1562,7 @@ async def natural_language_file_ingestion():
         # Full database workflow available
         await agent.chat("connect to mongodb://localhost:27017 database myapp")
         response = await agent.chat("read users.json file and insert all records into users collection")
-        print(f"✅ Database ingestion completed: {response}")
+        print(f" Database ingestion completed: {response}")
         
         await agent.cleanup_session()
         
@@ -1571,10 +1571,10 @@ async def natural_language_file_ingestion():
         from ambivo_agents import AssistantAgent
         agent = AssistantAgent.create_simple(user_id="user")
         
-        print("⚠️  DatabaseAgent not installed. Reading file only...")
+        print(" DatabaseAgent not installed. Reading file only...")
         response = await agent.chat("read and analyze the users.json file structure")
-        print(f"📁 File analysis: {response}")
-        print("💡 Install database support with: pip install ambivo-agents[database]")
+        print(f" File analysis: {response}")
+        print(" Install database support with: pip install ambivo-agents[database]")
         
         await agent.cleanup_session()
 ```
@@ -1619,15 +1619,15 @@ async def context_preservation_demo():
         await agent.chat("load data from transactions.xlsx and analyze it")
         
         # Multiple queries without reload - uses cached context
-        schema = await agent.chat("show schema")          # ✅ Uses cached data
-        top_items = await agent.chat("what are the top 5 amounts?")  # ✅ Uses cached data
-        summary = await agent.chat("summary statistics")   # ✅ Uses cached data
-        counts = await agent.chat("count by category")     # ✅ Uses cached data
+        schema = await agent.chat("show schema") # Uses cached data
+        top_items = await agent.chat("what are the top 5 amounts?") # Uses cached data
+        summary = await agent.chat("summary statistics") # Uses cached data
+        counts = await agent.chat("count by category") # Uses cached data
         
         print("All queries executed using cached dataset - no reload needed!")
         
     finally:
-        await agent.cleanup_session()  # Clean up resources
+        await agent.cleanup_session() # Clean up resources
 ```
 
 ### Knowledge Base Operations
@@ -1782,27 +1782,30 @@ async def custom_workflow():
 
 ## Streaming System
 
-The library features a modern **StreamChunk** system that provides structured, type-safe streaming responses with rich metadata.
+The library uses an SSE-aligned **StreamChunk** system with structured event types for real-time streaming responses.
 
-### StreamChunk Overview
+### SSE Event Types
 
-All agents now return `StreamChunk` objects instead of raw strings, enabling:
-- **Type-safe content classification** with `StreamSubType` enum
-- **Rich metadata** for debugging, analytics, and context
-- **Programmatic filtering** without string parsing
-- **Consistent interface** across all agents
-
-### StreamSubType Categories
+Since v1.4.1, streaming events align with the Server-Sent Events wire format:
 
 ```python
-from ambivo_agents.core.base import StreamSubType
+from ambivo_agents.core.base import SSEEventType, StreamSubType
 
-# Available sub-types:
-StreamSubType.CONTENT    # Actual response content from LLMs
-StreamSubType.STATUS     # Progress updates, thinking, interim info  
-StreamSubType.RESULT     # Search results, processing outputs
-StreamSubType.ERROR      # Error messages and failures
-StreamSubType.METADATA   # Additional context and metadata
+# SSE event types (used in StreamChunk.to_dict() as the "type" field):
+SSEEventType.START # "stream_start" - Stream initialized
+SSEEventType.CONTENT # "stream_chunk" - Text token (append to buffer)
+SSEEventType.STATUS # "stream_status" - Progress info (do NOT show in chat)
+SSEEventType.COMPLETE # "stream_complete" - Final answer + metadata
+SSEEventType.ERROR # "stream_error" - Error event
+SSEEventType.CANCELLED # "stream_cancelled" - Stream was cancelled
+SSEEventType.KEEPALIVE # "keepalive" - Connection keep-alive (ignore)
+
+# Legacy StreamSubType (still supported for backward compatibility):
+StreamSubType.CONTENT # Maps to SSEEventType.CONTENT
+StreamSubType.STATUS # Maps to SSEEventType.STATUS
+StreamSubType.RESULT # Maps to SSEEventType.COMPLETE
+StreamSubType.ERROR # Maps to SSEEventType.ERROR
+StreamSubType.METADATA # Maps to SSEEventType.STATUS
 ```
 
 ### Basic Streaming Usage
@@ -1813,63 +1816,19 @@ from ambivo_agents.core.base import StreamSubType
 
 async def streaming_example():
     moderator, context = ModeratorAgent.create(user_id="stream_user")
-    
-    # Stream with filtering
-    print("🤖 Assistant: ", end='', flush=True)
-    
+
     async for chunk in moderator.chat_stream("Search for Python tutorials"):
-        # Filter by content type
         if chunk.sub_type == StreamSubType.CONTENT:
             print(chunk.text, end='', flush=True)
         elif chunk.sub_type == StreamSubType.STATUS:
             print(f"\n[{chunk.text.strip()}]", end='', flush=True)
         elif chunk.sub_type == StreamSubType.ERROR:
             print(f"\n[ERROR: {chunk.text}]", end='', flush=True)
-    
+
     await moderator.cleanup_session()
 ```
 
-### Advanced Streaming with Metadata
-
-```python
-async def advanced_streaming():
-    moderator, context = ModeratorAgent.create(user_id="advanced_user")
-    
-    # Collect and analyze stream
-    content_chunks = []
-    status_chunks = []
-    result_chunks = []
-    
-    async for chunk in moderator.chat_stream("Download audio from YouTube"):
-        # Categorize by type
-        if chunk.sub_type == StreamSubType.CONTENT:
-            content_chunks.append(chunk)
-        elif chunk.sub_type == StreamSubType.STATUS:
-            status_chunks.append(chunk)
-        elif chunk.sub_type == StreamSubType.RESULT:
-            result_chunks.append(chunk)
-        
-        # Access metadata
-        agent_info = chunk.metadata.get('agent')
-        operation = chunk.metadata.get('operation')
-        phase = chunk.metadata.get('phase')
-        
-        print(f"[{chunk.sub_type.value}] {chunk.text[:50]}...")
-        if agent_info:
-            print(f"  Agent: {agent_info}")
-        if operation:
-            print(f"  Operation: {operation}")
-    
-    # Analysis
-    print(f"\nStream Analysis:")
-    print(f"Content chunks: {len(content_chunks)}")
-    print(f"Status updates: {len(status_chunks)}")
-    print(f"Results: {len(result_chunks)}")
-    
-    await moderator.cleanup_session()
-```
-
-### Streaming in Web APIs
+### Streaming in Web APIs (SSE Format)
 
 ```python
 from fastapi import FastAPI
@@ -1881,69 +1840,81 @@ app = FastAPI()
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
     moderator, context = ModeratorAgent.create(user_id=request.user_id)
-    
+
     async def generate_stream():
+        # Send session event
+        yield f"event: session\ndata: {context.session_id}\n\n"
+
         async for chunk in moderator.chat_stream(request.message):
-            # Convert StreamChunk to JSON
-            chunk_data = {
-                'type': 'chunk',
-                'sub_type': chunk.sub_type.value,
-                'text': chunk.text,
-                'metadata': chunk.metadata,
-                'timestamp': chunk.timestamp.isoformat()
-            }
-            yield f"data: {json.dumps(chunk_data)}\n\n"
-        
-        yield "data: {\"type\": \"done\"}\n\n"
-    
-    return StreamingResponse(generate_stream(), media_type="text/stream")
+            # to_dict() returns SSE-aligned type field
+            yield f"data: {json.dumps(chunk.to_dict())}\n\n"
+
+        yield "event: done\ndata:\n\n"
+
+    return StreamingResponse(generate_stream(), media_type="text/event-stream")
 ```
 
-### Real-time UI Integration
+### SSE Wire Format
+
+The `StreamChunk.to_dict()` method produces JSON matching the SSE protocol:
+
+```json
+{"type": "stream_start", "text": "", "sub_type": "status", "metadata": {}, "timestamp": "..."}
+{"type": "stream_chunk", "text": "The answer is", "sub_type": "content", "metadata": {}, "timestamp": "..."}
+{"type": "stream_status", "text": "Querying knowledge base...", "sub_type": "status", "metadata": {}, "timestamp": "..."}
+{"type": "stream_complete", "text": "", "sub_type": "result", "metadata": {"complete": true}, "timestamp": "..."}
+{"type": "stream_error", "text": "Error message", "sub_type": "error", "metadata": {}, "timestamp": "..."}
+```
+
+**Critical buffering rule:** `buffer += data.text` -- never trim, strip, or add spaces between chunks.
+
+### Frontend Integration
 
 ```javascript
-// Frontend streaming handler
-const eventSource = new EventSource('/chat/stream');
+async function streamChat(baseUrl, message, sessionId, callbacks) {
+  const response = await fetch(`${baseUrl}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, session_id: sessionId }),
+  });
 
-eventSource.onmessage = function(event) {
-    const data = JSON.parse(event.data);
-    
-    if (data.type === 'chunk') {
-        switch(data.sub_type) {
-            case 'content':
-                // Display main response content
-                appendToChat(data.text);
-                break;
-            case 'status':
-                // Show progress indicator
-                updateStatus(data.text);
-                break;
-            case 'result':
-                // Display search results/outputs
-                addResult(data.text, data.metadata);
-                break;
-            case 'error':
-                // Handle errors
-                showError(data.text);
-                break;
-        }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let partial = '';
+  let textBuffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    partial += decoder.decode(value, { stream: true });
+    const events = partial.split('\n\n');
+    partial = events.pop();
+
+    for (const block of events) {
+      const lines = block.split('\n');
+      let eventName = null, dataLine = null;
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) eventName = line.slice(7).trim();
+        else if (line.startsWith('data: ')) dataLine = line.slice(6);
+      }
+
+      if (eventName === 'session') { callbacks.onSession?.(dataLine.trim()); continue; }
+      if (eventName === 'done') return;
+      if (!dataLine) continue;
+
+      const data = JSON.parse(dataLine);
+      switch (data.type) {
+        case 'stream_chunk': textBuffer += data.text; callbacks.onChunk?.(textBuffer, data.text); break;
+        case 'stream_complete': callbacks.onComplete?.(data.text || textBuffer, data.metadata); break;
+        case 'stream_error': callbacks.onError?.(data.text); break;
+        case 'stream_status': callbacks.onStatus?.(data.text); break;
+      }
     }
-};
+  }
+}
 ```
-
-### StreamChunk Benefits
-
-**For Developers:**
-- **Type Safety** - No string parsing for content classification
-- **Rich Context** - Access agent info, operation details, timing
-- **Easy Filtering** - Filter streams by content type programmatically
-- **Debugging** - Detailed metadata for troubleshooting
-
-**For Applications:**
-- **Smart UIs** - Show different content types appropriately
-- **Progress Tracking** - Real-time operation status updates
-- **Error Handling** - Structured error information
-- **Analytics** - Performance metrics and usage tracking
 
 
 ## Session Management
@@ -1960,7 +1931,7 @@ The library uses two identifiers for context management:
 moderator, context = ModeratorAgent.create(
     user_id="john",
     session_id="user_john_main", 
-    conversation_id="user_john_main"  # Same as session_id
+    conversation_id="user_john_main" # Same as session_id
 )
 
 # Multiple conversations per session
@@ -1973,7 +1944,7 @@ moderator1, context1 = ModeratorAgent.create(
     conversation_id="john_data_analysis_conv"
 )
 
-# Conversation 2: YouTube Downloads  
+# Conversation 2: YouTube Downloads 
 moderator2, context2 = ModeratorAgent.create(
     user_id="john", 
     session_id=session_key,
@@ -2077,11 +2048,11 @@ The **ModeratorAgent** acts as an intelligent orchestrator:
 
 ```
 [WorkflowBuilder] → [Workflow Definition]
-        ↓                    ↓
+        ↓ ↓
 [Workflow Executor] → [Sequential/Parallel Execution]
-        ↓                    ↓
+        ↓ ↓
 [State Management] → [Persistent Checkpoints]
-        ↓                    ↓
+        ↓ ↓
 [Result Aggregation] → [Final Response]
 ```
 
@@ -2108,26 +2079,26 @@ All Docker-based agents (AnalyticsAgent, MediaEditorAgent, CodeExecutorAgent, We
 
 ```
 Your Project Directory/
-└── docker_shared/                           # Consolidated base directory
-    ├── input/                              # Read-only input files
-    │   ├── analytics/     →  /docker_shared/input/analytics     (AnalyticsAgent)
-    │   ├── media/         →  /docker_shared/input/media         (MediaEditorAgent)
-    │   ├── code/          →  /docker_shared/input/code          (CodeExecutorAgent)
-    │   └── scraper/       →  /docker_shared/input/scraper       (WebScraperAgent)
-    ├── output/                             # Read-write output files
-    │   ├── analytics/     →  /docker_shared/output/analytics    (Analysis results)
-    │   ├── media/         →  /docker_shared/output/media        (Processed media)
-    │   ├── code/          →  /docker_shared/output/code         (Code execution results)
-    │   └── scraper/       →  /docker_shared/output/scraper      (Scraped data)
-    ├── temp/                               # Read-write temporary workspace
-    │   ├── analytics/     →  /docker_shared/temp/analytics      (Analytics temp files)
-    │   ├── media/         →  /docker_shared/temp/media          (Media processing temp)
-    │   └── code/          →  /docker_shared/temp/code           (Code execution temp)
-    ├── handoff/                            # Read-write inter-agent file sharing
-    │   ├── database/      →  /docker_shared/handoff/database    (Database exports)
-    │   ├── analytics/     →  /docker_shared/handoff/analytics   (Analytics results)
-    │   └── media/         →  /docker_shared/handoff/media       (Media for processing)
-    └── work/              →  /docker_shared/work                # General workspace
+ docker_shared/ # Consolidated base directory
+     input/ # Read-only input files
+        analytics/ → /docker_shared/input/analytics (AnalyticsAgent)
+        media/ → /docker_shared/input/media (MediaEditorAgent)
+        code/ → /docker_shared/input/code (CodeExecutorAgent)
+        scraper/ → /docker_shared/input/scraper (WebScraperAgent)
+     output/ # Read-write output files
+        analytics/ → /docker_shared/output/analytics (Analysis results)
+        media/ → /docker_shared/output/media (Processed media)
+        code/ → /docker_shared/output/code (Code execution results)
+        scraper/ → /docker_shared/output/scraper (Scraped data)
+     temp/ # Read-write temporary workspace
+        analytics/ → /docker_shared/temp/analytics (Analytics temp files)
+        media/ → /docker_shared/temp/media (Media processing temp)
+        code/ → /docker_shared/temp/code (Code execution temp)
+     handoff/ # Read-write inter-agent file sharing
+        database/ → /docker_shared/handoff/database (Database exports)
+        analytics/ → /docker_shared/handoff/analytics (Analytics results)
+        media/ → /docker_shared/handoff/media (Media for processing)
+     work/ → /docker_shared/work # General workspace
 ```
 
 #### How the System Works
@@ -2146,10 +2117,10 @@ The consolidated structure enables seamless workflows between agents:
 
 **Database → Analytics Workflow:**
 ```
-1. DatabaseAgent exports data     →  ./docker_shared/handoff/database/export.csv
-2. AnalyticsAgent automatically  →  reads from /docker_shared/handoff/database/
-3. AnalyticsAgent processes data  →  outputs to /docker_shared/output/analytics/
-4. Results available at           →  ./docker_shared/output/analytics/results.json
+1. DatabaseAgent exports data → ./docker_shared/handoff/database/export.csv
+2. AnalyticsAgent automatically → reads from /docker_shared/handoff/database/
+3. AnalyticsAgent processes data → outputs to /docker_shared/output/analytics/
+4. Results available at → ./docker_shared/output/analytics/results.json
 ```
 
 #### Agent Handoff Mechanism
@@ -2210,18 +2181,18 @@ docker:
 ```
 1. User: "convert sales.csv to xlsx"
 2. ModeratorAgent detects file operation need
-3. Copies sales.csv               →  ./docker_shared/input/code/sales.csv
-4. CodeExecutorAgent processes    →  from /docker_shared/input/code/sales.csv
-5. Outputs converted file         →  to /docker_shared/output/code/sales.xlsx
-6. User accesses result at        →  ./docker_shared/output/code/sales.xlsx
+3. Copies sales.csv → ./docker_shared/input/code/sales.csv
+4. CodeExecutorAgent processes → from /docker_shared/input/code/sales.csv
+5. Outputs converted file → to /docker_shared/output/code/sales.xlsx
+6. User accesses result at → ./docker_shared/output/code/sales.xlsx
 ```
 
 **Media Processing Workflow:**
 ```
-1. User places video              →  ./docker_shared/input/media/input.mp4
-2. MediaEditorAgent processes     →  from /docker_shared/input/media/input.mp4
-3. Outputs processed file         →  to /docker_shared/output/media/output.mp3
-4. User gets result from          →  ./docker_shared/output/media/output.mp3
+1. User places video → ./docker_shared/input/media/input.mp4
+2. MediaEditorAgent processes → from /docker_shared/input/media/input.mp4
+3. Outputs processed file → to /docker_shared/output/media/output.mp3
+4. User gets result from → ./docker_shared/output/media/output.mp3
 ```
 
 #### Third-Party Developer Integration
@@ -2243,15 +2214,15 @@ input_path, output_path = shared_manager.prepare_agent_environment(
 # Get Docker volume configuration
 volumes = shared_manager.get_docker_volumes()
 # volumes = {
-#     '/path/to/docker_shared/input': {'bind': '/docker_shared/input', 'mode': 'ro'},
-#     '/path/to/docker_shared/output': {'bind': '/docker_shared/output', 'mode': 'rw'},
-#     # ... other mounts
+# '/path/to/docker_shared/input': {'bind': '/docker_shared/input', 'mode': 'ro'},
+# '/path/to/docker_shared/output': {'bind': '/docker_shared/output', 'mode': 'rw'},
+# # ... other mounts
 # }
 
 # In your Docker container, access files at:
-# - Input:   /docker_shared/input/my_custom_agent/
-# - Output:  /docker_shared/output/my_custom_agent/
-# - Temp:    /docker_shared/temp/my_custom_agent/
+# - Input: /docker_shared/input/my_custom_agent/
+# - Output: /docker_shared/output/my_custom_agent/
+# - Temp: /docker_shared/temp/my_custom_agent/
 # - Handoff: /docker_shared/handoff/my_custom_agent/
 
 # After processing, check results:
@@ -2270,9 +2241,9 @@ async def process_files_with_consolidated_structure():
     moderator, context = ModeratorAgent.create(user_id="file_processor")
     
     # File operations use consolidated Docker structure
-    await moderator.chat("convert sales_data.csv to xlsx format")  # → ./docker_shared/output/code/
-    await moderator.chat("extract audio from video.mp4 as MP3")     # → ./docker_shared/output/media/
-    await moderator.chat("analyze customer_data.csv and chart")     # → ./docker_shared/output/analytics/
+    await moderator.chat("convert sales_data.csv to xlsx format") # → ./docker_shared/output/code/
+    await moderator.chat("extract audio from video.mp4 as MP3") # → ./docker_shared/output/media/
+    await moderator.chat("analyze customer_data.csv and chart") # → ./docker_shared/output/analytics/
     
     # All results organized by agent type in docker_shared/output/
     await moderator.cleanup_session()
@@ -2286,18 +2257,18 @@ asyncio.run(process_files_with_consolidated_structure())
 ```bash
 # Directory structure after various operations
 your-project/
-├── sales_data.csv              # Your original files
-├── video.mp4
-├── customer_data.csv
-└── docker_shared/              # Consolidated results
-    └── output/
-        ├── code/
-        │   └── sales_data.xlsx         # CSV→XLSX conversion
-        ├── media/
-        │   └── video_audio.mp3         # Audio extraction
-        └── analytics/
-            ├── analysis_report.json    # Data analysis
-            └── customer_charts.png     # Generated charts
+ sales_data.csv # Your original files
+ video.mp4
+ customer_data.csv
+ docker_shared/ # Consolidated results
+     output/
+         code/
+            sales_data.xlsx # CSV→XLSX conversion
+         media/
+            video_audio.mp3 # Audio extraction
+         analytics/
+             analysis_report.json # Data analysis
+             customer_charts.png # Generated charts
 ```
 
 #### Configuration
@@ -2306,13 +2277,13 @@ The consolidated structure is configured in `agent_config.yaml`:
 
 ```yaml
 docker:
-  shared_base_dir: "./docker_shared"     # Host base directory
+  shared_base_dir: "./docker_shared" # Host base directory
   container_mounts:
-    input: "/docker_shared/input"        # Read-only input
-    output: "/docker_shared/output"      # Read-write output
-    temp: "/docker_shared/temp"          # Read-write temp
-    handoff: "/docker_shared/handoff"    # Read-write handoffs
-    work: "/docker_shared/work"          # Read-write workspace
+    input: "/docker_shared/input" # Read-only input
+    output: "/docker_shared/output" # Read-write output
+    temp: "/docker_shared/temp" # Read-write temp
+    handoff: "/docker_shared/handoff" # Read-write handoffs
+    work: "/docker_shared/work" # Read-write workspace
   agent_subdirs:
     analytics: ["input/analytics", "output/analytics", "temp/analytics", "handoff/analytics"]
     media: ["input/media", "output/media", "temp/media", "handoff/media"]
@@ -2325,43 +2296,43 @@ docker:
 When developers install `ambivo-agents` via `pip install ambivo-agents`, the Docker shared directory is created relative to their project root. Here's how the directory structure would look:
 
 ```
-my-ai-project/                          # Third-party developer's project
-├── main.py                             # Their application code
-├── requirements.txt                    # Including ambivo-agents
-├── agent_config.yaml                   # Their configuration file
-├── data/                               # Their project data
-│   ├── input_files.csv
-│   └── documents.pdf
-├── docker_shared/                      # Auto-created by ambivo-agents
-│   ├── input/                          # Container read-only mounts
-│   │   ├── analytics/                  # For data analysis tasks
-│   │   │   └── uploaded_data.csv
-│   │   ├── media/                      # For media processing
-│   │   │   └── video_to_process.mp4
-│   │   └── code/                       # For code execution
-│   │       └── user_script.py
-│   ├── output/                         # Container write-enabled results
-│   │   ├── analytics/                  # Analysis results
-│   │   │   ├── report.json
-│   │   │   └── charts.png
-│   │   ├── media/                      # Processed media
-│   │   │   ├── audio_extracted.mp3
-│   │   │   └── compressed_video.mp4
-│   │   └── code/                       # Code execution results
-│   │       └── execution_results.txt
-│   ├── temp/                           # Temporary files during processing
-│   │   ├── analytics/
-│   │   ├── media/
-│   │   └── code/
-│   ├── handoff/                        # Cross-agent file sharing
-│   │   ├── analytics/                  # Database → Analytics
-│   │   ├── database/                   # Database exports
-│   │   ├── media/                      # Media processing handoffs
-│   │   └── scraper/                    # Web scraper results
-│   └── work/                           # Container workspace
-└── venv/                               # Their virtual environment
-    └── lib/python3.x/site-packages/
-        └── ambivo_agents/              # Installed package
+my-ai-project/ # Third-party developer's project
+ main.py # Their application code
+ requirements.txt # Including ambivo-agents
+ agent_config.yaml # Their configuration file
+ data/ # Their project data
+    input_files.csv
+    documents.pdf
+ docker_shared/ # Auto-created by ambivo-agents
+    input/ # Container read-only mounts
+       analytics/ # For data analysis tasks
+          uploaded_data.csv
+       media/ # For media processing
+          video_to_process.mp4
+       code/ # For code execution
+           user_script.py
+    output/ # Container write-enabled results
+       analytics/ # Analysis results
+          report.json
+          charts.png
+       media/ # Processed media
+          audio_extracted.mp3
+          compressed_video.mp4
+       code/ # Code execution results
+           execution_results.txt
+    temp/ # Temporary files during processing
+       analytics/
+       media/
+       code/
+    handoff/ # Cross-agent file sharing
+       analytics/ # Database → Analytics
+       database/ # Database exports
+       media/ # Media processing handoffs
+       scraper/ # Web scraper results
+    work/ # Container workspace
+ venv/ # Their virtual environment
+     lib/python3.x/site-packages/
+         ambivo_agents/ # Installed package
 ```
 
 **Environment Variable Configuration:**
@@ -2419,18 +2390,18 @@ The system includes built-in protection against accessing sensitive system direc
 security:
   file_access:
     restricted_directories:
-      - "/etc"           # System configuration
-      - "/root"          # Root user directory
-      - "/var/log"       # System logs
-      - "/proc"          # Process information
-      - "/sys"           # System information
-      - "/dev"           # Device files
-      - "/boot"          # Boot files
-      - "~/.ssh"         # SSH keys
-      - "~/.aws"         # AWS credentials
-      - "~/.config"      # User configuration
-      - "/usr/bin"       # System binaries
-      - "/usr/sbin"      # System admin binaries
+      - "/etc" # System configuration
+      - "/root" # Root user directory
+      - "/var/log" # System logs
+      - "/proc" # Process information
+      - "/sys" # System information
+      - "/dev" # Device files
+      - "/boot" # Boot files
+      - "~/.ssh" # SSH keys
+      - "~/.aws" # AWS credentials
+      - "~/.config" # User configuration
+      - "/usr/bin" # System binaries
+      - "/usr/sbin" # System admin binaries
 ```
 
 **Environment Variable Configuration:**
@@ -2490,17 +2461,17 @@ print(f"Analytics outputs: {output_files}")
 
 The system automatically detects file paths in natural language and supports:
 
-**Data Files**: `.csv`, `.xlsx`, `.xls`, `.json`, `.xml`, `.parquet`  
-**Media Files**: `.mp4`, `.avi`, `.mov`, `.mp3`, `.wav`, `.flac`  
-**Text Files**: `.txt`, `.md`, `.log`, `.py`, `.js`, `.sql`  
+**Data Files**: `.csv`, `.xlsx`, `.xls`, `.json`, `.xml`, `.parquet` 
+**Media Files**: `.mp4`, `.avi`, `.mov`, `.mp3`, `.wav`, `.flac` 
+**Text Files**: `.txt`, `.md`, `.log`, `.py`, `.js`, `.sql` 
 **Documents**: `.pdf` (read-only)
 
 ```
 # These requests automatically trigger file sharing:
-"convert data.csv to xlsx"                    → Detects: data.csv → ./docker_shared/input/code/
-"extract audio from video.mp4"               → Detects: video.mp4 → ./docker_shared/input/media/
-"analyze quarterly_report.xlsx"              → Detects: quarterly_report.xlsx → ./docker_shared/input/analytics/
-"scrape data from website"                   → No file detected → ./docker_shared/output/scraper/
+"convert data.csv to xlsx" → Detects: data.csv → ./docker_shared/input/code/
+"extract audio from video.mp4" → Detects: video.mp4 → ./docker_shared/input/media/
+"analyze quarterly_report.xlsx" → Detects: quarterly_report.xlsx → ./docker_shared/input/analytics/
+"scrape data from website" → No file detected → ./docker_shared/output/scraper/
 ```
 
 #### Docker Image Configuration
@@ -2566,13 +2537,13 @@ docker run --rm \
 
 #### Benefits of Consolidated Structure
 
-✅ **Consistency**: All agents use the same directory structure  
-✅ **Inter-Agent Workflows**: Seamless file handoffs between agents  
-✅ **Security**: Proper read-only/read-write permissions  
-✅ **Organization**: Files organized by agent and purpose  
-✅ **Monitoring**: Centralized disk usage and cleanup  
-✅ **Third-Party Integration**: Easy for custom agent development  
-✅ **Auto-Management**: Directories created and managed automatically
+ **Consistency**: All agents use the same directory structure 
+ **Inter-Agent Workflows**: Seamless file handoffs between agents 
+ **Security**: Proper read-only/read-write permissions 
+ **Organization**: Files organized by agent and purpose 
+ **Monitoring**: Centralized disk usage and cleanup 
+ **Third-Party Integration**: Easy for custom agent development 
+ **Auto-Management**: Directories created and managed automatically
 
 ## Troubleshooting
 
@@ -2581,7 +2552,7 @@ docker run --rm \
 1. **Redis Connection Failed**
    ```bash
    # Check if Redis is running
-   redis-cli ping  # Should return "PONG"
+   redis-cli ping # Should return "PONG"
    ```
 
 2. **Docker Not Available**
@@ -2619,7 +2590,7 @@ service:
 
 - **Docker Isolation**: All code execution happens in isolated containers
 - **Network Restrictions**: Containers run with `network_disabled=True` by default
-- **Resource Limits**: Memory and CPU limits prevent resource exhaustion  
+- **Resource Limits**: Memory and CPU limits prevent resource exhaustion 
 - **API Key Management**: Store sensitive keys in environment variables
 - **Input Sanitization**: All user inputs are validated and sanitized
 - **Session Isolation**: Each agent session is completely isolated
@@ -2680,7 +2651,7 @@ This project leverages several open-source libraries and commercial services:
 
 ### AI/ML Frameworks
 - **OpenAI**: GPT models and API services
-- **Anthropic**: Claude models and API services  
+- **Anthropic**: Claude models and API services 
 - **AWS Bedrock**: Cloud-based AI model access
 - **LangChain**: Framework for building AI applications (by LangChain, Inc.)
 - **LlamaIndex**: Data framework for LLM applications (by Jerry Liu)
@@ -2746,7 +2717,7 @@ async def demo():
     )
     resp = await agent.process_message("What changed in v2.0 API?", context=ctx)
     print(resp.content)
-    print(resp.metadata)  # includes used_kbs, primary_kb, sources_dict
+    print(resp.metadata) # includes used_kbs, primary_kb, sources_dict
 
     # 2) Via AgentMessage.metadata — list of dicts
     msg = AgentMessage(
