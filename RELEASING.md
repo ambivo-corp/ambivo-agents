@@ -6,110 +6,91 @@ How to version, tag, and publish this package to PyPI.
 
 ## Why version appears in 3 files
 
-The version is declared in three places because each serves a different consumer:
-
 | File | Why it exists | Who reads it |
 |------|--------------|--------------|
-| `ambivo_agents/__init__.py` (`__version__`) | Runtime access -- `import ambivo_agents; print(ambivo_agents.__version__)`. Also used by tools like `importlib.metadata` as a fallback. | Your code, pip, debugging |
-| `pyproject.toml` (`version`) | PEP 621 standard. Modern build tools (`python -m build`) read this to stamp the wheel/sdist filename and package metadata. | `build`, `pip`, PyPI |
-| `setup.py` (`version`) | Legacy setuptools entry point. Still needed because some downstream tools and editable installs (`pip install -e .`) fall back to `setup.py`. Will eventually be removed when full PEP 621 migration is complete. | `pip install -e .`, older tooling |
+| `ambivo_agents/__init__.py` (`__version__`) | Runtime access -- `import ambivo_agents; print(ambivo_agents.__version__)` | Your code, pip, debugging |
+| `pyproject.toml` (`version`) | PEP 621 standard. `python -m build` reads this to stamp the wheel filename. | `build`, `pip`, PyPI |
+| `setup.py` (`version`) | Legacy setuptools. Still needed for `pip install -e .` and older tooling. | Editable installs, older pip |
 
-**Rule:** All three must match. The publish script (`manual_pypi_publish.sh`) validates this and syncs them automatically.
+**Rule:** All three must match. The publish script (`manual_pypi_publish.sh`) validates and syncs them.
 
 ---
 
-## Release workflow
+## Release workflow (primary)
 
-### Standard release (CI-driven)
+Build and publish locally, then tag and push. This is the fastest and most reliable path.
 
 ```bash
-# 1. Make your changes, bump version in all 3 files
-#    __init__.py, setup.py, pyproject.toml
+# 1. Bump version in all 3 files
+#    ambivo_agents/__init__.py, setup.py, pyproject.toml
 
-# 2. Commit
-git add ambivo_agents/__init__.py setup.py pyproject.toml [other files]
-git commit -m "Release v1.4.2 - brief description of changes"
+# 2. Commit everything
+git add ambivo_agents/__init__.py setup.py pyproject.toml [other changed files]
+git commit -m "Release v1.4.3 - brief description of changes"
 
-# 3. Tag AFTER commit, BEFORE push
-git tag v1.4.2
+# 3. Build and publish to PyPI
+rm -rf dist/ build/ *.egg-info/
+python -m build
+twine upload dist/*
 
-# 4. Push commit AND tag together
+# 4. Tag AFTER successful publish
+git tag v1.4.3
+
+# 5. Push commit and tag
 git push origin main --tags
-
-# 5. Done -- GitHub Actions (pypi-publish.yml) auto-publishes to PyPI
 ```
 
-### What triggers publishing
+**Why publish before tagging:** If the build or upload fails, you don't have a tag pointing to an unpublished version. Tag only after PyPI confirms the upload.
 
-| Action | CI workflow triggered | Publishes? |
-|--------|---------------------|------------|
-| `git push origin main` | `python-package.yml` (tests only) | No |
-| `git push origin v1.4.2` | `pypi-publish.yml` | Yes (production PyPI) |
-| `git push origin v1.4.2-beta.1` | `pypi-publish.yml` | Yes (Test PyPI only) |
-| Manual workflow dispatch | `pypi-publish.yml` | Yes (whichever target) |
-
-### Pre-release testing
+### Using the publish script (alternative to steps 3-4)
 
 ```bash
-# Tag as beta -- publishes to Test PyPI only
-git tag v1.4.2-beta.1
-git push origin v1.4.2-beta.1
-
-# Install from Test PyPI to verify
-pip install -i https://test.pypi.org/simple/ --no-deps ambivo-agents==1.4.2b1
-
-# If good, tag the SAME commit for production
-git tag v1.4.2
-git push origin v1.4.2
-```
-
-**Tip:** Test PyPI has unreliable mirrors for dependencies. Install deps from real PyPI first, then install only your package with `--no-deps`:
-
-```bash
-pip install -r requirements.txt
-pip install -i https://test.pypi.org/simple/ --no-deps ambivo-agents==1.4.2b1
-```
-
----
-
-## Manual publishing (fallback)
-
-Use `manual_pypi_publish.sh` only when GitHub Actions runners are unavailable.
-
-```bash
-# Make executable (first time)
-chmod +x manual_pypi_publish.sh
-
-# Publish current version
+# After committing (step 2), use the script instead of manual commands:
 ./manual_pypi_publish.sh
 
-# Test on Test PyPI first
-./manual_pypi_publish.sh --test
-
-# Specific version
-./manual_pypi_publish.sh --version 1.4.2
-
-# Dry run (see what would happen)
-./manual_pypi_publish.sh --dry-run
-
-# Force (skip confirmations)
-./manual_pypi_publish.sh --force
+# Or for a specific version:
+./manual_pypi_publish.sh --version 1.4.3
 ```
 
-### What the script does
+The script validates prerequisites, syncs version files, builds, verifies, and uploads.
 
-1. Validates prerequisites (.pypirc, git repo, Python tools)
-2. Determines version from git tag / pyproject.toml / manual flag
-3. Syncs version across all 3 files if they differ
-4. Installs/upgrades build tools (pip, build, twine, wheel)
-5. Cleans old `dist/`, `build/`, `*.egg-info/`
-6. Builds wheel + sdist via `python -m build`
-7. Verifies with `twine check dist/*`
-8. Checks PyPI for duplicate version
-9. Asks for confirmation
-10. Uploads via `twine upload dist/* --config-file .pypirc`
+---
 
-### If the script fails
+## What happens on push
+
+| Action | What triggers | Result |
+|--------|--------------|--------|
+| `git push origin main` | `python-package.yml` | Runs integration tests only. No publishing. |
+| `git push origin v1.4.3` (stable tag) | `pypi-publish.yml` | Attempts PyPI publish. Requires `pypi` environment approval. Harmless "version exists" if already published locally. |
+| `git push origin v1.4.3-beta.1` (pre-release tag) | `pypi-publish.yml` | Publishes to Test PyPI only. Requires `testpypi` environment approval. |
+
+The CI publish workflow (`pypi-publish.yml`) serves as a **backup path**. It requires GitHub environment approval and uses the `PYPI_API_TOKEN` secret. The primary path is local publishing with `.pypirc`.
+
+---
+
+## Pre-release testing
+
+```bash
+# 1. Publish to Test PyPI first
+./manual_pypi_publish.sh --test --version 1.4.3
+
+# 2. Install from Test PyPI to verify (deps from real PyPI, package from test)
+pip install -r requirements.txt
+pip install -i https://test.pypi.org/simple/ --no-deps ambivo-agents==1.4.3
+
+# 3. If good, publish to production
+./manual_pypi_publish.sh --version 1.4.3
+
+# 4. Tag and push
+git tag v1.4.3
+git push origin main --tags
+```
+
+---
+
+## Quick reference: manual commands
+
+If the publish script isn't available:
 
 ```bash
 rm -rf dist/ build/ *.egg-info/
@@ -122,11 +103,11 @@ twine upload dist/* --config-file .pypirc --verbose
 
 ## Prerequisites
 
-- `.pypirc` with PyPI API tokens (never commit this -- already in .gitignore)
-- Python 3.11+ with pip
+- `.pypirc` with PyPI API tokens in the repo root (never committed -- in .gitignore)
+- Python 3.11+ with `build` and `twine` installed (`pip install build twine`)
 - Git
 
-### PyPI environments (for GitHub Actions)
+### PyPI environments (for GitHub Actions CI backup)
 
 | Environment | Secret | Repository URL |
 |-------------|--------|---------------|
@@ -162,6 +143,7 @@ git push origin v1.1.8
 
 | Version | Tag | Key changes |
 |---------|-----|-------------|
+| 1.4.2 | `v1.4.2` | Doc consolidation, CI lint removal, workflow pattern docs |
 | 1.4.1 | `v1.4.1` | Security hardening, SSE streaming, emoji removal, defensive coding |
 | 1.4.0 | `v1.4.0` | Pre-hardening baseline |
 | 1.3.9 | `v1.3.9` | Knowledge synthesis, response quality assessor |
