@@ -72,10 +72,8 @@ try:
     from ambivo_agents.config.loader import ConfigurationError, get_config_section, load_config
 
     LOADER_AVAILABLE = True
-    print("Using ambivo_agents configuration loader with environment variable support")
 except ImportError:
     LOADER_AVAILABLE = False
-    print("ambivo_agents.config.loader not available - using fallback configuration")
 
 # Fallback to service for complex routing if needed
 try:
@@ -508,12 +506,16 @@ class AmbivoAgentsCLI:
             agent, context = self._session_agents[key]
 
             if self.config.get("cli.verbose", False):
-                print(f"Removing cached agent: {agent.agent_id}")
+                logging.debug(f"Removing cached agent: {agent.agent_id}")
 
             try:
-                asyncio.create_task(agent.cleanup_session())
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(agent.cleanup_session())
+                else:
+                    loop.run_until_complete(agent.cleanup_session())
             except Exception as e:
-                print(f"Warning during agent cleanup: {e}")
+                logging.debug(f"Agent cleanup skipped: {e}")
 
             del self._session_agents[key]
 
@@ -527,9 +529,13 @@ class AmbivoAgentsCLI:
 
         for key, (agent, context) in self._session_agents.items():
             try:
-                asyncio.create_task(agent.cleanup_session())
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(agent.cleanup_session())
+                else:
+                    loop.run_until_complete(agent.cleanup_session())
             except Exception as e:
-                print(f"Warning during agent cleanup: {e}")
+                logging.debug(f"Agent cleanup skipped: {e}")
 
         self._session_agents.clear()
 
@@ -604,9 +610,6 @@ class AmbivoAgentsCLI:
             r"create.*code.*(?:execute|run)", # "create code ... execute"
         ]
 
-        # Check regex patterns first (strongest indicators)
-        import re
-
         for pattern in strong_patterns:
             if re.search(pattern, message_lower):
                 return True
@@ -643,9 +646,6 @@ class AmbivoAgentsCLI:
             r"rest.*api", # REST API
             r"http.*(?:request|call)", # HTTP request/call
         ]
-
-        # Check regex patterns first (strongest indicators)
-        import re
 
         for pattern in strong_patterns:
             if re.search(pattern, message_lower):
@@ -701,9 +701,6 @@ class AmbivoAgentsCLI:
             r"(?:statistics|stats|summary).*(?:data|dataset)", # Statistical analysis
             r"duckdb.*(?:query|analyze|load)", # DuckDB specific
         ]
-
-        # Check regex patterns first (strongest indicators)
-        import re
 
         for pattern in strong_patterns:
             if re.search(pattern, message_lower):
@@ -777,8 +774,6 @@ class AmbivoAgentsCLI:
 
     def _detect_database_request(self, message: str) -> bool:
         """Enhanced database operation detection with comprehensive keyword matching"""
-        import re
-
         message_lower = message.lower()
 
         # Database connection keywords
@@ -819,8 +814,7 @@ class AmbivoAgentsCLI:
         return False
 
     async def _route_with_builtin_logic(self, message: str, session_id: str) -> str:
-        """Built-in routing logic using cached agents"""
-        """Built-in routing logic using cached agents - ENHANCED WITH CODE DETECTION"""
+        """Built-in routing logic using cached agents with intent detection"""
         message_lower = message.lower()
 
         # CodeExecutorAgent - enabled by default when Docker is available unless explicitly disabled
@@ -958,8 +952,6 @@ class AmbivoAgentsCLI:
                 )
 
                 try:
-                    import re
-
                     youtube_patterns = [
                         r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
                         r"https?://(?:www\.)?youtu\.be/[\w-]+",
@@ -1060,7 +1052,7 @@ def initialize_cli(
 
 
 @click.group(invoke_without_command=True)
-@click.version_option(version="1.1.0", prog_name="Ambivo Agents")
+@click.version_option(version=None, prog_name="Ambivo Agents", package_name="ambivo-agents")
 @click.option("--config", "-c", help="Configuration file path")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option("--env-vars", is_flag=True, help="Force use of environment variables")
@@ -1101,7 +1093,8 @@ def cli(ctx, config: Optional[str], verbose: bool, env_vars: bool):
     cli_instance = initialize_cli(config, verbose, env_vars if env_vars else None)
 
     if verbose:
-        click.echo("Ambivo Agents CLI v1.1.0 - Enhanced with Full Environment Variable Support")
+        from ambivo_agents import __version__
+        click.echo(f"Ambivo Agents CLI v{__version__}")
         click.echo("Contact: info@ambivo.com")
         click.echo("Company: https://www.ambivo.com")
         click.echo("Agent caching, session management, ENV variables, and MCP integration")
@@ -1249,8 +1242,9 @@ def shell():
     """Start Ambivo Agents interactive shell with full environment variable support"""
 
     # Show enhanced welcome message
-    click.echo("Ambivo Agents Shell v1.1.0 (Full Environment Variable Support)")
-    click.echo("YAML config + ENV variables + agent caching + session history + MCP integration")
+    from ambivo_agents import __version__
+    click.echo(f"Ambivo Agents Shell v{__version__}")
+    click.echo("YAML config + ENV variables + agent caching + session history")
 
     click.echo(f"Configuration source: {cli_instance.config.config_source}")
 
@@ -1703,8 +1697,6 @@ def api(request: str, token: str, timeout: int, stream: bool):
     - ambivo-agents api "Read docs at https://api.example.com/docs and get users" --token abc123
     - ambivo-agents api "POST https://api.example.com/users" --stream
     """
-    import asyncio
-
     async def run_api_request():
         try:
             if not cli_instance:
