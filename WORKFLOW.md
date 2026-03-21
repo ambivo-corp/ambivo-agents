@@ -1,5 +1,20 @@
 # Workflow Development Guide
 
+## Scope
+
+This guide covers the **lightweight, in-memory workflow system** built into `ambivo_agents`. It is designed for single-process orchestration using `asyncio` -- no external task queue, no persistent state, no REST API.
+
+For **enterprise workflows** with MongoDB/Redis persistence, Celery task queues, 26+ node types (LEAD, EMAIL, API_CALL, TRANSCRIBE, OCR, etc.), REST API, and multi-server execution, see the [ai_workflow_system](https://github.com/ambivo-corp/ai_workflow) repository.
+
+| Feature | ambivo_agents (this library) | ai_workflow_system |
+|---------|-----------------------------|--------------------|
+| Concurrency | asyncio.gather() | Celery + Redis broker |
+| Persistence | In-memory (lost on restart) | MongoDB + Redis |
+| Node types | Sequential, Parallel, Consensus, Debate, Map-Reduce, Error Recovery | 28+ types incl. LEAD, EMAIL, AGENT, TRANSCRIBE, OCR |
+| API | Python-only | FastAPI REST endpoints |
+| Agent integration | Direct Python calls | Agent nodes via ambivo_agents.create() |
+| Use case | Scripts, notebooks, single-process apps | Production multi-tenant SaaS |
+
 ## Complete Workflow Architecture and Development Guide
 
 This guide provides comprehensive documentation for building robust, stateful workflows using the ambivo_agents library.
