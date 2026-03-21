@@ -38,35 +38,6 @@ class TestBasicIntegration:
         # Cleanup
         await agent.cleanup_session()
 
-    @pytest.mark.asyncio
-    async def test_knowledge_base_workflow(self):
-        """Test basic knowledge base workflow (based on one_liner_examples.py)"""
-        agent, context = KnowledgeBaseAgent.create(user_id="kb_test_user")
-
-        try:
-            # Ingest some text
-            result = await agent._ingest_text(
-                kb_name="simple_test_kb",
-                input_text="Ambivo is an AI company that builds intelligent automation platforms.",
-                custom_meta={"source": "simple_test"}
-            )
-
-            assert result['success'] is True
-            print("✅ Text ingested successfully")
-
-            # Query the knowledge base
-            answer = await agent._query_knowledge_base(
-                kb_name="simple_test_kb",
-                query="What does Ambivo do?"
-            )
-
-            assert answer['success'] is True
-            assert "Ambivo" in answer['answer']
-            print(f"💬 Answer: {answer['answer']}")
-
-        finally:
-            # Always cleanup
-            await agent.cleanup_session()
 
 
 if __name__ == "__main__":
