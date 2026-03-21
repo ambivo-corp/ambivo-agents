@@ -138,7 +138,10 @@ class MediaDockerExecutor:
             # 4. Other docker shared directories (for workflow handoffs)
             self.handoff_dir / filename,
             self.handoff_dir / Path(filename).name,
-            # 5. Cross-agent handoff directories (for workflow integration)
+            # 5. Shared directory (common to all agents)
+            self.shared_manager.get_shared_dir() / filename,
+            self.shared_manager.get_shared_dir() / Path(filename).name,
+            # 6. Cross-agent handoff directories (for workflow integration)
             self.shared_manager.get_host_path("youtube", "handoff") / filename,
             self.shared_manager.get_host_path("youtube", "handoff") / Path(filename).name,
             self.shared_manager.get_host_path("youtube", "output") / filename,

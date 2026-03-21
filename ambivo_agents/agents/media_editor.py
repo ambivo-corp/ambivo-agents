@@ -280,6 +280,24 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             self.memory.store_message(original_message)
 
         try:
+            # Pre-resolve file paths in the message before LLM analysis.
+            # When a workflow passes an absolute path like "/path/to/file.mp4",
+            # resolve it directly so the LLM doesn't truncate long filenames.
+            import re as _re
+            path_match = _re.search(r'(/[\w/._\- ]+\.(?:mp4|mp3|wav|avi|mov|mkv|flac|ogg|webm|m4a|pdf|png|jpg))', user_message)
+            if path_match:
+                resolved_path = Path(path_match.group(1))
+                if resolved_path.exists():
+                    self._pre_resolved_input_file = str(resolved_path)
+                    self.logger.info(f"Pre-resolved input file from message: {resolved_path.name}")
+                else:
+                    # Try to find it via resolve_input_file
+                    from ..executors.media_executor import MediaExecutor
+                    if hasattr(self, '_media_executor') and self._media_executor:
+                        found = self._media_executor.resolve_input_file(resolved_path.name)
+                        if found:
+                            self._pre_resolved_input_file = str(found)
+                            self.logger.info(f"Resolved input file by name: {found}")
 
             # Update conversation state
             self.update_conversation_state(user_message)
@@ -644,6 +662,14 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         self, media_files: List[str], output_prefs: Dict[str, Any], user_message: str
     ) -> str:
         """Handle audio extraction with LLM analysis"""
+
+        # Use pre-resolved file path if available (set by process_message when
+        # an absolute path was detected in the prompt from a workflow pipeline)
+        pre_resolved = getattr(self, '_pre_resolved_input_file', None)
+        if pre_resolved:
+            media_files = [pre_resolved]
+            self._pre_resolved_input_file = None  # consume it
+            self.logger.info(f"Using pre-resolved input file: {pre_resolved}")
 
         if not media_files:
             recent_file = self.get_recent_media_file()

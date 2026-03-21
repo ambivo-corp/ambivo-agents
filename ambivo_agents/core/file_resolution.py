@@ -94,7 +94,16 @@ def resolve_agent_file_path(
             ]
         )
 
-        # 4. Current working directory
+        # 4. Shared directory (common to all agents)
+        shared_path = Path(shared_base_dir) / "shared"
+        search_locations.extend(
+            [
+                shared_path / filename,
+                shared_path / Path(filename).name,
+            ]
+        )
+
+        # 5. Current working directory
         search_locations.extend(
             [
                 Path(filename),

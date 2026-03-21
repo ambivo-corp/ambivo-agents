@@ -163,11 +163,18 @@ ls -la /workspace/output/
                             "path": str(downloaded_file),
                         }
 
-                        # Move output file to shared output directory (Docker shared structure)
+                        # Move output file to agent output directory
                         shared_output = self.output_dir / downloaded_file.name
                         shutil.move(str(downloaded_file), str(shared_output))
                         output_info["final_path"] = str(shared_output)
                         output_info["shared_path"] = str(shared_output)
+
+                        # Also copy to the shared directory for cross-agent access
+                        try:
+                            shared_copy = self.shared_manager.copy_to_shared(str(shared_output))
+                            output_info["shared_dir_path"] = str(shared_copy)
+                        except Exception as e:
+                            logging.debug(f"Failed to copy to shared dir: {e}")
 
                         # Try to parse JSON result from the script output
                         try:

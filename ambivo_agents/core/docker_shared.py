@@ -34,6 +34,7 @@ class DockerSharedManager:
             "temp": self.base_dir / "temp",
             "handoff": self.base_dir / "handoff",
             "work": self.base_dir / "work",
+            "shared": self.base_dir / "shared",
         }
 
         # Agent-specific subdirectories (from agent_config.yaml)
@@ -95,6 +96,7 @@ class DockerSharedManager:
             str(self.subdirs["temp"]): {"bind": f"{self.container_base}/temp", "mode": "rw"},
             str(self.subdirs["handoff"]): {"bind": f"{self.container_base}/handoff", "mode": "rw"},
             str(self.subdirs["work"]): {"bind": f"{self.container_base}/work", "mode": "rw"},
+            str(self.subdirs["shared"]): {"bind": f"{self.container_base}/shared", "mode": "rw"},
         }
 
     def copy_to_input(self, source_file: str, agent: str, filename: Optional[str] = None) -> Path:
@@ -124,6 +126,22 @@ class DockerSharedManager:
         dest_path = handoff_dir / filename
         shutil.copy2(source_file, dest_path)
         logger.info(f"Handoff: {source_file} → {dest_path} (from {from_agent} to {to_agent})")
+        return dest_path
+
+    def get_shared_dir(self) -> Path:
+        """Get the shared directory path accessible by all agents."""
+        shared = self.subdirs["shared"]
+        shared.mkdir(parents=True, exist_ok=True)
+        return shared
+
+    def copy_to_shared(self, source_file: str, filename: Optional[str] = None) -> Path:
+        """Copy file to the shared directory accessible by all agents."""
+        if filename is None:
+            filename = os.path.basename(source_file)
+        shared_dir = self.get_shared_dir()
+        dest_path = shared_dir / filename
+        shutil.copy2(source_file, dest_path)
+        logger.info(f"Shared: {source_file} -> {dest_path}")
         return dest_path
 
     def list_outputs(self, agent: str) -> List[str]:
