@@ -66,6 +66,15 @@ knowledge_base:
   qdrant_url: "https://your-cluster-id.us-east4-0.gcp.cloud.qdrant.io:6333"
   qdrant_api_key: "your-qdrant-api-key"
 
+  # VectorDB API URL — used for temporary KB lifecycle management (TTL, cleanup)
+  # When set, skill-assigned KBs use the vectordb-api HTTP endpoints instead of
+  # writing directly to Qdrant, enabling automatic TTL-based expiration.
+  vectordb_api_url: ""  # e.g. "https://vectordb.ambivo.com"
+  vectordb_api_token: ""  # JWT or X-AMBIVO-INTERNAL-SECRET for vectordb-api auth
+
+  # Temporary KB defaults (used when agents create session-scoped KBs)
+  temp_kb_ttl_hours: 24  # Default TTL for temporary knowledge bases
+
   # Feature Settings
   enable_file_processing: true
   enable_web_ingestion: true
