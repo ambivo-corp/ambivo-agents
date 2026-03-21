@@ -10,6 +10,9 @@ from .base import (
     MessageType,
     ProviderConfig,
     ProviderTracker,
+    SSEEventType,
+    StreamChunk,
+    StreamSubType,
 )
 from .llm import LLMServiceInterface, MultiProviderLLMService, create_multi_provider_llm_service
 from .memory import MemoryManagerInterface, RedisMemoryManager, create_redis_memory_manager
@@ -33,6 +36,9 @@ __all__ = [
     "MultiProviderLLMService",
     "create_multi_provider_llm_service",
     "AgentSession",
+    "SSEEventType",
+    "StreamChunk",
+    "StreamSubType",
     "WorkflowBuilder",
     "AmbivoWorkflow",
     "WorkflowPatterns",

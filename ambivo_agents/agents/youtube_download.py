@@ -182,7 +182,8 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
         self, message: AgentMessage, context: ExecutionContext = None
     ) -> AgentMessage:
         """Process message with LLM-based YouTube intent detection and history context"""
-        self.memory.store_message(message)
+        if self.memory:
+            self.memory.store_message(message)
 
         try:
             user_message = message.content
@@ -210,7 +211,8 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
                 conversation_id=message.conversation_id,
             )
 
-            self.memory.store_message(response)
+            if self.memory:
+                self.memory.store_message(response)
             return response
 
         except Exception as e:
@@ -227,7 +229,8 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
         self, message: AgentMessage, context: ExecutionContext = None
     ) -> AsyncIterator[StreamChunk]:
         """Stream processing for YouTube operations"""
-        self.memory.store_message(message)
+        if self.memory:
+            self.memory.store_message(message)
 
         try:
             user_message = message.content
@@ -329,7 +332,8 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
                         context_summary.append(f"Previous YouTube URL: {youtube_urls[0]}")
 
             return "\n".join(context_summary) if context_summary else "No previous YouTube context"
-        except:
+        except Exception as e:
+            self.logger.debug(f"Failed to get YouTube context: {e}")
             return "No previous YouTube context"
 
     async def _route_youtube_with_llm_analysis(
@@ -386,21 +390,21 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
 
             if result["success"]:
                 file_size_mb = result.get("file_size_bytes", 0) / (1024 * 1024)
-                return f"""✅ **YouTube Audio Download Completed**
+                return f""" **YouTube Audio Download Completed**
 
-🎵 **Type:** Audio (MP3)
-🔗 **URL:** {url}
-📁 **File:** {result.get('filename', 'Unknown')}
-📍 **Location:** {result.get('file_path', 'Unknown')}
-📊 **Size:** {file_size_mb:.2f} MB
-⏱️ **Download Time:** {result.get('execution_time', 0):.2f}s
+ **Type:** Audio (MP3)
+ **URL:** {url}
+ **File:** {result.get('filename', 'Unknown')}
+ **Location:** {result.get('file_path', 'Unknown')}
+ **Size:** {file_size_mb:.2f} MB
+⏱ **Download Time:** {result.get('execution_time', 0):.2f}s
 
-Your audio file has been successfully downloaded and is ready to use! 🎉"""
+Your audio file has been successfully downloaded and is ready to use! """
             else:
-                return f"❌ **Audio download failed:** {result['error']}"
+                return f" **Audio download failed:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error during audio download:** {str(e)}"
+            return f" **Error during audio download:** {str(e)}"
 
     async def _handle_video_download(
         self, youtube_urls: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -424,21 +428,21 @@ Your audio file has been successfully downloaded and is ready to use! 🎉"""
 
             if result["success"]:
                 file_size_mb = result.get("file_size_bytes", 0) / (1024 * 1024)
-                return f"""✅ **YouTube Video Download Completed**
+                return f""" **YouTube Video Download Completed**
 
-🎬 **Type:** Video (MP4)
-🔗 **URL:** {url}
-📁 **File:** {result.get('filename', 'Unknown')}
-📍 **Location:** {result.get('file_path', 'Unknown')}
-📊 **Size:** {file_size_mb:.2f} MB
-⏱️ **Download Time:** {result.get('execution_time', 0):.2f}s
+ **Type:** Video (MP4)
+ **URL:** {url}
+ **File:** {result.get('filename', 'Unknown')}
+ **Location:** {result.get('file_path', 'Unknown')}
+ **Size:** {file_size_mb:.2f} MB
+⏱ **Download Time:** {result.get('execution_time', 0):.2f}s
 
-Your video file has been successfully downloaded and is ready to use! 🎉"""
+Your video file has been successfully downloaded and is ready to use! """
             else:
-                return f"❌ **Video download failed:** {result['error']}"
+                return f" **Video download failed:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error during video download:** {str(e)}"
+            return f" **Error during video download:** {str(e)}"
 
     async def _handle_video_info(self, youtube_urls: List[str], user_message: str) -> str:
         """Handle video info requests"""
@@ -459,25 +463,25 @@ Your video file has been successfully downloaded and is ready to use! 🎉"""
 
             if result["success"]:
                 video_info = result["video_info"]
-                return f"""📹 **YouTube Video Information**
+                return f""" **YouTube Video Information**
 
-**🎬 Title:** {video_info.get('title', 'Unknown')}
-**👤 Author:** {video_info.get('author', 'Unknown')}
-**⏱️ Duration:** {self._format_duration(video_info.get('duration', 0))}
-**👀 Views:** {video_info.get('views', 0):,}
-**🔗 URL:** {url}
+** Title:** {video_info.get('title', 'Unknown')}
+** Author:** {video_info.get('author', 'Unknown')}
+**⏱ Duration:** {self._format_duration(video_info.get('duration', 0))}
+** Views:** {video_info.get('views', 0):,}
+** URL:** {url}
 
-**📊 Available Streams:**
+** Available Streams:**
 - Audio streams: {video_info.get('available_streams', {}).get('audio_streams', 0)}
 - Video streams: {video_info.get('available_streams', {}).get('video_streams', 0)}
 - Highest resolution: {video_info.get('available_streams', {}).get('highest_resolution', 'Unknown')}
 
 Would you like me to download this video?"""
             else:
-                return f"❌ **Error getting video info:** {result['error']}"
+                return f" **Error getting video info:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error getting video info:** {str(e)}"
+            return f" **Error getting video info:** {str(e)}"
 
     async def _handle_batch_download(
         self, youtube_urls: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -500,9 +504,9 @@ Would you like me to download this video?"""
                 failed = result["failed"]
                 total = result["total_urls"]
 
-                response = f"""📦 **Batch YouTube Download Completed**
+                response = f""" **Batch YouTube Download Completed**
 
-📊 **Summary:**
+ **Summary:**
 - **Total URLs:** {total}
 - **Successful:** {successful}
 - **Failed:** {failed}
@@ -511,26 +515,26 @@ Would you like me to download this video?"""
 """
 
                 if successful > 0:
-                    response += "✅ **Successfully Downloaded:**\n"
+                    response += " **Successfully Downloaded:**\n"
                     for i, download_result in enumerate(result["results"], 1):
                         if download_result.get("success", False):
                             response += f"{i}. {download_result.get('filename', 'Unknown')}\n"
 
                 if failed > 0:
-                    response += f"\n❌ **Failed Downloads:** {failed}\n"
+                    response += f"\n **Failed Downloads:** {failed}\n"
                     for i, download_result in enumerate(result["results"], 1):
                         if not download_result.get("success", False):
                             response += f"{i}. {download_result.get('url', 'Unknown')}: {download_result.get('error', 'Unknown error')}\n"
 
                 response += (
-                    f"\n🎉 Batch download completed with {successful}/{total} successful downloads!"
+                    f"\n Batch download completed with {successful}/{total} successful downloads!"
                 )
                 return response
             else:
-                return f"❌ **Batch download failed:** {result['error']}"
+                return f" **Batch download failed:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error during batch download:** {str(e)}"
+            return f" **Error during batch download:** {str(e)}"
 
     async def _handle_youtube_help_request(self, user_message: str) -> str:
         """Handle YouTube help requests with conversation context"""
@@ -538,22 +542,22 @@ Would you like me to download this video?"""
 
         response = (
             "I'm your YouTube Download Agent! I can help you with:\n\n"
-            "🎵 **Audio Downloads**\n"
+            " **Audio Downloads**\n"
             "- Download MP3 audio from YouTube videos\n"
             "- High-quality audio extraction\n"
             "- Custom filename support\n\n"
-            "🎥 **Video Downloads**\n"
+            " **Video Downloads**\n"
             "- Download MP4 videos in highest available quality\n"
             "- Progressive download format\n"
             "- Full video with audio\n\n"
-            "📊 **Video Information**\n"
+            " **Video Information**\n"
             "- Get video details without downloading\n"
             "- Check duration, views, and available streams\n"
             "- Thumbnail and metadata extraction\n\n"
-            "📦 **Batch Operations**\n"
+            " **Batch Operations**\n"
             "- Download multiple videos at once\n"
             "- Bulk audio/video processing\n\n"
-            "🧠 **Smart Context Features**\n"
+            " **Smart Context Features**\n"
             "- Remembers YouTube URLs from conversation\n"
             "- Understands 'that video' and 'this URL'\n"
             "- Maintains working context\n\n"
@@ -561,14 +565,14 @@ Would you like me to download this video?"""
 
         # Add current context information
         if state.current_resource and self._is_valid_youtube_url(state.current_resource):
-            response += f"🎯 **Current Video:** {state.current_resource}\n"
+            response += f" **Current Video:** {state.current_resource}\n"
 
-        response += "\n💡 **Examples:**\n"
+        response += "\n **Examples:**\n"
         response += "• 'Download audio from https://youtube.com/watch?v=example'\n"
         response += "• 'Download video from https://youtube.com/watch?v=example'\n"
         response += "• 'Get info about https://youtube.com/watch?v=example'\n"
         response += "• 'Download that video as audio'\n"
-        response += "\nI understand context from our conversation! 🚀"
+        response += "\nI understand context from our conversation! "
 
         return response
 
@@ -875,10 +879,12 @@ Would you like me to download this video?"""
         for pattern in youtube_patterns:
             urls.extend(re.findall(pattern, text, re.IGNORECASE))
 
-        return list(set(urls))  # Remove duplicates
+        return list(set(urls)) # Remove duplicates
 
     def _get_recent_youtube_url_from_history(self, context):
         """Get most recent YouTube URL from conversation history"""
+        if not self.memory:
+            return None
         try:
             history = self.memory.get_recent_messages(
                 limit=5, conversation_id=context.conversation_id if context else None
@@ -889,8 +895,8 @@ Would you like me to download this video?"""
                     urls = self._extract_youtube_urls(content)
                     if urls:
                         return urls[0]
-        except:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Failed to extract URL: {e}")
         return None
 
     def _format_duration(self, seconds: int) -> str:
@@ -924,7 +930,7 @@ Would you like me to download this video?"""
             agent_id = f"youtube_{str(uuid.uuid4())[:8]}"
 
         # Create with auto-configuration enabled
-        return cls(agent_id=agent_id, auto_configure=True, **kwargs)  # Enable auto-configuration
+        return cls(agent_id=agent_id, auto_configure=True, **kwargs) # Enable auto-configuration
 
     @classmethod
     def create_advanced(
@@ -953,6 +959,6 @@ Would you like me to download this video?"""
             memory_manager=memory_manager,
             llm_service=llm_service,
             config=config,
-            auto_configure=False,  # Disable auto-config when using advanced mode
+            auto_configure=False, # Disable auto-config when using advanced mode
             **kwargs,
         )

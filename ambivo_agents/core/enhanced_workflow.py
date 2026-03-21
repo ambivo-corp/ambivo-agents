@@ -642,7 +642,7 @@ class WorkflowModerator(BaseAgent):
             if not workflow_found:
                 yield "x-amb-info:**Workflow Moderator**\n\n"
                 yield f"Available workflows: {', '.join(self.registered_workflows.keys())}\n\n"
-                yield "💡 **Commands:**\n"
+                yield "**Commands:**\n"
                 yield "• `workflow list` - List available workflows\n"
                 yield "• `workflow status <id>` - Check workflow status\n"
                 yield "• `workflow resume <id>` - Resume paused workflow\n"
@@ -657,10 +657,10 @@ class WorkflowModerator(BaseAgent):
             result = await self.execute_named_workflow(workflow_name, message.content, context)
 
             if result.success:
-                response_content = f"✅ Workflow '{workflow_name}' completed successfully!\n\n"
-                response_content += f"⏱️ Execution time: {result.execution_time:.2f}s\n"
-                response_content += f"🔧 Nodes executed: {', '.join(result.nodes_executed)}\n"
-                response_content += f"💬 Messages generated: {len(result.messages)}\n\n"
+                response_content = f"Workflow '{workflow_name}' completed successfully!\n\n"
+                response_content += f"Execution time: {result.execution_time:.2f}s\n"
+                response_content += f"Nodes executed: {', '.join(result.nodes_executed)}\n"
+                response_content += f"Messages generated: {len(result.messages)}\n\n"
 
                 if result.messages:
                     final_message = result.messages[-1]
@@ -673,7 +673,7 @@ class WorkflowModerator(BaseAgent):
                     conversation_id=message.conversation_id,
                 )
             else:
-                error_content = f"❌ Workflow '{workflow_name}' failed:\n"
+                error_content = f"Workflow '{workflow_name}' failed:\n"
                 error_content += "\n".join(result.errors)
 
                 return self.create_response(
@@ -1095,15 +1095,15 @@ async def setup_enhanced_workflow_system():
 async def integrate_with_existing_system():
     """Quick integration script for your existing system"""
 
-    print("🚀 Integrating Advanced Workflows with Existing System...")
+    print("Integrating Advanced Workflows with Existing System...")
 
     # Step 1: Import your existing moderator
     try:
         from ambivo_agents.agents.moderator import ModeratorAgent
 
-        print("✅ Found existing ModeratorAgent")
+        print("Found existing ModeratorAgent")
     except ImportError:
-        print("❌ Could not import ModeratorAgent")
+        print("Could not import ModeratorAgent")
         return None
 
     # Step 2: Create enhanced version
@@ -1118,10 +1118,10 @@ async def integrate_with_existing_system():
         "Use map-reduce to research multiple topics simultaneously",
     ]
 
-    print("\n🔧 Testing Advanced Workflow Patterns:")
+    print("\nTesting Advanced Workflow Patterns:")
 
     for pattern in test_patterns:
-        print(f"\n📝 Testing: {pattern[:50]}...")
+        print(f"\nTesting: {pattern[:50]}...")
 
         test_message = AgentMessage(
             id=str(uuid.uuid4()),
@@ -1135,15 +1135,15 @@ async def integrate_with_existing_system():
 
         try:
             response = await enhanced_moderator.process_message_with_workflows(test_message)
-            print(f"✅ Response received: {len(response.content)} characters")
+            print(f"Response received: {len(response.content)} characters")
         except Exception as e:
-            print(f"❌ Error: {str(e)}")
+            print(f"Error: {str(e)}")
 
-    print("\n🎉 Integration complete!")
+    print("\nIntegration complete!")
 
     # Step 4: Show available workflows
     status = await enhanced_moderator.get_workflow_status()
-    print(f"\n📊 Available advanced workflows: {status['advanced_workflows']['registered']}")
+    print(f"\nAvailable advanced workflows: {status['advanced_workflows']['registered']}")
 
     return enhanced_moderator
 

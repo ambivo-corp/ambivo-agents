@@ -205,7 +205,8 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
                         context_summary.append("Previous execution: failed")
 
             return "\n".join(context_summary) if context_summary else "No previous code execution"
-        except:
+        except Exception as e:
+            self.logger.debug(f"Failed to get code execution context: {e}")
             return "No previous code execution"
 
     async def _route_request(
@@ -284,14 +285,14 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
         if not self.llm_service:
             return "I can execute code, but I need an LLM service to write code. Please provide the code you want to execute."
 
-            # 🔥 FIX: Get conversation history for context
+            # FIX: Get conversation history for context
         conversation_history = []
         try:
             conversation_history = await self.get_conversation_history(
                 limit=5, include_metadata=True
             )
-        except:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Failed to retrieve conversation history: {e}")
 
         task_description = self._extract_task_from_message(user_message)
 
@@ -306,7 +307,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
         Respond with ONLY the code wrapped in ```{language} code blocks, followed by a brief explanation."""
 
         try:
-            # 🔥 FIX: Pass conversation history through context
+            # FIX: Pass conversation history through context
             llm_context = {
                 "conversation_history": conversation_history,
                 "task_type": "code_generation",
@@ -315,7 +316,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
 
             llm_response = await self.llm_service.generate_response(
                 prompt=code_prompt,
-                context=llm_context,  # 🔥 FIX: Context preserves memory across provider switches
+                context=llm_context,  # FIX: Context preserves memory across provider switches
             )
 
             # Extract code from LLM response
@@ -337,7 +338,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
 
                 if execution_result["success"]:
                     response += f"**Code Executor agent Result:**\n```\n{execution_result['output']}\n```\n\n"
-                    response += f"✅ Code executed successfully in {execution_result['execution_time']:.2f}s"
+                    response += f"Code executed successfully in {execution_result['execution_time']:.2f}s"
                 else:
                     response += f"**Execution Error:**\n```\n{execution_result['error']}\n```"
 
@@ -408,7 +409,8 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
         self, message: AgentMessage, context: ExecutionContext = None
     ) -> AgentMessage:
         """Process code execution requests with execution history"""
-        self.memory.store_message(message)
+        if self.memory:
+            self.memory.store_message(message)
 
         try:
             user_message = message.content
@@ -432,7 +434,8 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
                 conversation_id=message.conversation_id,
             )
 
-            self.memory.store_message(response)
+            if self.memory:
+                self.memory.store_message(response)
             return response
 
         except Exception as e:
@@ -449,7 +452,8 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
         self, message: AgentMessage, context: ExecutionContext = None
     ) -> AsyncIterator[StreamChunk]:
         """Stream processing for CodeExecutorAgent - FIXED: Context preserved across provider switches"""
-        self.memory.store_message(message)
+        if self.memory:
+            self.memory.store_message(message)
 
         try:
             user_message = message.content
@@ -461,7 +465,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
                 metadata={"agent": "code_executor", "phase": "initialization"},
             )
 
-            # 🔥 FIX: Get conversation context for streaming
+            # FIX: Get conversation context for streaming
             conversation_context = self._get_conversation_context_summary()
             conversation_history = await self.get_conversation_history(
                 limit=5, include_metadata=True
@@ -477,9 +481,9 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
             intent_analysis = await self._analyze_intent(user_message, conversation_context)
             primary_intent = intent_analysis.get("primary_intent", "execute_code")
 
-            # 🔥 FIX: Build LLM context for streaming
+            # FIX: Build LLM context for streaming
             llm_context = {
-                "conversation_history": conversation_history,  # 🔥 KEY FIX
+                "conversation_history": conversation_history,  # KEY FIX
                 "conversation_id": message.conversation_id,
                 "intent_analysis": intent_analysis,
                 "streaming": True,
@@ -512,7 +516,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
                     metadata={"phase": "code_generation"},
                 )
 
-                # 🔥 FIX: Generate and execute code with context preservation
+                # FIX: Generate and execute code with context preservation
                 response_content = await self._handle_code_writing_request_with_context(
                     user_message, language, llm_context
                 )
@@ -524,7 +528,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
 
             elif "```python" in user_message or "```bash" in user_message:
                 yield StreamChunk(
-                    text="🐍 **Code Execution Detected**\n\n",
+                    text="**Code Execution Detected**\n\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"intent": "execute_existing_code"},
                 )
@@ -532,7 +536,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
 
             else:
                 yield StreamChunk(
-                    text="⚠️ **No executable code detected**\n\n",
+                    text="**No executable code detected**\n\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"intent": "no_code_detected"},
                 )
@@ -555,7 +559,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
 
         task_description = self._extract_task_from_message(user_message)
 
-        # 🆕 Code-specific prompt that works with system message
+        # Code-specific prompt that works with system message
         code_prompt = f"""Task: {task_description}
 
     Requirements:
@@ -567,14 +571,14 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
     Please write the code now:"""
 
         try:
-            # 🆕 Get enhanced system message for code generation
+            # Get enhanced system message for code generation
             enhanced_system_message = self.get_system_message_for_llm(llm_context)
 
             # Generate code with system message guidance
             llm_response = await self.llm_service.generate_response(
                 prompt=code_prompt,
                 context=llm_context,
-                system_message=enhanced_system_message,  # 🆕 System message guides code style
+                system_message=enhanced_system_message,  # System message guides code style
             )
 
             # Extract and execute code (existing logic)
@@ -594,7 +598,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
 
                 if execution_result["success"]:
                     response += f"**Execution Result:**\n```\n{execution_result['output']}\n```\n\n"
-                    response += f"✅ Code executed successfully in {execution_result['execution_time']:.2f}s"
+                    response += f"Code executed successfully in {execution_result['execution_time']:.2f}s"
                 else:
                     response += f"**Execution Error:**\n```\n{execution_result['error']}\n```"
 

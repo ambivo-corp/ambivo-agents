@@ -6,11 +6,13 @@ authentication handling, retry logic, and security features.
 
 import asyncio
 import hashlib
+import ipaddress
 import json
 import logging
 import os
 from pathlib import Path
 import re
+import socket
 import time
 import urllib.parse
 from dataclasses import dataclass, field
@@ -70,13 +72,13 @@ class OutputConfig:
     """
 
     auto_save_large_responses: bool = True
-    size_threshold_kb: int = 50  # 50KB threshold
+    size_threshold_kb: int = 50 # 50KB threshold
     output_directory: str = "./api_responses"
     filename_template: str = "response_{timestamp}_{domain}_{method}"
     detect_content_type: bool = True
-    max_inline_size_kb: int = 5  # 5KB max inline display
-    create_summary: bool = True  # Create summary for saved files
-    compress_json: bool = False  # Whether to pretty-print JSON or compress it
+    max_inline_size_kb: int = 5 # 5KB max inline display
+    create_summary: bool = True # Create summary for saved files
+    compress_json: bool = False # Whether to pretty-print JSON or compress it
 
 
 @dataclass
@@ -93,7 +95,7 @@ class SecurityConfig:
     For production environments, consider setting specific allowed_domains.
     """
 
-    allowed_domains: Optional[List[str]] = None  # None = allow all (except blocked)
+    allowed_domains: Optional[List[str]] = None # None = allow all (except blocked)
     blocked_domains: Optional[List[str]] = field(
         default_factory=lambda: ["localhost", "127.0.0.1", "0.0.0.0"]
     )
@@ -102,12 +104,12 @@ class SecurityConfig:
     max_redirects: int = 5
     verify_ssl: bool = True
     timeout_seconds: int = 30
-    max_response_size: int = 50 * 1024 * 1024  # 50MB
+    max_response_size: int = 50 * 1024 * 1024 # 50MB
 
     # Safety timeout settings
-    default_timeout_seconds: int = 8  # Default safe timeout
-    max_safe_timeout: int = 8  # Maximum timeout without Docker
-    force_docker_above_timeout: bool = True  # Force Docker for longer timeouts
+    default_timeout_seconds: int = 8 # Default safe timeout
+    max_safe_timeout: int = 8 # Maximum timeout without Docker
+    force_docker_above_timeout: bool = True # Force Docker for longer timeouts
     docker_image: str = "sgosain/amb-ubuntu-python-public-pod"
 
 
@@ -139,7 +141,7 @@ class AuthConfig:
     pre_auth_method: HTTPMethod = HTTPMethod.POST
     pre_auth_payload: Optional[Dict[str, Any]] = None
     pre_auth_headers: Optional[Dict[str, str]] = None
-    token_path: str = "access_token"  # JSON path to extract token
+    token_path: str = "access_token" # JSON path to extract token
     token_prefix: str = "Bearer"
 
 
@@ -211,7 +213,7 @@ class APIDocumentation:
     endpoints: List[APIEndpoint] = field(default_factory=list)
     schemas: Dict[str, Any] = field(default_factory=dict)
     examples: Dict[str, Any] = field(default_factory=dict)
-    source_type: str = "openapi"  # openapi, html, postman
+    source_type: str = "openapi" # openapi, html, postman
 
 
 class APIAgent(BaseAgent, WebAgentHistoryMixin):
@@ -243,7 +245,7 @@ class APIAgent(BaseAgent, WebAgentHistoryMixin):
                 security_config = SecurityConfig(
                     allowed_domains=api_config.get(
                         "allowed_domains"
-                    ),  # None = allow all domains (except blocked)
+                    ), # None = allow all domains (except blocked)
                     blocked_domains=api_config.get(
                         "blocked_domains", ["localhost", "127.0.0.1", "0.0.0.0"]
                     ),
@@ -313,7 +315,7 @@ class APIAgent(BaseAgent, WebAgentHistoryMixin):
         # Initialize HTTP client with safe default timeout
         self.client = httpx.AsyncClient(
             verify=self.security_config.verify_ssl,
-            timeout=self.security_config.default_timeout_seconds,  # Use safe default
+            timeout=self.security_config.default_timeout_seconds, # Use safe default
             follow_redirects=True,
             max_redirects=self.security_config.max_redirects,
         )
@@ -402,7 +404,8 @@ Always prioritize security and follow the configured restrictions. Use your inte
             try:
                 json.loads(content_stripped)
                 return "json"
-            except:
+            except (json.JSONDecodeError, ValueError) as e:
+                self.logger.debug(f"Content looks like JSON but failed to parse: {e}")
                 pass
 
         if content_stripped.startswith("<?xml") or content_stripped.startswith("<"):
@@ -418,7 +421,8 @@ Always prioritize security and follow the configured restrictions. Use your inte
         try:
             parsed_url = urllib.parse.urlparse(url)
             domain = parsed_url.netloc.replace(".", "_")
-        except:
+        except (ValueError, AttributeError) as e:
+            self.logger.warning(f"Failed to parse URL for filename generation: {e}")
             domain = "unknown"
 
         # Use template from config
@@ -458,7 +462,8 @@ Always prioritize security and follow the configured restrictions. Use your inte
                     # Pretty print JSON
                     parsed_json = json.loads(content)
                     formatted_content = json.dumps(parsed_json, indent=2, ensure_ascii=False)
-                except:
+                except (json.JSONDecodeError, ValueError) as e:
+                    self.logger.debug(f"Failed to pretty-print JSON content, using raw content: {e}")
                     formatted_content = content
             else:
                 formatted_content = content
@@ -469,11 +474,11 @@ Always prioritize security and follow the configured restrictions. Use your inte
 
             # Create summary
             content_size_kb = len(content.encode("utf-8")) / 1024
-            summary = f"""📁 Response saved to file: {file_path}
-📊 Size: {content_size_kb:.1f} KB
-🌐 URL: {url}
-🔧 Method: {method}
-📄 Type: {content_type.upper()}
+            summary = f""" Response saved to file: {file_path}
+ Size: {content_size_kb:.1f} KB
+ URL: {url}
+ Method: {method}
+ Type: {content_type.upper()}
 ⏰ Timestamp: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}"""
 
             if self.output_config.create_summary:
@@ -488,7 +493,7 @@ Always prioritize security and follow the configured restrictions. Use your inte
 
         except Exception as e:
             self.logger.error(f"Failed to save response to file: {e}")
-            return "", f"❌ Failed to save response to file: {str(e)}"
+            return "", f" Failed to save response to file: {str(e)}"
 
     def _get_inline_content_preview(self, content: str, content_type: str) -> str:
         """Get truncated content for inline display"""
@@ -516,6 +521,18 @@ Always prioritize security and follow the configured restrictions. Use your inte
             await self.client.aclose()
         await super().cleanup_session()
 
+    def _domain_matches(self, pattern: str, domain: str) -> bool:
+        """Check if domain matches pattern. Supports wildcards like *.example.com"""
+        pattern = pattern.lower().strip()
+        domain = domain.lower().strip()
+        # Remove port from domain if present
+        if ":" in domain:
+            domain = domain.split(":")[0]
+        if pattern.startswith("*."):
+            suffix = pattern[1:]  # e.g., ".example.com"
+            return domain == pattern[2:] or domain.endswith(suffix)
+        return domain == pattern
+
     def _validate_security(self, request: APIRequest) -> Tuple[bool, Optional[str]]:
         """Validate request against security configuration"""
         # Parse URL to get domain
@@ -528,18 +545,29 @@ Always prioritize security and follow the configured restrictions. Use your inte
         # Check blocked domains
         if self.security_config.blocked_domains:
             for blocked in self.security_config.blocked_domains:
-                if blocked.lower() in domain:
+                if self._domain_matches(blocked, domain):
                     return False, f"Domain {domain} is blocked"
 
         # Check allowed domains (if specified)
         if self.security_config.allowed_domains:
             allowed = False
             for allowed_domain in self.security_config.allowed_domains:
-                if allowed_domain.lower() in domain:
+                if self._domain_matches(allowed_domain, domain):
                     allowed = True
                     break
             if not allowed:
                 return False, f"Domain {domain} is not in allowed list"
+
+        # Check for private/reserved IP ranges
+        try:
+            resolved_ip = socket.getaddrinfo(
+                parsed_url.hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+            )[0][4][0]
+            ip = ipaddress.ip_address(resolved_ip)
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                return False, f"Domain {domain} resolves to private/reserved IP {resolved_ip}"
+        except (socket.gaierror, ValueError, OSError):
+            pass  # DNS resolution failed -- allow the request to fail naturally later
 
         # Check blocked methods
         if (
@@ -598,7 +626,7 @@ Always prioritize security and follow the configured restrictions. Use your inte
                     return token
 
         except Exception as e:
-            self.logger.error(f"Failed to obtain auth token: {str(e)}")
+            self.logger.error(f"Failed to obtain auth token: {str(e)[:100]}")
 
         return None
 
@@ -673,7 +701,8 @@ Always prioritize security and follow the configured restrictions. Use your inte
                 # Prepare response object
                 try:
                     json_data = response.json()
-                except:
+                except (json.JSONDecodeError, ValueError) as e:
+                    self.logger.debug(f"Response body is not valid JSON: {e}")
                     json_data = None
 
                 api_response = APIResponse(
@@ -799,16 +828,16 @@ Always prioritize security and follow the configured restrictions. Use your inte
             client = docker.from_env()
 
             # Run the API request in Docker container
-            self.logger.info(f"🐳 Executing API request in Docker with {timeout_seconds}s timeout")
+            self.logger.info(f" Executing API request in Docker with {timeout_seconds}s timeout")
 
             container = client.containers.run(
                 image=self.security_config.docker_image,
                 command=["python", "-c", python_script],
                 detach=True,
                 remove=True,
-                network_mode="bridge",  # Allow network access but isolated
-                mem_limit="512m",  # Memory limit
-                cpu_quota=50000,  # CPU limit (50% of one core)
+                network_mode="bridge", # Allow network access but isolated
+                mem_limit="512m", # Memory limit
+                cpu_quota=50000, # CPU limit (50% of one core)
                 environment={"PYTHONUNBUFFERED": "1"},
             )
 
@@ -918,7 +947,8 @@ try:
     # Try to parse JSON
     try:
         result['json_data'] = response.json()
-    except:
+    except (ValueError, Exception) as e:
+        print(f"Debug: Response body is not valid JSON: {{e}}", file=sys.stderr)
         result['json_data'] = None
     
     # Output result as JSON
@@ -1404,7 +1434,7 @@ except Exception as e:
                 "type": param.get("type", ""),
                 "required": param.get("required", False),
                 "description": param.get("description", ""),
-                "location": param.get("in", "query"),  # query, path, header, etc.
+                "location": param.get("in", "query"), # query, path, header, etc.
             }
             parameters[param_name] = param_info
 
@@ -1796,7 +1826,7 @@ except Exception as e:
             json_data=json_data,
             params=params,
             auth_config=auth_config,
-            timeout=8,  # Use safe timeout by default
+            timeout=8, # Use safe timeout by default
         )
 
     async def process_message(
@@ -1830,9 +1860,9 @@ except Exception as e:
 
                 # Format response
                 if response.error:
-                    content = f"❌ API Request Failed: {response.error}"
+                    content = f" API Request Failed: {response.error}"
                 else:
-                    content = f"✅ API Response (HTTP {response.status_code}):\n"
+                    content = f" API Response (HTTP {response.status_code}):\n"
                     content += f"URL: {response.url}\n"
                     content += f"Duration: {response.duration_ms:.0f}ms\n"
 
@@ -1845,7 +1875,7 @@ except Exception as e:
                                 json_content,
                                 response.url,
                                 "GET",
-                                response.headers,  # Default to GET for non-streaming
+                                response.headers, # Default to GET for non-streaming
                             )
 
                             if file_path:
@@ -1991,19 +2021,19 @@ except Exception as e:
 
         try:
             # Step 1: Parse the documentation
-            status_msg = f"📚 Reading API documentation from {doc_url}..."
+            status_msg = f" Reading API documentation from {doc_url}..."
             self.logger.info(status_msg)
 
             api_doc = await self.parse_api_documentation(doc_url)
 
             if not api_doc.endpoints:
                 # Determine recipient_id from original message if available
-                recipient_id = "user"  # Default fallback
+                recipient_id = "user" # Default fallback
                 if isinstance(message_obj, AgentMessage):
                     recipient_id = message_obj.sender_id
 
                 return self.create_response(
-                    content=f"❌ No API endpoints found in documentation at {doc_url}",
+                    content=f" No API endpoints found in documentation at {doc_url}",
                     recipient_id=recipient_id,
                     message_type=MessageType.ERROR,
                     metadata={"error": "No endpoints found"},
@@ -2015,17 +2045,17 @@ except Exception as e:
             if not endpoint:
                 # List available endpoints for user
                 endpoint_list = []
-                for ep in api_doc.endpoints[:10]:  # Limit to first 10
+                for ep in api_doc.endpoints[:10]: # Limit to first 10
                     endpoint_list.append(f"- {ep.method.value} {ep.path}: {ep.description}")
 
-                content = f"❌ Could not find matching endpoint for '{api_request_desc}'\n\n"
-                content += f"📋 Available endpoints in {api_doc.title}:\n"
+                content = f" Could not find matching endpoint for '{api_request_desc}'\n\n"
+                content += f" Available endpoints in {api_doc.title}:\n"
                 content += "\n".join(endpoint_list)
                 if len(api_doc.endpoints) > 10:
                     content += f"\n... and {len(api_doc.endpoints) - 10} more endpoints"
 
                 # Determine recipient_id from original message if available
-                recipient_id = "user"  # Default fallback
+                recipient_id = "user" # Default fallback
                 if isinstance(message_obj, AgentMessage):
                     recipient_id = message_obj.sender_id
 
@@ -2042,28 +2072,28 @@ except Exception as e:
             )
 
             # Step 4: Make the API call
-            self.logger.info(f"🚀 Making API call to {endpoint.method.value} {endpoint.path}")
+            self.logger.info(f" Making API call to {endpoint.method.value} {endpoint.path}")
             response = await self.make_api_request(api_request)
 
             # Step 5: Format the response
             if response.error:
-                content = f"❌ API Request Failed: {response.error}\n\n"
-                content += f"📋 Attempted: {endpoint.method.value} {api_request.url}"
+                content = f" API Request Failed: {response.error}\n\n"
+                content += f" Attempted: {endpoint.method.value} {api_request.url}"
             else:
-                content = f"✅ Successfully called {api_doc.title} API!\n\n"
-                content += f"📡 **Endpoint**: {endpoint.method.value} {endpoint.path}\n"
-                content += f"📄 **Description**: {endpoint.description}\n"
-                content += f"🔗 **URL**: {response.url}\n"
-                content += f"⏱️ **Duration**: {response.duration_ms:.0f}ms\n"
-                content += f"📊 **Status**: HTTP {response.status_code}\n\n"
+                content = f" Successfully called {api_doc.title} API!\n\n"
+                content += f" **Endpoint**: {endpoint.method.value} {endpoint.path}\n"
+                content += f" **Description**: {endpoint.description}\n"
+                content += f" **URL**: {response.url}\n"
+                content += f"⏱ **Duration**: {response.duration_ms:.0f}ms\n"
+                content += f" **Status**: HTTP {response.status_code}\n\n"
 
                 if response.json_data:
-                    content += f"📦 **JSON Response**:\n```json\n{json.dumps(response.json_data, indent=2)}\n```"
+                    content += f" **JSON Response**:\n```json\n{json.dumps(response.json_data, indent=2)}\n```"
                 else:
-                    content += f"📄 **Content**: {response.content[:1000]}{'...' if len(response.content) > 1000 else ''}"
+                    content += f" **Content**: {response.content[:1000]}{'...' if len(response.content) > 1000 else ''}"
 
             # Determine recipient_id from original message if available
-            recipient_id = "user"  # Default fallback
+            recipient_id = "user" # Default fallback
             if isinstance(message_obj, AgentMessage):
                 recipient_id = message_obj.sender_id
 
@@ -2084,12 +2114,12 @@ except Exception as e:
         except Exception as e:
             self.logger.error(f"Error in documentation API request: {str(e)}")
             # Determine recipient_id from original message if available
-            recipient_id = "user"  # Default fallback
+            recipient_id = "user" # Default fallback
             if isinstance(message_obj, AgentMessage):
                 recipient_id = message_obj.sender_id
 
             return self.create_response(
-                content=f"❌ Error processing documentation request: {str(e)}\n\n"
+                content=f" Error processing documentation request: {str(e)}\n\n"
                 f"I tried to:\n1. Read docs from: {doc_url}\n"
                 f"2. Find endpoint for: {api_request_desc}\n"
                 f"3. Make API call with token: {'Yes' if token else 'No'}",
@@ -2103,7 +2133,7 @@ except Exception as e:
     ) -> AsyncIterator[StreamChunk]:
         """Process message with streaming support for both direct API calls and documentation parsing"""
         yield StreamChunk(
-            text="🔄 Processing API request...",
+            text=" Processing API request...",
             sub_type=StreamSubType.STATUS,
             metadata={"status": "processing"},
         )
@@ -2134,7 +2164,7 @@ except Exception as e:
 
             if api_request:
                 yield StreamChunk(
-                    text=f"📡 Making {api_request.method.value} request to {api_request.url}",
+                    text=f" Making {api_request.method.value} request to {api_request.url}",
                     sub_type=StreamSubType.STATUS,
                 )
 
@@ -2142,25 +2172,25 @@ except Exception as e:
 
                 if response.error:
                     yield StreamChunk(
-                        text=f"❌ Request failed: {response.error}",
+                        text=f" Request failed: {response.error}",
                         sub_type=StreamSubType.ERROR,
                         metadata={"error": response.error},
                     )
                 else:
                     yield StreamChunk(
-                        text=f"✅ Success! HTTP {response.status_code} ({response.duration_ms:.0f}ms)",
+                        text=f" Success! HTTP {response.status_code} ({response.duration_ms:.0f}ms)",
                         sub_type=StreamSubType.STATUS,
                     )
 
                     if response.json_data:
                         yield StreamChunk(
-                            text=f"📦 **JSON Response**:\n```json\n{json.dumps(response.json_data, indent=2)}\n```",
+                            text=f" **JSON Response**:\n```json\n{json.dumps(response.json_data, indent=2)}\n```",
                             sub_type=StreamSubType.CONTENT,
                             metadata={"content_type": "json"},
                         )
                     else:
                         yield StreamChunk(
-                            text=f"📄 **Content**: {response.content}",
+                            text=f" **Content**: {response.content}",
                             sub_type=StreamSubType.CONTENT,
                             metadata={"content_type": "text"},
                         )
@@ -2198,7 +2228,7 @@ except Exception as e:
         try:
             # Step 1: Parse the documentation
             yield StreamChunk(
-                text=f"📚 Reading API documentation from {doc_url}...",
+                text=f" Reading API documentation from {doc_url}...",
                 sub_type=StreamSubType.STATUS,
                 metadata={"step": "parsing_documentation"},
             )
@@ -2207,21 +2237,21 @@ except Exception as e:
 
             if not api_doc.endpoints:
                 yield StreamChunk(
-                    text=f"❌ No API endpoints found in documentation at {doc_url}",
+                    text=f" No API endpoints found in documentation at {doc_url}",
                     sub_type=StreamSubType.ERROR,
                     metadata={"error": "No endpoints found"},
                 )
                 return
 
             yield StreamChunk(
-                text=f"✅ Found {len(api_doc.endpoints)} endpoints in {api_doc.title}",
+                text=f" Found {len(api_doc.endpoints)} endpoints in {api_doc.title}",
                 sub_type=StreamSubType.STATUS,
                 metadata={"endpoints_found": len(api_doc.endpoints)},
             )
 
             # Step 2: Find the matching endpoint
             yield StreamChunk(
-                text=f"🔍 Finding endpoint for: '{api_request_desc}'...",
+                text=f" Finding endpoint for: '{api_request_desc}'...",
                 sub_type=StreamSubType.STATUS,
                 metadata={"step": "finding_endpoint"},
             )
@@ -2231,17 +2261,17 @@ except Exception as e:
             if not endpoint:
                 # List available endpoints for user
                 endpoint_list = []
-                for ep in api_doc.endpoints[:5]:  # Limit to first 5 for streaming
+                for ep in api_doc.endpoints[:5]: # Limit to first 5 for streaming
                     endpoint_list.append(f"- {ep.method.value} {ep.path}: {ep.description}")
 
                 yield StreamChunk(
-                    text=f"❌ Could not find matching endpoint for '{api_request_desc}'",
+                    text=f" Could not find matching endpoint for '{api_request_desc}'",
                     sub_type=StreamSubType.ERROR,
                     metadata={"available_endpoints": len(api_doc.endpoints)},
                 )
 
                 yield StreamChunk(
-                    text=f"📋 Available endpoints in {api_doc.title}:\n" + "\n".join(endpoint_list),
+                    text=f" Available endpoints in {api_doc.title}:\n" + "\n".join(endpoint_list),
                     sub_type=StreamSubType.CONTENT,
                     metadata={"content_type": "endpoint_list"},
                 )
@@ -2254,14 +2284,14 @@ except Exception as e:
                 return
 
             yield StreamChunk(
-                text=f"✅ Found matching endpoint: {endpoint.method.value} {endpoint.path}",
+                text=f" Found matching endpoint: {endpoint.method.value} {endpoint.path}",
                 sub_type=StreamSubType.STATUS,
                 metadata={"endpoint": f"{endpoint.method.value} {endpoint.path}"},
             )
 
             # Step 3: Construct the API request
             yield StreamChunk(
-                text=f"🔧 Constructing API request with authentication...",
+                text=f" Constructing API request with authentication...",
                 sub_type=StreamSubType.STATUS,
                 metadata={"step": "constructing_request"},
             )
@@ -2272,7 +2302,7 @@ except Exception as e:
 
             # Step 4: Make the API call
             yield StreamChunk(
-                text=f"🚀 Making API call to {endpoint.method.value} {endpoint.path}",
+                text=f" Making API call to {endpoint.method.value} {endpoint.path}",
                 sub_type=StreamSubType.STATUS,
                 metadata={"step": "making_api_call"},
             )
@@ -2282,7 +2312,7 @@ except Exception as e:
             # Step 5: Stream the response
             if response.error:
                 yield StreamChunk(
-                    text=f"❌ API Request Failed: {response.error}",
+                    text=f" API Request Failed: {response.error}",
                     sub_type=StreamSubType.ERROR,
                     metadata={
                         "error": response.error,
@@ -2290,39 +2320,39 @@ except Exception as e:
                     },
                 )
                 yield StreamChunk(
-                    text=f"📋 Attempted: {endpoint.method.value} {api_request.url}",
+                    text=f" Attempted: {endpoint.method.value} {api_request.url}",
                     sub_type=StreamSubType.STATUS,
                 )
             else:
                 yield StreamChunk(
-                    text=f"✅ Successfully called {api_doc.title} API!",
+                    text=f" Successfully called {api_doc.title} API!",
                     sub_type=StreamSubType.STATUS,
                     metadata={"success": True, "status_code": response.status_code},
                 )
 
                 # Stream endpoint details
                 yield StreamChunk(
-                    text=f"📡 **Endpoint**: {endpoint.method.value} {endpoint.path}",
+                    text=f" **Endpoint**: {endpoint.method.value} {endpoint.path}",
                     sub_type=StreamSubType.CONTENT,
                 )
 
                 yield StreamChunk(
-                    text=f"📄 **Description**: {endpoint.description}",
+                    text=f" **Description**: {endpoint.description}",
                     sub_type=StreamSubType.CONTENT,
                 )
 
                 yield StreamChunk(
-                    text=f"🔗 **URL**: {response.url}",
+                    text=f" **URL**: {response.url}",
                     sub_type=StreamSubType.CONTENT,
                 )
 
                 yield StreamChunk(
-                    text=f"⏱️ **Duration**: {response.duration_ms:.0f}ms",
+                    text=f"⏱ **Duration**: {response.duration_ms:.0f}ms",
                     sub_type=StreamSubType.CONTENT,
                 )
 
                 yield StreamChunk(
-                    text=f"📊 **Status**: HTTP {response.status_code}",
+                    text=f" **Status**: HTTP {response.status_code}",
                     sub_type=StreamSubType.CONTENT,
                 )
 
@@ -2352,7 +2382,7 @@ except Exception as e:
                             # Show truncated preview
                             preview_content = self._get_inline_content_preview(json_content, "json")
                             yield StreamChunk(
-                                text=f"📦 **JSON Response Preview**:\n```json\n{preview_content}\n```",
+                                text=f" **JSON Response Preview**:\n```json\n{preview_content}\n```",
                                 sub_type=StreamSubType.CONTENT,
                                 metadata={
                                     "content_type": "json",
@@ -2363,14 +2393,14 @@ except Exception as e:
                         else:
                             # Fallback to full content if file save failed
                             yield StreamChunk(
-                                text=f"📦 **JSON Response**:\n```json\n{json_content}\n```",
+                                text=f" **JSON Response**:\n```json\n{json_content}\n```",
                                 sub_type=StreamSubType.CONTENT,
                                 metadata={"content_type": "json", "data": response.json_data},
                             )
                     else:
                         # Small response - show inline
                         yield StreamChunk(
-                            text=f"📦 **JSON Response**:\n```json\n{json_content}\n```",
+                            text=f" **JSON Response**:\n```json\n{json_content}\n```",
                             sub_type=StreamSubType.CONTENT,
                             metadata={"content_type": "json", "data": response.json_data},
                         )
@@ -2402,7 +2432,7 @@ except Exception as e:
                                 content, content_type
                             )
                             yield StreamChunk(
-                                text=f"📄 **Content Preview**:\n```{content_type}\n{preview_content}\n```",
+                                text=f" **Content Preview**:\n```{content_type}\n{preview_content}\n```",
                                 sub_type=StreamSubType.CONTENT,
                                 metadata={
                                     "content_type": content_type,
@@ -2416,7 +2446,7 @@ except Exception as e:
                             if len(content) > 1000:
                                 content_preview += "..."
                             yield StreamChunk(
-                                text=f"📄 **Content**: {content_preview}",
+                                text=f" **Content**: {content_preview}",
                                 sub_type=StreamSubType.CONTENT,
                                 metadata={"content_type": "text"},
                             )
@@ -2426,14 +2456,14 @@ except Exception as e:
                         if len(content) > 1000:
                             content_preview += "..."
                         yield StreamChunk(
-                            text=f"📄 **Content**: {content_preview}",
+                            text=f" **Content**: {content_preview}",
                             sub_type=StreamSubType.CONTENT,
                             metadata={"content_type": "text"},
                         )
 
         except Exception as e:
             yield StreamChunk(
-                text=f"❌ Error processing documentation request: {str(e)}",
+                text=f" Error processing documentation request: {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"error": str(e), "doc_url": doc_url},
             )

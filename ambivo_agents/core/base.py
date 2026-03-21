@@ -364,8 +364,21 @@ class DockerCodeExecutor:
             return {"success": False, "error": str(e), "language": language}
 
 
+class SSEEventType(Enum):
+    """SSE event types aligned with the Ambivo streaming wire format.
+    Values are the exact strings sent as the 'type' field in SSE JSON payloads."""
+
+    START = "stream_start"
+    CONTENT = "stream_chunk"
+    STATUS = "stream_status"
+    COMPLETE = "stream_complete"
+    ERROR = "stream_error"
+    CANCELLED = "stream_cancelled"
+    KEEPALIVE = "keepalive"
+
+
 class StreamSubType(Enum):
-    """Types of streaming content to distinguish between actual results vs interim status"""
+    """Legacy enum kept for backward compatibility. Prefer SSEEventType for new code."""
 
     CONTENT = "content"  # Actual response content
     STATUS = "status"  # Status updates, thinking, interim info
@@ -374,19 +387,37 @@ class StreamSubType(Enum):
     METADATA = "metadata"  # Additional metadata or context
 
 
+# Mapping from legacy StreamSubType to SSEEventType
+_SUBTYPE_TO_SSE: Dict[StreamSubType, SSEEventType] = {
+    StreamSubType.CONTENT: SSEEventType.CONTENT,
+    StreamSubType.STATUS: SSEEventType.STATUS,
+    StreamSubType.RESULT: SSEEventType.COMPLETE,
+    StreamSubType.ERROR: SSEEventType.ERROR,
+    StreamSubType.METADATA: SSEEventType.STATUS,
+}
+
+
 @dataclass
 class StreamChunk:
-    """Structured streaming chunk with sub-type information"""
+    """Structured streaming chunk with SSE-aligned event type information"""
 
     text: str
     sub_type: StreamSubType = StreamSubType.CONTENT
+    event_type: Optional[SSEEventType] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
 
+    def _resolved_event_type(self) -> SSEEventType:
+        """Resolve the SSE event type from explicit event_type or legacy sub_type."""
+        if self.event_type is not None:
+            return self.event_type
+        return _SUBTYPE_TO_SSE.get(self.sub_type, SSEEventType.CONTENT)
+
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary format for JSON serialization"""
+        """Convert to dictionary format for JSON serialization.
+        The 'type' field matches the SSE wire format (stream_chunk, stream_complete, etc.)."""
         return {
-            "type": "stream_chunk",
+            "type": self._resolved_event_type().value,
             "text": self.text,
             "sub_type": self.sub_type.value,
             "metadata": self.metadata,
@@ -466,7 +497,7 @@ class BaseAgent(ABC):
                 from ..core.llm import create_multi_provider_llm_service
 
                 self.llm_service = create_multi_provider_llm_service()
-                logging.info(f"Auto-configured LLM service for agent {agent_id}")
+                logging.debug(f"Auto-configured LLM service for agent {agent_id}")
             except Exception as e:
                 logging.warning(f"Could not auto-configure LLM for {agent_id}: {e}")
                 self.llm_service = None
@@ -505,7 +536,7 @@ class BaseAgent(ABC):
         return role_messages.get(self.role, "You are a helpful AI agent.")
 
     def get_system_message_for_llm(self, context: Dict[str, Any] = None) -> str:
-        """🆕 Get context-enhanced system message for LLM calls"""
+        """Get context-enhanced system message for LLM calls"""
         base_message = self.system_message
 
         # Add context-specific instructions
@@ -571,7 +602,7 @@ class BaseAgent(ABC):
         **kwargs,
     ) -> Tuple["BaseAgent", AgentContext]:
         """
-        🌟 DEFAULT: Create agent and return both agent and context
+        DEFAULT: Create agent and return both agent and context
         This is the RECOMMENDED way to create agents with auto-context
 
         Usage:
@@ -607,7 +638,7 @@ class BaseAgent(ABC):
         """
         Create agent with auto-context (returns agent only)
 
-        ⚠️  LEGACY: Use create() instead for explicit context handling
+        LEGACY: Use create() instead for explicit context handling
 
         Usage:
             agent = KnowledgeBaseAgent.create_simple(user_id="john")
@@ -673,11 +704,17 @@ class BaseAgent(ABC):
             execution_context = self.context.to_execution_context()
             execution_context.metadata.update(kwargs)
             agent_response = await self.process_message(user_message, execution_context)
-            return agent_response.content
+
+            if isinstance(agent_response, AgentMessage):
+                return agent_response.content
+            elif isinstance(agent_response, dict):
+                return agent_response.get("content", agent_response.get("response", str(agent_response)))
+            else:
+                return str(agent_response)
 
         except Exception as e:
             error_msg = f"Chat error: {str(e)}"
-            logging.error(f"Agent {self.agent_id} chat error: {e}")
+            logging.error(f"Agent {self.agent_id} chat error: {e}", exc_info=True)
             return error_msg
 
     def chat_sync(self, message: str, **kwargs) -> str:
@@ -728,40 +765,45 @@ class BaseAgent(ABC):
 
     async def chat_stream(self, message: str, **kwargs) -> AsyncIterator[StreamChunk]:
         """
-        🌟 NEW: Streaming chat interface that yields response chunks
+        Streaming chat interface that yields response chunks.
 
         Args:
             message: User message as string
             **kwargs: Optional metadata to add to the message
 
         Yields:
-            StreamChunk objects with structured data and sub_type information
+            StreamChunk objects with SSE-aligned event types
 
         Usage:
             agent, context = YouTubeDownloadAgent.create(user_id="john")
             async for chunk in agent.chat_stream("Download https://youtube.com/watch?v=abc123"):
                 print(chunk.text, end='', flush=True)
-                print(f"Sub-type: {chunk.sub_type.value}")
         """
         try:
-            # Create AgentMessage from string using auto-context
+            if self.context is None:
+                raise RuntimeError("Agent context not initialized. Cannot stream without context.")
+
+            ctx_session = self.context.session_id
+            ctx_user = self.context.user_id or "unknown"
+            ctx_conversation = self.context.conversation_id
+
             user_message = AgentMessage(
                 id=str(uuid.uuid4()),
-                sender_id=self.context.user_id,
+                sender_id=ctx_user,
                 recipient_id=self.agent_id,
                 content=message,
                 message_type=MessageType.USER_INPUT,
-                session_id=self.context.session_id,
-                conversation_id=self.context.conversation_id,
+                session_id=ctx_session,
+                conversation_id=ctx_conversation,
                 metadata={"chat_interface": True, "streaming_call": True, **kwargs},
             )
 
-            # Get execution context from auto-context
             execution_context = self.context.to_execution_context()
             execution_context.metadata.update(kwargs)
 
-            # Stream the response
             async for chunk in self.process_message_stream(user_message, execution_context):
+                if chunk.metadata.get("session_id") is None:
+                    chunk.metadata["session_id"] = ctx_session
                 yield chunk
 
         except Exception as e:
@@ -770,6 +812,7 @@ class BaseAgent(ABC):
             yield StreamChunk(
                 text=error_msg,
                 sub_type=StreamSubType.ERROR,
+                event_type=SSEEventType.ERROR,
                 metadata={"error": True, "agent_id": self.agent_id},
             )
 
@@ -778,20 +821,65 @@ class BaseAgent(ABC):
         self, message: AgentMessage, context: ExecutionContext = None
     ) -> AsyncIterator[StreamChunk]:
         """
-        🌟 NEW: Stream processing method - must be implemented by subclasses
+        Stream processing method - must be implemented by subclasses.
+
+        Implementations should follow the SSE event protocol:
+        1. Yield a START chunk first
+        2. Yield CONTENT chunks for the response body
+        3. Yield a COMPLETE chunk last
+        4. Yield ERROR chunks for errors
+
+        Agents without real streaming can delegate to _fallback_stream().
 
         Args:
             message: The user message to process
             context: Execution context (uses auto-context if None)
 
         Yields:
-            StreamChunk objects with structured data and sub_type information
+            StreamChunk objects with SSE-aligned event types
         """
         if context is None:
             context = self.get_execution_context()
 
-        # Subclasses must implement this
         raise NotImplementedError("Subclasses must implement process_message_stream")
+
+    async def _fallback_stream(
+        self, message: AgentMessage, context: ExecutionContext = None
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Default streaming implementation for agents without real streaming.
+        Calls process_message() and wraps the result in START -> CONTENT -> COMPLETE events.
+        """
+        yield StreamChunk(
+            text="",
+            sub_type=StreamSubType.STATUS,
+            event_type=SSEEventType.START,
+            metadata={"agent_id": self.agent_id},
+        )
+        try:
+            response = await self.process_message(message, context)
+            content = response.content if isinstance(response, AgentMessage) else str(response)
+            resp_metadata = response.metadata if isinstance(response, AgentMessage) else {}
+            yield StreamChunk(
+                text=content,
+                sub_type=StreamSubType.CONTENT,
+                event_type=SSEEventType.CONTENT,
+                metadata=resp_metadata,
+            )
+            yield StreamChunk(
+                text="",
+                sub_type=StreamSubType.RESULT,
+                event_type=SSEEventType.COMPLETE,
+                metadata={"agent_id": self.agent_id, "complete": True},
+            )
+        except Exception as e:
+            logging.error(f"Agent {self.agent_id} fallback stream error: {e}")
+            yield StreamChunk(
+                text=f"Error: {str(e)}",
+                sub_type=StreamSubType.ERROR,
+                event_type=SSEEventType.ERROR,
+                metadata={"error": True, "agent_id": self.agent_id},
+            )
 
     def get_context(self) -> AgentContext:
         """Get the agent's auto-generated context"""
@@ -998,7 +1086,7 @@ class BaseAgent(ABC):
 
         return {"execution_context": execution_context, "operation_metadata": operation_metadata}
 
-    # 🧹 SESSION CLEANUP
+    # SESSION CLEANUP
 
     async def cleanup_session(self) -> bool:
         """Cleanup the agent's session and resources"""
@@ -1010,34 +1098,34 @@ class BaseAgent(ABC):
                 try:
                     # Commented out temporarily as noted in original
                     # self.memory.clear_memory(self.context.conversation_id)
-                    logging.info(f"🧹 Cleared memory for session {session_id}")
+                    logging.info(f"Cleared memory for session {session_id}")
                 except Exception as e:
-                    logging.warning(f"⚠️  Could not clear memory: {e}")
+                    logging.warning(f"Could not clear memory: {e}")
 
             # Cleanup skill agents
             if hasattr(self, "_skill_agents"):
                 try:
                     await self.cleanup_skill_agents()
-                    logging.info(f"🔧 Cleaned up skill agents for session {session_id}")
+                    logging.info(f"Cleaned up skill agents for session {session_id}")
                 except Exception as e:
-                    logging.warning(f"⚠️  Could not cleanup skill agents: {e}")
+                    logging.warning(f"Could not cleanup skill agents: {e}")
 
             # Shutdown executor
             if hasattr(self, "executor") and self.executor:
                 try:
                     self.executor.shutdown(wait=True)
-                    logging.info(f"🛑 Shutdown executor for session {session_id}")
+                    logging.info(f"Shutdown executor for session {session_id}")
                 except Exception as e:
-                    logging.warning(f"⚠️  Could not shutdown executor: {e}")
+                    logging.warning(f"Could not shutdown executor: {e}")
 
-            logging.info(f"✅ Session {session_id} cleaned up successfully")
+            logging.info(f"Session {session_id} cleaned up successfully")
             return True
 
         except Exception as e:
-            logging.error(f"❌ Error cleaning up session: {e}")
+            logging.error(f"Error cleaning up session: {e}")
             return False
 
-    # 🛠️ TOOL MANAGEMENT
+    # TOOL MANAGEMENT
 
     def add_tool(self, tool: AgentTool):
         """Add a tool to the agent"""
@@ -1063,7 +1151,7 @@ class BaseAgent(ABC):
                 result = await tool.function(**parameters)
             else:
                 result = await asyncio.get_event_loop().run_in_executor(
-                    self.executor, tool.function, **parameters
+                    self.executor, lambda: tool.function(**parameters)
                 )
 
             return {
@@ -1085,21 +1173,32 @@ class BaseAgent(ABC):
         conversation_id: str = None,
     ) -> AgentMessage:
         """
-        Create a response message with auto-context
-        Uses agent's context if session_id/conversation_id not provided
+        Create a response message with auto-context.
+        Uses agent's context if session_id/conversation_id not provided.
+        Automatically injects standard metadata keys (agent_id, agent_type, session_id,
+        streaming_supported) which are merged under caller-provided metadata.
         """
+        ctx_session = self.context.session_id if self.context else None
+        ctx_conversation = self.context.conversation_id if self.context else None
+        base_metadata = {
+            "agent_id": self.agent_id,
+            "agent_type": self.__class__.__name__.lower().replace("agent", ""),
+            "session_id": session_id or ctx_session,
+            "streaming_supported": True,
+        }
+        merged_metadata = {**base_metadata, **(metadata or {})}
         return AgentMessage(
             id=str(uuid.uuid4()),
             sender_id=self.agent_id,
             recipient_id=recipient_id,
             content=content,
             message_type=message_type,
-            metadata=metadata or {},
-            session_id=session_id or self.context.session_id,  # 🎯 Auto-context!
-            conversation_id=conversation_id or self.context.conversation_id,  # 🎯 Auto-context!
+            metadata=merged_metadata,
+            session_id=session_id or ctx_session,
+            conversation_id=conversation_id or ctx_conversation,
         )
 
-    # 📨 ABSTRACT METHOD (must be implemented by subclasses)
+    # ABSTRACT METHOD (must be implemented by subclasses)
 
     @abstractmethod
     async def process_message(
@@ -1115,7 +1214,7 @@ class BaseAgent(ABC):
         # Subclasses must implement this
         pass
 
-    # 📁 FILE OPERATIONS (Available to all agents)
+    # FILE OPERATIONS (Available to all agents)
 
     def _is_path_restricted(self, file_path: str) -> bool:
         """
@@ -1581,7 +1680,7 @@ class BaseAgent(ABC):
                 return Path(filename)
             return None
 
-    # 🛠️ SKILL ASSIGNMENT SYSTEM
+    # SKILL ASSIGNMENT SYSTEM
 
     def __init_skills__(self):
         """Initialize skill assignment system (called during __init__)"""
@@ -1716,7 +1815,9 @@ class BaseAgent(ABC):
             return {"success": False, "error": f"Failed to assign database skill: {str(e)}"}
 
     async def assign_kb_skill(
-        self, documents_path: str, collection_name: str = None, skill_name: str = None
+        self, documents_path: str, collection_name: str = None, skill_name: str = None,
+        temporary: bool = True, ttl_hours: float = None,
+        vectordb_api_url: str = None, vectordb_api_token: str = None,
     ) -> Dict[str, Any]:
         """
         Assign a knowledge base skill to this agent
@@ -1725,6 +1826,11 @@ class BaseAgent(ABC):
             documents_path: Path to documents or directory to ingest
             collection_name: Qdrant collection name
             skill_name: Optional name for this skill
+            temporary: If True, use vectordb-api temp KB endpoints with TTL lifecycle.
+                       If False, write directly to Qdrant (permanent, no cleanup).
+            ttl_hours: TTL for temporary KBs (default: from config or 24h)
+            vectordb_api_url: Override vectordb-api URL (default: from agent_config.yaml)
+            vectordb_api_token: Override auth token for vectordb-api
 
         Returns:
             Dict with success status and skill details
@@ -1741,17 +1847,45 @@ class BaseAgent(ABC):
             if not collection_name:
                 collection_name = f"collection_{skill_name}"
 
+            # Resolve vectordb-api config from YAML when using temporary mode
+            from ..config.loader import get_config_section, load_config
+            config = load_config()
+            kb_config = get_config_section("knowledge_base", config)
+
+            resolved_api_url = vectordb_api_url or kb_config.get("vectordb_api_url", "")
+            resolved_api_token = vectordb_api_token or kb_config.get("vectordb_api_token", "")
+            resolved_ttl = ttl_hours if ttl_hours is not None else kb_config.get("temp_kb_ttl_hours", 24)
+
+            # If temporary is requested but no vectordb_api_url is configured, fall back to permanent
+            if temporary and not resolved_api_url:
+                self.logger.warning(
+                    f"KB skill '{skill_name}': temporary=True but vectordb_api_url not configured. "
+                    "Falling back to permanent (direct Qdrant) mode. Set vectordb_api_url in "
+                    "agent_config.yaml knowledge_base section to enable temp KB lifecycle."
+                )
+                temporary = False
+
+            # Build a session_id for temp KB scoping
+            temp_session_id = f"{self.context.session_id}_{skill_name}" if temporary else None
+
             # Store skill configuration
             skill_config = {
                 "documents_path": documents_path,
                 "collection_name": collection_name,
                 "assigned_at": datetime.now().isoformat(),
+                "temporary": temporary,
+                "ttl_hours": resolved_ttl,
+                "vectordb_api_url": resolved_api_url if temporary else None,
+                "vectordb_api_token": resolved_api_token if temporary else None,
+                "temp_session_id": temp_session_id,
             }
 
             self._assigned_skills["kb_skills"][skill_name] = skill_config
 
+            mode_label = f"temporary (TTL: {resolved_ttl}h)" if temporary else "permanent"
             self.logger.info(
-                f"Assigned knowledge base skill '{skill_name}' for collection '{collection_name}'"
+                f"Assigned knowledge base skill '{skill_name}' for collection "
+                f"'{collection_name}' [{mode_label}]"
             )
 
             return {
@@ -1759,6 +1893,8 @@ class BaseAgent(ABC):
                 "skill_name": skill_name,
                 "collection_name": collection_name,
                 "documents_path": documents_path,
+                "temporary": temporary,
+                "ttl_hours": resolved_ttl if temporary else None,
             }
 
         except Exception as e:
@@ -1819,7 +1955,7 @@ class BaseAgent(ABC):
         else:
             return "unknown"
 
-    # 🎯 INTENT CLASSIFICATION FOR SKILLS
+    # INTENT CLASSIFICATION FOR SKILLS
 
     async def _classify_intent_for_skills(self, message: str) -> Dict[str, Any]:
         """
@@ -2056,9 +2192,16 @@ Only return JSON, no other text."""
                 start = response_str.find("{")
                 end = response_str.rfind("}")
                 if start != -1 and end != -1:
-                    result = json.loads(response_str[start : end + 1])
+                    try:
+                        result = json.loads(response_str[start : end + 1])
+                    except (json.JSONDecodeError, ValueError):
+                        result = None
 
                     # Validate the skill exists
+                    if result is None:
+                        return {"should_use_skills": False, "reason": "json_parse_failed"}
+
+
                     if result.get("should_use_skills") and result.get("skill_name"):
                         skill_type = result.get("skill_type")
                         skill_name = result.get("skill_name")
@@ -2075,7 +2218,7 @@ Only return JSON, no other text."""
             self.logger.warning(f"LLM-based intent classification failed: {e}")
             return {"should_use_skills": False, "reason": f"llm_error: {str(e)}"}
 
-    # 🚀 DYNAMIC AGENT INSTANTIATION
+    # DYNAMIC AGENT INSTANTIATION
 
     async def _get_or_create_skill_agent(self, skill_type: str, skill_name: str) -> Optional[Any]:
         """
@@ -2158,6 +2301,22 @@ Only return JSON, no other text."""
                 # Store KB config
                 agent._assigned_documents_path = skill_config["documents_path"]
                 agent._assigned_collection_name = skill_config["collection_name"]
+
+                # If temporary mode, swap the qdrant_service with TempKBAdapter
+                if skill_config.get("temporary"):
+                    from ..agents.knowledge_base import TempKBAdapter
+
+                    agent.qdrant_service = TempKBAdapter(
+                        vectordb_api_url=skill_config["vectordb_api_url"],
+                        api_token=skill_config.get("vectordb_api_token"),
+                        session_id=skill_config["temp_session_id"],
+                        ttl_hours=skill_config.get("ttl_hours", 24),
+                    )
+                    self.logger.info(
+                        f"KB skill '{skill_name}' using TempKBAdapter "
+                        f"(session: {skill_config['temp_session_id']}, "
+                        f"TTL: {skill_config.get('ttl_hours', 24)}h)"
+                    )
 
             else:
                 self.logger.error(f"Unknown skill type: {skill_type}")
@@ -2328,7 +2487,7 @@ Documents source: {skill_config['documents_path']}
             "used_skill": f"{intent['skill_type']}/{intent['skill_name']}",
         }
 
-    # 🌟 RESPONSE TRANSLATION TO NATURAL LANGUAGE
+    # RESPONSE TRANSLATION TO NATURAL LANGUAGE
 
     async def _translate_technical_response(
         self, execution_result: Dict[str, Any], original_message: str
@@ -2414,7 +2573,7 @@ Response:"""
 
         skill_desc = skill_descriptions.get(skill_type, f"{skill_type} skill '{skill_name}'")
 
-        return f"""✅ I've completed your request using the {skill_desc}.
+        return f"""I've completed your request using the {skill_desc}.
 
 **Response:**
 {summary}
@@ -2423,13 +2582,39 @@ Response:"""
 
     async def cleanup_skill_agents(self) -> bool:
         """
-        Cleanup all instantiated skill agents
+        Cleanup all instantiated skill agents.
+
+        For KB skills with temporary=True, this also deletes the temp KB
+        collection via the vectordb-api so Qdrant storage doesn't leak.
 
         Returns:
             True if cleanup successful, False otherwise
         """
         try:
             cleanup_count = 0
+
+            # Delete temp KB collections before clearing agents
+            if hasattr(self, "_assigned_skills"):
+                for skill_name, skill_config in self._assigned_skills.get("kb_skills", {}).items():
+                    if skill_config.get("temporary") and skill_config.get("vectordb_api_url"):
+                        try:
+                            from ..agents.knowledge_base import TempKBAdapter
+
+                            adapter = TempKBAdapter(
+                                vectordb_api_url=skill_config["vectordb_api_url"],
+                                api_token=skill_config.get("vectordb_api_token"),
+                                session_id=skill_config["temp_session_id"],
+                            )
+                            adapter.delete_temp_kb()
+                            self.logger.info(
+                                f"Deleted temp KB for skill '{skill_name}' "
+                                f"(session: {skill_config['temp_session_id']})"
+                            )
+                        except Exception as e:
+                            self.logger.warning(
+                                f"Failed to delete temp KB for skill '{skill_name}': {e}"
+                            )
+
             for cache_key, agent in list(self._skill_agents.items()):
                 try:
                     if hasattr(agent, "cleanup_session"):
@@ -2450,7 +2635,7 @@ Response:"""
             return False
 
 
-# 🎯 CONTEXT MANAGER FOR AUTO-CONTEXT AGENTS
+# CONTEXT MANAGER FOR AUTO-CONTEXT AGENTS
 
 
 class AgentSession:
@@ -2495,12 +2680,12 @@ class AgentSession:
             await self.agent.cleanup_session()
 
 
-# 🚀 CONVENIENCE FUNCTIONS FOR QUICK AGENT USAGE
+# CONVENIENCE FUNCTIONS FOR QUICK AGENT USAGE
 
 
 async def quick_chat(agent_class, message: str, user_id: str = None, **kwargs) -> str:
     """
-    🌟 ULTRA-SIMPLIFIED: One-liner agent chat
+    ULTRA-SIMPLIFIED: One-liner agent chat
 
     Usage:
         response = await quick_chat(YouTubeDownloadAgent, "Download https://youtube.com/watch?v=abc")
@@ -2517,7 +2702,7 @@ async def quick_chat(agent_class, message: str, user_id: str = None, **kwargs) -
 
 def quick_chat_sync(agent_class, message: str, user_id: str = None, **kwargs) -> str:
     """
-    🌟 FIXED: One-liner synchronous agent chat that properly handles event loops
+    FIXED: One-liner synchronous agent chat that properly handles event loops
 
     Usage:
         response = quick_chat_sync(YouTubeDownloadAgent, "Download https://youtube.com/watch?v=abc")

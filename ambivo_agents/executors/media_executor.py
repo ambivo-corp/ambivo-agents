@@ -5,6 +5,8 @@ Media Docker executor for FFmpeg operations.
 
 import asyncio
 import json
+import logging
+import shlex
 import shutil
 import tempfile
 import time
@@ -78,6 +80,36 @@ class MediaDockerExecutor:
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Docker for media processing: {e}")
 
+    def _validate_ffmpeg_command(self, command: str) -> str:
+        """Validate and sanitize FFmpeg command to prevent injection."""
+        dangerous_patterns = [';', '&&', '||', '$(', '`', '|', '>', '>>', '<', '\n', '\r']
+        for pattern in dangerous_patterns:
+            if pattern in command:
+                raise ValueError(f"Unsafe character sequence in FFmpeg command: {repr(pattern)}")
+        return command
+
+    def _is_path_allowed(self, resolved_path: Path) -> bool:
+        """Check if path is within allowed base directories."""
+        allowed_bases = [
+            Path(self.input_dir).resolve(),
+            Path(self.output_dir).resolve(),
+            Path(self.handoff_dir).resolve() if hasattr(self, 'handoff_dir') else None,
+            Path(self.temp_dir).resolve() if hasattr(self, 'temp_dir') else None,
+        ]
+        # Also allow cross-agent handoff/output directories
+        for agent_name in ['youtube', 'analytics', 'code']:
+            try:
+                allowed_bases.append(self.shared_manager.get_host_path(agent_name, "handoff").resolve())
+                allowed_bases.append(self.shared_manager.get_host_path(agent_name, "output").resolve())
+            except Exception:
+                pass
+
+        resolved = resolved_path.resolve()
+        for base in allowed_bases:
+            if base and resolved.is_relative_to(base):
+                return True
+        return False
+
     def resolve_input_file(self, filename: str) -> Path:
         """
         Resolve input file path by checking multiple locations
@@ -88,9 +120,12 @@ class MediaDockerExecutor:
         Returns:
             Path object if file exists, None otherwise
         """
-        # If it's already an absolute path and exists, return it
+        # If it's already an absolute path and exists, validate it's in allowed directories
         if Path(filename).is_absolute() and Path(filename).exists():
-            return Path(filename)
+            abs_path = Path(filename).resolve()
+            if self._is_path_allowed(abs_path):
+                return abs_path
+            # Don't return arbitrary absolute paths
 
         # Check various possible locations in order of priority
         search_locations = [
@@ -116,7 +151,9 @@ class MediaDockerExecutor:
 
         for location in search_locations:
             if location.exists():
-                return location
+                resolved = location.resolve()
+                if self._is_path_allowed(resolved):
+                    return resolved
 
         return None
 
@@ -184,9 +221,14 @@ class MediaDockerExecutor:
 
                 # Add output path
                 if output_filename:
+                    # Prevent path traversal in output filename
+                    output_filename = Path(output_filename).name  # Strip directory components
                     final_command = final_command.replace(
                         "${OUTPUT}", f"/workspace/output/{output_filename}"
                     )
+
+                # Validate command to prevent shell injection
+                final_command = self._validate_ffmpeg_command(final_command)
 
                 # Create execution script
                 script_content = f"""#!/bin/bash
@@ -296,7 +338,8 @@ ls -la /workspace/output/
                 # Parse JSON output from ffprobe
                 media_info = json.loads(result["output"].split("\n")[-2])  # Get JSON from output
                 return {"success": True, "media_info": media_info, "file_path": file_path}
-            except:
+            except Exception as e:
+                logging.debug(f"Failed to parse media info JSON: {e}")
                 return {"success": True, "raw_output": result["output"], "file_path": file_path}
 
         return result

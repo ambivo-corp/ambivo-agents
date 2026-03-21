@@ -10,6 +10,18 @@ from ..config.loader import get_config_section
 from .docker_shared import get_shared_manager
 
 
+def _is_path_within_allowed_dirs(
+    resolved_path: Path, shared_base_dir: str, legacy_fallback_dirs: list = None
+) -> bool:
+    """Validate that resolved path is within allowed base directories."""
+    allowed_bases = [Path(shared_base_dir).resolve(), Path.cwd().resolve()]
+    if legacy_fallback_dirs:
+        for d in legacy_fallback_dirs:
+            allowed_bases.append(Path(d).resolve())
+    resolved = resolved_path.resolve()
+    return any(resolved.is_relative_to(base) for base in allowed_bases if base.exists())
+
+
 def resolve_agent_file_path(
     filename: str, agent_type: str = "code", priority_subdirs: Optional[List[str]] = None
 ) -> Optional[Path]:
@@ -44,9 +56,11 @@ def resolve_agent_file_path(
         # Get shared manager
         shared_manager = get_shared_manager(shared_base_dir, legacy_fallback_dirs)
 
-        # If it's already an absolute path and exists, return it
+        # If it's already an absolute path and exists, return it (if within allowed dirs)
         if Path(filename).is_absolute() and Path(filename).exists():
-            return Path(filename)
+            abs_path = Path(filename).resolve()
+            if _is_path_within_allowed_dirs(abs_path, shared_base_dir, legacy_fallback_dirs):
+                return abs_path
 
         # Build search locations in priority order
         search_locations = []
@@ -119,14 +133,26 @@ def resolve_agent_file_path(
         # Search for file in order of priority
         for location in search_locations:
             if location.exists() and location.is_file():
-                return location.resolve()
+                resolved = location.resolve()
+                if _is_path_within_allowed_dirs(resolved, shared_base_dir, legacy_fallback_dirs):
+                    return resolved
 
         return None
 
     except Exception:
         # Fallback to simple path resolution
         if Path(filename).exists():
-            return Path(filename)
+            fallback_path = Path(filename).resolve()
+            try:
+                docker_config = get_config_section("docker") or {}
+                fb_shared_base = docker_config.get("shared_base_dir", "./docker_shared")
+                fb_legacy = docker_config.get(
+                    "legacy_fallback_dirs", ["docker_shared/input", "docker_shared"]
+                )
+                if _is_path_within_allowed_dirs(fallback_path, fb_shared_base, fb_legacy):
+                    return fallback_path
+            except Exception:
+                pass
         return None
 
 

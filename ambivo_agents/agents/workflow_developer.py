@@ -134,18 +134,18 @@ Communication style: Professional, methodical, helpful. Ask one focused question
     ) -> AgentMessage:
         """Handle initial greeting and start requirements gathering"""
 
-        greeting = """🏗️ Welcome to the Workflow Developer Agent!
+        greeting = """Welcome to the Workflow Developer Agent!
 
 I'll help you create a complete workflow system following the WORKFLOW.md patterns. 
 I'll ask you a series of questions to understand your needs, then generate:
 
-✅ Complete Python workflow system file
-✅ All necessary imports and boilerplate code  
-✅ Agent creation patterns
-✅ ConversationFlow with your steps
-✅ SQLite persistence configuration
-✅ Test file template
-✅ Helpful comments and customization hints
+Complete Python workflow system file
+All necessary imports and boilerplate code  
+Agent creation patterns
+ConversationFlow with your steps
+SQLite persistence configuration
+Test file template
+Helpful comments and customization hints
 
 Let's start! What's the domain/industry for your workflow system?
 
@@ -317,7 +317,7 @@ Be specific and detailed. This will generate actual production code."""
             # Parse the AI suggestions and store them
             self._parse_ai_suggestions(ai_suggestions)
 
-            response = f"""🤖 **AI Analysis Complete!** Here are my intelligent suggestions:
+            response = f"""**AI Analysis Complete!** Here are my intelligent suggestions:
 
 {ai_suggestions}
 
@@ -342,7 +342,7 @@ What would you like to do?"""
 
         except Exception as e:
             return self.create_response(
-                content=f"❌ Error getting AI suggestions: {e}\n\nLet's continue with manual agent selection. What agents do you need?",
+                content=f"Error getting AI suggestions: {e}\n\nLet's continue with manual agent selection. What agents do you need?",
                 recipient_id=message.sender_id,
                 session_id=message.session_id,
                 conversation_id=message.conversation_id,
@@ -600,10 +600,10 @@ Please describe your workflow steps (I'll convert them to technical specificatio
 {steps_summary}
 
 For persistence, I recommend SQLite (default) which provides:
-✅ Automatic state saving
-✅ Conversation rollback capability  
-✅ Session management
-✅ Easy configuration
+Automatic state saving
+Conversation rollback capability  
+Session management
+Easy configuration
 
 Do you want:
 1. "SQLite" - Recommended for most use cases
@@ -685,7 +685,7 @@ Example: "web search, api calls" or "none"""
 
         features_text = ", ".join(features) if features else "Core workflow only"
 
-        summary = f"""🎯 Perfect! Here's your workflow specification:
+        summary = f"""Perfect! Here's your workflow specification:
 
 **Domain:** {self.requirements.domain_name}
 **System Class:** {self.requirements.system_class_name}
@@ -696,13 +696,13 @@ Example: "web search, api calls" or "none"""
 **Output Directory:** {self.requirements.output_directory}
 
 Ready to generate your code! I'll create:
-✅ Complete workflow system Python file
-✅ All imports and boilerplate code
-✅ Agent creation with your specifications
-✅ ConversationFlow with your steps
-✅ Persistence configuration
-✅ Test file template
-✅ Helpful comments for customization
+Complete workflow system Python file
+All imports and boilerplate code
+Agent creation with your specifications
+ConversationFlow with your steps
+Persistence configuration
+Test file template
+Helpful comments for customization
 
 Files will be generated in the configured shared directory: `{self.requirements.output_directory}`
 
@@ -754,30 +754,30 @@ Type "generate" to create your workflow code!"""
             backup_content = customized_content
 
             # Use enhanced local formatter (skip AI formatter for now)
-            print("🧹 Formatting generated code with enhanced local formatter...")
+            print("Formatting generated code with enhanced local formatter...")
             formatted_content = self._enhanced_local_formatter(backup_content)
 
             # Validate syntax and logic with dedicated agent
-            print("🔍 Validating code syntax and logic...")
+            print("Validating code syntax and logic...")
             validation_result = await self._validate_code_with_dedicated_agent(formatted_content)
 
             if not validation_result["success"]:
-                print(f"⚠️ Code validation failed: {validation_result['issues']}")
+                print(f"Code validation failed: {validation_result['issues']}")
                 # Try to fix the issues automatically
-                print("🔧 Attempting to fix validation issues...")
+                print("Attempting to fix validation issues...")
                 fixed_content = await self._fix_validation_issues(
                     formatted_content, validation_result["issues"]
                 )
                 if fixed_content != formatted_content:
                     formatted_content = fixed_content
-                    print("✅ Issues fixed automatically!")
+                    print("Issues fixed automatically!")
                 else:
-                    print("⚠️ Could not fix all issues automatically")
+                    print("Could not fix all issues automatically")
             else:
-                print("✅ Code validation passed!")
+                print("Code validation passed!")
 
             # Test the code in Docker to ensure it works
-            print("🧪 Testing generated code in Docker...")
+            print("Testing generated code in Docker...")
             test_result = await self._test_code_in_docker(
                 formatted_content, self.requirements.system_class_name.lower()
             )
@@ -788,7 +788,7 @@ Type "generate" to create your workflow code!"""
             )
 
             if not test_result["success"]:
-                print(f"⚠️ Code test failed: {test_result['error']}")
+                print(f"Code test failed: {test_result['error']}")
 
                 # Write both the formatted version and a backup
                 backup_file_path = os.path.join(
@@ -796,10 +796,10 @@ Type "generate" to create your workflow code!"""
                 )
                 with open(backup_file_path, "w", encoding="utf-8") as f:
                     f.write(backup_content)
-                print(f"📁 Backup saved to: {backup_file_path}")
+                print(f"Backup saved to: {backup_file_path}")
 
                 # Add warning to the main file
-                warning_content = f"""# ⚠️ WARNING: This code failed initial testing
+                warning_content = f"""# WARNING: This code failed initial testing
 # Error: {test_result['error']}
 # Please review and fix any issues before running
 # A backup of the original code is saved as {self.requirements.system_class_name.lower()}_backup.py
@@ -809,7 +809,7 @@ Type "generate" to create your workflow code!"""
                 with open(main_file_path, "w", encoding="utf-8") as f:
                     f.write(warning_content)
             else:
-                print("✅ Code test passed successfully!")
+                print("Code test passed successfully!")
                 with open(main_file_path, "w", encoding="utf-8") as f:
                     f.write(formatted_content)
 
@@ -824,13 +824,13 @@ Type "generate" to create your workflow code!"""
             # Review the generated code with code reviewer agent
             review_result = await self._review_generated_code(main_file_path, formatted_content)
 
-            code_result = f"""✅ Generated workflow files using enhanced template-based approach:
-📁 Directory: {output_dir}
-🐍 Main file: {main_file_path}
-🧪 Test file: {test_file_path}
-🔧 Persistence: {self.requirements.persistence_backend}
+            code_result = f"""Generated workflow files using enhanced template-based approach:
+Directory: {output_dir}
+Main file: {main_file_path}
+Test file: {test_file_path}
+Persistence: {self.requirements.persistence_backend}
 
-✨ Template Features Included:
+Template Features Included:
 - Production-ready workflow orchestration
 - Database integration with agents
 - State management and persistence
@@ -838,20 +838,20 @@ Type "generate" to create your workflow code!"""
 - Session management
 - Interactive conversation flows
 
-🧹 Enhanced Code Processing Steps:
-1. ✅ Template customization with user requirements
-2. ✅ Specialized Python code formatting agent
-3. ✅ Docker-based syntax and structure testing
-4. ✅ Quality review by AI assistant
-4. ✅ Syntax validation and error checking
+Enhanced Code Processing Steps:
+1. Template customization with user requirements
+2. Specialized Python code formatting agent
+3. Docker-based syntax and structure testing
+4. Quality review by AI assistant
+4. Syntax validation and error checking
 
-🔍 Code Review Results:
+Code Review Results:
 {review_result}
 
-📖 Files are ready to use on your host filesystem!
-💡 You can run the test file to verify everything works."""
+Files are ready to use on your host filesystem!
+You can run the test file to verify everything works."""
 
-            response = f"""🎉 **Workflow Code Generated Successfully!**
+            response = f"""**Workflow Code Generated Successfully!**
 
 {code_result}
 
@@ -871,19 +871,19 @@ Type "generate" to create your workflow code!"""
 - Async test setup
 
 **Key Features Included:**
-✅ Following WORKFLOW.md architecture patterns
-✅ Agent creation with specialized system messages
-✅ ConversationOrchestrator setup
-✅ ConversationFlow with your steps
-✅ {self.requirements.persistence_backend.title()} persistence configuration
-✅ Session management
-✅ Error handling
-✅ Cleanup methods
+Following WORKFLOW.md architecture patterns
+Agent creation with specialized system messages
+ConversationOrchestrator setup
+ConversationFlow with your steps
+{self.requirements.persistence_backend.title()} persistence configuration
+Session management
+Error handling
+Cleanup methods
 
 **File Organization:**
-📁 {self.requirements.output_directory}/
-  📄 {self.requirements.system_class_name.lower()}.py (main workflow)
-  🧪 test_{self.requirements.system_class_name.lower()}.py (tests)
+{self.requirements.output_directory}/
+  {self.requirements.system_class_name.lower()}.py (main workflow)
+  test_{self.requirements.system_class_name.lower()}.py (tests)
 
 **Customization Hints:**
 - Look for `# TODO:` comments in the code
@@ -891,7 +891,7 @@ Type "generate" to create your workflow code!"""
 - Add your specific business logic to workflow steps
 - Update agent_config.yaml with your persistence settings
 
-Ready to build amazing workflows! 🚀"""
+Ready to build amazing workflows! """
 
             return self.create_response(
                 content=response,
@@ -901,7 +901,7 @@ Ready to build amazing workflows! 🚀"""
             )
 
         except Exception as e:
-            error_response = f"""❌ Error generating workflow code: {str(e)}
+            error_response = f"""Error generating workflow code: {str(e)}
 
 Let me provide the code directly instead:
 
@@ -938,7 +938,7 @@ Please save these manually to your project directory."""
         )
 
         return self.create_response(
-            content=f"📖 **Workflow Development Help:**\n\n{assistant_response}\n\n"
+            content=f"**Workflow Development Help:**\n\n{assistant_response}\n\n"
             "If you'd like to start over with workflow generation, just say 'start over' or 'new workflow'.",
             recipient_id=message.sender_id,
             session_id=message.session_id,
@@ -1225,42 +1225,42 @@ Agent: {step.get('agent', 'primary')}
         if not session_id:
             session_id = f"session_{{int(asyncio.get_event_loop().time())}}"
         
-        print(f"\\n🚀 Starting {self.requirements.domain_name} Demo: {{session_id}}")
+        print(f"\\nStarting {self.requirements.domain_name} Demo: {{session_id}}")
         print("=" * 70)
         
         # Simple workflow demonstration
         try:
-            print("\\n📋 Demonstrating {self.requirements.domain_name} Workflow:")
+            print("\\nDemonstrating {self.requirements.domain_name} Workflow:")
             
             # Demo the first agent
             if hasattr(self, 'primary_agent'):
                 demo_response = await self.primary_agent.chat(
                     f"Demonstrate the {self.requirements.domain_name.lower()} workflow process."
                 )
-                print(f"\\n💼 AGENT: {{demo_response}}")
+                print(f"\\nAGENT: {{demo_response}}")
             
-            print(f"\\n🎉 {self.requirements.domain_name} Demo completed!")
-            print(f"✅ Demonstrated: Workflow orchestration and agent interaction")
+            print(f"\\n{self.requirements.domain_name} Demo completed!")
+            print(f"Demonstrated: Workflow orchestration and agent interaction")
             
             return session_id
             
         except Exception as e:
-            print(f"\\n❌ Demo failed: {{e}}")
+            print(f"\\nDemo failed: {{e}}")
             return ""'''
 
         content = re.sub(demo_pattern, demo_replacement, content, flags=re.DOTALL)
 
         # Remove hardcoded database methods
         content = re.sub(
-            r'async def initialize_database\(self\).*?print\("📝 Continuing with in-memory fallback..."\)',
-            f'async def initialize_database(self):\n        """Initialize the {self.requirements.domain_name.lower()} database"""\n        print("🔧 Database initialization for {self.requirements.domain_name.lower()}...")',
+            r'async def initialize_database\(self\).*?print\("Continuing with in-memory fallback..."\)',
+            f'async def initialize_database(self):\n        """Initialize the {self.requirements.domain_name.lower()} database"""\n        print("Database initialization for {self.requirements.domain_name.lower()}...")',
             content,
             flags=re.DOTALL,
         )
 
         content = re.sub(
-            r'async def _create_demo_properties\(self\).*?print\(f"⚠️ Could not create demo properties: {{e}}"\)',
-            f'async def _create_demo_data(self):\n        """Create demo data for {self.requirements.domain_name.lower()}"""\n        print("✅ Demo data created for {self.requirements.domain_name.lower()}")',
+            r'async def _create_demo_properties\(self\).*?print\(f"Could not create demo properties: {{e}}"\)',
+            f'async def _create_demo_data(self):\n        """Create demo data for {self.requirements.domain_name.lower()}"""\n        print("Demo data created for {self.requirements.domain_name.lower()}")',
             content,
             flags=re.DOTALL,
         )
@@ -1319,7 +1319,7 @@ Agent: {step.get('agent', 'primary')}
             return cleaned_code
 
         except Exception as e:
-            print(f"⚠️ Local code cleaning failed: {e}")
+            print(f"Local code cleaning failed: {e}")
             return code_content
 
     def _enhanced_local_formatter(self, code_content: str) -> str:
@@ -1431,7 +1431,7 @@ Agent: {step.get('agent', 'primary')}
             return formatted_code
 
         except Exception as e:
-            print(f"⚠️ Enhanced local formatting failed: {e}")
+            print(f"Enhanced local formatting failed: {e}")
             return self._clean_code_locally(code_content)
 
     async def _format_code_with_specialized_agent(self, code_content: str) -> str:
@@ -1472,7 +1472,7 @@ Return only the clean, properly formatted Python code with consistent indentatio
             return formatted_code
 
         except Exception as e:
-            print(f"⚠️ Specialized formatting failed: {e}")
+            print(f"Specialized formatting failed: {e}")
             return self._clean_code_locally(code_content)
 
     def _extract_code_from_response(self, response: str) -> str:
@@ -1648,7 +1648,7 @@ Return ONLY valid JSON with the format specified in your instructions."""
                 return result
 
             except json.JSONDecodeError as e:
-                print(f"⚠️ Could not parse validation response: {e}")
+                print(f"Could not parse validation response: {e}")
                 return {
                     "success": False,
                     "issues": [
@@ -1660,7 +1660,7 @@ Return ONLY valid JSON with the format specified in your instructions."""
                 }
 
         except Exception as e:
-            print(f"⚠️ Validation agent failed: {e}")
+            print(f"Validation agent failed: {e}")
             return {"success": False, "issues": [{"type": "agent_error", "description": str(e)}]}
 
     async def _fix_validation_issues(self, code_content: str, issues: list) -> str:
@@ -1731,7 +1731,7 @@ Return ONLY valid JSON with the format specified in your instructions."""
             return fixed_content
 
         except Exception as e:
-            print(f"⚠️ Auto-fix failed: {e}")
+            print(f"Auto-fix failed: {e}")
             return code_content
 
     async def _test_code_in_docker(self, code_content: str, filename: str) -> dict:
@@ -1749,17 +1749,17 @@ try:
     
     # Parse the code to check for syntax errors
     ast.parse(code)
-    print("✅ Syntax check passed")
+    print("Syntax check passed")
     
     # Try to import the code (basic validation)
     # This is a simple test - in production you'd do more
-    print("✅ Code structure validation passed")
+    print("Code structure validation passed")
     
 except SyntaxError as e:
-    print(f"❌ Syntax error: {{e}}")
+    print(f"Syntax error: {{e}}")
     sys.exit(1)
 except Exception as e:
-    print(f"❌ Code error: {{e}}")
+    print(f"Code error: {{e}}")
     sys.exit(1)
 """
 
@@ -1784,13 +1784,13 @@ Please test this Python code for syntax errors and basic structure:
 
             # Check if the test passed
             if (
-                "✅ Syntax check passed" in test_result
-                and "✅ Code structure validation passed" in test_result
+                "Syntax check passed" in test_result
+                and "Code structure validation passed" in test_result
             ):
                 return {"success": True, "message": "Code validation passed"}
-            elif "❌" in test_result:
+            elif "" in test_result:
                 # Extract error message
-                error_lines = [line for line in test_result.split("\n") if "❌" in line]
+                error_lines = [line for line in test_result.split("\n") if "" in line]
                 error_msg = error_lines[0] if error_lines else "Unknown error"
                 return {"success": False, "error": error_msg}
             else:
@@ -1902,13 +1902,13 @@ Return ONLY the cleaned, properly formatted Python code. Do not include any expl
 
             # Final fallback - return original if we can't extract clean code
             if not cleaned_code.strip():
-                print("⚠️ Could not extract clean code from response, returning original")
+                print("Could not extract clean code from response, returning original")
                 return code_content
 
             return cleaned_code
 
         except Exception as e:
-            print(f"⚠️ Code formatting failed: {e}")
+            print(f"Code formatting failed: {e}")
             return code_content
 
     def _create_test_file(self) -> str:
@@ -1931,60 +1931,60 @@ from {self.requirements.system_class_name.lower()} import {self.requirements.sys
 
 async def test_workflow():
     """Test the {self.requirements.domain_name.lower()} workflow system"""
-    print(f"🧪 Testing {self.requirements.system_class_name}")
+    print(f"Testing {self.requirements.system_class_name}")
     print("=" * 60)
     
     try:
         # Create the workflow system
         system = {self.requirements.system_class_name}()
-        print("✅ System created successfully")
+        print("System created successfully")
         
         # Test basic functionality
-        print("\\n🔧 Testing workflow session...")
+        print("\\nTesting workflow session...")
         session_id = await system.start_interactive_session("test_session")
         
         if session_id:
-            print("✅ Session started successfully")
+            print("Session started successfully")
             
             # Show available features
-            print("\\n📋 Available workflow features:")
+            print("\\nAvailable workflow features:")
             flows = await system.list_available_workflows()
             for flow_id, flow_info in flows.items():
                 print(f"   • {{flow_id}}: {{flow_info.get('description', 'No description')}}")
         
         # Cleanup
         await system.cleanup()
-        print("\\n✅ Cleanup completed")
+        print("\\nCleanup completed")
         
-        print("\\n🎉 All tests passed!")
-        print("💡 Your {self.requirements.domain_name.lower()} workflow system is ready to use!")
+        print("\\nAll tests passed!")
+        print("Your {self.requirements.domain_name.lower()} workflow system is ready to use!")
         
     except Exception as e:
-        print(f"❌ Test failed: {{e}}")
-        print("\\n🔍 Error details:")
+        print(f"Test failed: {{e}}")
+        print("\\nError details:")
         import traceback
         traceback.print_exc()
-        print("\\n💡 Check that all dependencies are installed and configured correctly.")
+        print("\\nCheck that all dependencies are installed and configured correctly.")
 
 async def demo_workflow():
     """Demonstrate the workflow system features"""
-    print(f"🚀 {self.requirements.system_class_name} Demo")
+    print(f"{self.requirements.system_class_name} Demo")
     print("=" * 60)
     
     system = {self.requirements.system_class_name}()
     
     try:
-        print("\\n🎭 Demonstrating workflow features...")
+        print("\\nDemonstrating workflow features...")
         await system.demonstrate_workflow_features()
         
-        print("\\n🎯 Starting interactive demo session...")
+        print("\\nStarting interactive demo session...")
         session_id = await system.start_interactive_session("demo_session")
         
         if session_id:
-            print(f"✅ Demo session completed: {{session_id}}")
+            print(f"Demo session completed: {{session_id}}")
         
     except Exception as e:
-        print(f"❌ Demo failed: {{e}}")
+        print(f"Demo failed: {{e}}")
     finally:
         await system.cleanup()
 
@@ -2020,14 +2020,14 @@ EXPECTED WORKFLOW STEPS:
 PERSISTENCE: {self.requirements.persistence_backend}
 
 REVIEW CRITERIA:
-1. ✅ Verify class name matches: {self.requirements.system_class_name}
-2. ✅ Check if workflow steps match user requirements (not hardcoded real estate steps)
-3. ✅ Verify agents match user specifications 
-4. ✅ Check persistence configuration is correct
-5. ✅ Ensure no hardcoded real estate content remains (budget, bedrooms, rent, etc.)
-6. ✅ Verify imports are correct for ambivo_agents
-7. ✅ Check that domain-specific text is used throughout
-8. ✅ Verify workflow follows WORKFLOW.md patterns
+1. Verify class name matches: {self.requirements.system_class_name}
+2. Check if workflow steps match user requirements (not hardcoded real estate steps)
+3. Verify agents match user specifications 
+4. Check persistence configuration is correct
+5. Ensure no hardcoded real estate content remains (budget, bedrooms, rent, etc.)
+6. Verify imports are correct for ambivo_agents
+7. Check that domain-specific text is used throughout
+8. Verify workflow follows WORKFLOW.md patterns
 
 GENERATED CODE TO REVIEW:
 ```python
@@ -2035,9 +2035,9 @@ GENERATED CODE TO REVIEW:
 ```
 
 Please provide a concise review highlighting:
-- ✅ What matches requirements correctly
-- ❌ Any issues or hardcoded content that should be removed
-- 💡 Suggestions for improvement
+- What matches requirements correctly
+- Any issues or hardcoded content that should be removed
+- Suggestions for improvement
 - Overall quality score (1-10)
 """
 
@@ -2054,7 +2054,7 @@ Please provide a concise review highlighting:
 - Domain-specific customization verification"""
 
         except Exception as e:
-            return f"⚠️ Code review failed: {e}. Please manually verify the generated code."
+            return f"Code review failed: {e}. Please manually verify the generated code."
 
     def _generate_main_workflow_file(self) -> str:
         """Generate the main workflow Python file"""
@@ -2157,15 +2157,15 @@ class {self.requirements.system_class_name}:
             try:
                 success = await self.orchestrator.resume_conversation(session_id)
                 if success:
-                    print(f"✅ Session {{session_id}} resumed successfully")
+                    print(f"Session {{session_id}} resumed successfully")
                 else:
-                    print(f"❌ Failed to resume session {{session_id}}")
+                    print(f"Failed to resume session {{session_id}}")
                 return success
             except Exception as e:
                 print(f"Error resuming session: {{e}}")
                 return False
         else:
-            print(f"❌ Session {{session_id}} not found")
+            print(f"Session {{session_id}} not found")
             return False
     
     async def get_session_status(self, session_id: str) -> Optional[Dict[str, Any]]:
@@ -2181,14 +2181,14 @@ class {self.requirements.system_class_name}:
         try:
             for agent in self.agents.values():
                 await agent.cleanup_session()
-            print("🧹 System cleanup completed")
+            print("System cleanup completed")
         except Exception as e:
             print(f"Error during cleanup: {{e}}")
 
 
 async def main():
     \"\"\"Main function to run the {self.requirements.domain_name.lower()} workflow system\"\"\"
-    print("🚀 {self.requirements.system_class_name} Starting...")
+    print("{self.requirements.system_class_name} Starting...")
     print("=" * 60)
     
     system = {self.requirements.system_class_name}()
@@ -2197,17 +2197,17 @@ async def main():
         # Start a demo session
         session_id, execution_id, result = await system.start_session()
         
-        print(f"✅ Session started: {{session_id}}")
-        print(f"🔄 Execution ID: {{execution_id}}")
-        print(f"📊 Result: {{result}}")
+        print(f"Session started: {{session_id}}")
+        print(f"Execution ID: {{execution_id}}")
+        print(f"Result: {{result}}")
         
         # You can add interactive session handling here
         # For example, waiting for user input and continuing the conversation
         
     except KeyboardInterrupt:
-        print("\\n\\n⏸️  System interrupted by user")
+        print("\\n\\n⏸ System interrupted by user")
     except Exception as e:
-        print(f"\\n❌ System error: {{e}}")
+        print(f"\\nSystem error: {{e}}")
     finally:
         await system.cleanup()
 
@@ -2559,7 +2559,7 @@ async def demo_interactive_session():
     
     This demonstrates the basic usage pattern for your {self.requirements.domain_name.lower()} workflow.
     """
-    print("🚀 {self.requirements.system_class_name} Demo")
+    print("{self.requirements.system_class_name} Demo")
     print("=" * 50)
     
     # Create the system
@@ -2568,14 +2568,14 @@ async def demo_interactive_session():
     try:
         # Start a session
         session_id, execution_id, result = await system.start_session()
-        print(f"✅ Session started: {{session_id}}")
-        print(f"🔄 Execution ID: {{execution_id}}")
+        print(f"Session started: {{session_id}}")
+        print(f"Execution ID: {{execution_id}}")
         
         # Get session status
         status = await system.get_session_status(session_id)
         if status:
-            print(f"📊 Status: {{status['status']}}")
-            print(f"📈 Progress: {{status.get('progress', 0):.1%}}")
+            print(f"Status: {{status['status']}}")
+            print(f"Progress: {{status.get('progress', 0):.1%}}")
         
         # TODO: Add interactive conversation loop here
         # Example:
@@ -2588,10 +2588,10 @@ async def demo_interactive_session():
         #     response = await system.continue_conversation(session_id, user_input)
         #     print(f"System: {{response}}")
         
-        print("\\n🎉 Demo completed successfully!")
+        print("\\nDemo completed successfully!")
         
     except Exception as e:
-        print(f"❌ Demo error: {{e}}")
+        print(f"Demo error: {{e}}")
     
     finally:
         await system.cleanup()
@@ -2612,21 +2612,21 @@ async def main():
         
         try:
             await test_instance.test_system_initialization()
-            print("✅ System initialization test passed")
+            print("System initialization test passed")
             
             await test_instance.test_agent_creation()
-            print("✅ Agent creation test passed")
+            print("Agent creation test passed")
             
             await test_instance.test_workflow_structure()
-            print("✅ Workflow structure test passed")
+            print("Workflow structure test passed")
             
             await test_instance.test_session_creation()
-            print("✅ Session creation test passed")
+            print("Session creation test passed")
             
-            print("\\n🎉 All tests passed!")
+            print("\\nAll tests passed!")
             
         except Exception as e:
-            print(f"❌ Test failed: {{e}}")
+            print(f"Test failed: {{e}}")
         
         finally:
             await test_instance.teardown_method()

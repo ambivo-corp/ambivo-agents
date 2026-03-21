@@ -204,7 +204,10 @@ class AmbivoWorkflow:
                 if node_id in executed_nodes:
                     continue
 
-                node = self.nodes[node_id]
+                node = self.nodes.get(node_id)
+                if not node:
+                    errors.append(f"Node '{node_id}' not found in workflow")
+                    continue
 
                 if node.node_type == WorkflowNodeType.AGENT and node.agent:
                     try:

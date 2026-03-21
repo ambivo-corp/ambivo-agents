@@ -297,11 +297,11 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
             user_message = message.content
             self.update_conversation_state(user_message)
 
-            # 🆕 Check if assigned skills should handle this request
+            # Check if assigned skills should handle this request
             skill_result = await self._should_use_assigned_skills(user_message)
 
             if skill_result.get("should_use_skills"):
-                self.logger.info(f"🔧 Using assigned skill: {skill_result['used_skill']}")
+                self.logger.info(f"Using assigned skill: {skill_result['used_skill']}")
 
                 # Translate technical response to natural language
                 execution_result = skill_result["execution_result"]
@@ -347,7 +347,7 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                 # Use the conversation history provided by moderator routing
                 conversation_history = conversation_history_from_routing
                 self.logger.info(
-                    f"🔄 Using {len(conversation_history)} messages from moderator routing"
+                    f"Using {len(conversation_history)} messages from moderator routing"
                 )
                 conversation_context = self._build_context_summary(conversation_history)
             else:
@@ -355,7 +355,7 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                 conversation_history = await self.get_conversation_history(
                     limit=8, include_metadata=True
                 )
-                self.logger.info(f"📝 Using {len(conversation_history)} messages from local memory")
+                self.logger.info(f"Using {len(conversation_history)} messages from local memory")
                 conversation_context = self._get_conversation_context_summary()
 
             # Analyze intent with full context
@@ -411,7 +411,7 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                 self.memory.store_message(response)
 
             self.logger.info(
-                f"✅ Processed message with {len(conversation_history)} context messages"
+                f"Processed message with {len(conversation_history)} context messages"
             )
             return response
 
@@ -454,7 +454,7 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                 conversation_history = conversation_history_from_routing
                 conversation_context = self._build_context_summary(conversation_history)
                 self.logger.info(
-                    f"🔄 Streaming with {len(conversation_history)} messages from routing"
+                    f"Streaming with {len(conversation_history)} messages from routing"
                 )
             else:
                 conversation_history = await self.get_conversation_history(
@@ -462,7 +462,7 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
                 )
                 conversation_context = self._get_conversation_context_summary()
                 self.logger.info(
-                    f"📝 Streaming with {len(conversation_history)} messages from local memory"
+                    f"Streaming with {len(conversation_history)} messages from local memory"
                 )
 
             # Analyze intent

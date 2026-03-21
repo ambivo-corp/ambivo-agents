@@ -284,7 +284,10 @@ class RedisMemoryManager(MemoryManagerInterface):
             raise ImportError("Redis package is required but not installed")
 
         try:
-            self.redis_client = redis.Redis(**self.redis_config)
+            redis_params = {**self.redis_config}
+            redis_params.setdefault("socket_timeout", 5)
+            redis_params.setdefault("socket_connect_timeout", 5)
+            self.redis_client = redis.Redis(**redis_params)
             self.redis_client.ping()
             self.available = True
         except Exception as e:
@@ -363,33 +366,33 @@ class RedisMemoryManager(MemoryManagerInterface):
                 message.to_dict() if hasattr(message, "to_dict") else message
             )
 
-            self.redis_client.lpush(key, message_data)
-            self.redis_client.expire(key, 30 * 24 * 3600)  # 30 days TTL
+            pipe = self.redis_client.pipeline()
+            pipe.lpush(key, message_data)
+            pipe.expire(key, 30 * 24 * 3600)  # 30 days TTL
+            pipe.execute()
 
             # Cache the latest message
             self.cache.set(f"recent_msg:{key}", message_data)
             self.stats.total_operations += 1
 
             # Enhanced debug logging
-            logging.debug(f"STORED message - Key: {key}")
+            logging.debug(f"[{self.agent_id}] Stored message - Key: {key}")
             logging.debug(f"  session_id: {session_id}, conversation_id: {conversation_id}")
             logging.debug(
                 f"  primary_id: {self._get_primary_identifier(session_id, conversation_id)}"
             )
 
         except Exception as e:
-            logging.error(f"Error storing message: {e}")
+            logging.error(f"Error storing message: {e}", exc_info=True)
             self.stats.error_count += 1
 
-    def get_recent_messages(self, limit: int = 10, conversation_id: Optional[str] = None):
-        """FIXED: Get recent messages with proper message ordering and error handling"""
+    def get_recent_messages(self, limit: int = 10, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
+        """Get recent messages with proper message ordering and error handling"""
         try:
-            # Generate key using fixed logic
-            key = self._get_message_key(conversation_id, conversation_id)
+            key = self._get_message_key(session_id, conversation_id)
 
-            # Enhanced debug logging
-            logging.debug(f"RETRIEVING MESSAGES from key: {key}")
-            logging.debug(f"  conversation_id: {conversation_id}, limit: {limit}")
+            logging.debug(f"[{self.agent_id}] Retrieving messages from key: {key}")
+            logging.debug(f"  session_id: {session_id}, conversation_id: {conversation_id}, limit: {limit}")
 
             # Check if key exists
             key_exists = self.redis_client.exists(key)
@@ -416,39 +419,41 @@ class RedisMemoryManager(MemoryManagerInterface):
 
                     if isinstance(data, dict) and "content" in data:
                         logging.debug(
-                            f"    ✅ Valid message: {data.get('message_type')} - {data.get('content')[:30]}..."
+                            f"    Valid message: {data.get('message_type')} - {data.get('content')[:30]}..."
                         )
                         messages.append(data)
                     else:
-                        logging.warning(f"    ⚠️ Invalid message format: {type(data)}")
+                        logging.warning(f"    Invalid message format: {type(data)}")
 
                 except Exception as e:
-                    logging.error(f"  ❌ Error parsing message {i + 1}: {e}")
+                    logging.error(f"  Error parsing message {i + 1}: {e}")
                     continue
 
             # CRITICAL FIX: Reverse to get chronological order (oldest first)
             # LPUSH stores newest first, so we need to reverse for proper conversation flow
             messages.reverse()
 
-            logging.debug(f"  ✅ Returning {len(messages)} messages in chronological order")
+            logging.debug(f"  Returning {len(messages)} messages in chronological order")
 
             self.stats.total_operations += 1
             return messages
 
         except Exception as e:
-            logging.error(f"Error retrieving messages: {e}")
+            logging.error(f"Error retrieving messages: {e}", exc_info=True)
             self.stats.error_count += 1
             return []
 
-    def store_context(self, key: str, value: Any, conversation_id: Optional[str] = None):
-        """FIXED: Store context with consistent keys"""
+    def store_context(self, key: str, value: Any, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
+        """Store context with consistent keys"""
         try:
-            redis_key = self._get_context_key(conversation_id, conversation_id)
+            redis_key = self._get_context_key(session_id, conversation_id)
 
             value_json = self._safe_serialize(value)
 
-            self.redis_client.hset(redis_key, key, value_json)
-            self.redis_client.expire(redis_key, 30 * 24 * 3600)  # 30 days TTL
+            pipe = self.redis_client.pipeline()
+            pipe.hset(redis_key, key, value_json)
+            pipe.expire(redis_key, 30 * 24 * 3600)  # 30 days TTL
+            pipe.execute()
 
             self.cache.set(f"ctx:{redis_key}:{key}", value)
             self.stats.total_operations += 1
@@ -457,10 +462,10 @@ class RedisMemoryManager(MemoryManagerInterface):
             logging.error(f"Error storing context: {e}")
             self.stats.error_count += 1
 
-    def get_context(self, key: str, conversation_id: Optional[str] = None):
-        """FIXED: Get context with consistent keys"""
+    def get_context(self, key: str, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
+        """Get context with consistent keys"""
         try:
-            redis_key = self._get_context_key(conversation_id, conversation_id)
+            redis_key = self._get_context_key(session_id, conversation_id)
 
             cache_key = f"ctx:{redis_key}:{key}"
             cached_value = self.cache.get(cache_key)
@@ -484,17 +489,16 @@ class RedisMemoryManager(MemoryManagerInterface):
             self.stats.error_count += 1
             return None
 
-    def clear_memory(self, conversation_id: Optional[str] = None):
-        """FIXED: Clear memory with consistent keys"""
+    def clear_memory(self, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
+        """Clear memory with consistent keys"""
         try:
-            if conversation_id:
-                # Clear specific session
-                message_key = self._get_message_key(conversation_id, conversation_id)
-                context_key = self._get_context_key(conversation_id, conversation_id)
+            if conversation_id or session_id:
+                message_key = self._get_message_key(session_id, conversation_id)
+                context_key = self._get_context_key(session_id, conversation_id)
                 deleted_count = self.redis_client.delete(message_key, context_key)
 
                 logging.debug(
-                    f"Cleared memory for conversation {conversation_id}: {deleted_count} keys deleted"
+                    f"[{self.agent_id}] Cleared memory for conversation {conversation_id}: {deleted_count} keys deleted"
                 )
             else:
                 # Clear all agent keys
@@ -510,7 +514,7 @@ class RedisMemoryManager(MemoryManagerInterface):
                 else:
                     deleted_count = 0
 
-                logging.debug(f"Cleared all memory: {deleted_count} keys deleted")
+                logging.debug(f"[{self.agent_id}] Cleared all memory: {deleted_count} keys deleted")
 
             self.cache.clear()
             self.stats.total_operations += 1

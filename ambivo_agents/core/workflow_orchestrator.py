@@ -634,7 +634,7 @@ class ConversationOrchestrator:
         """Create a default interaction handler for testing"""
 
         async def handler(interaction: UserInteraction) -> Optional[str]:
-            print(f"\n🔔 Interaction Required: {interaction.prompt}")
+            print(f"\nInteraction Required: {interaction.prompt}")
             if interaction.options:
                 print(f"Options: {', '.join(interaction.options)}")
 
@@ -852,8 +852,8 @@ if __name__ == "__main__":
     import asyncio
 
     async def demo():
-        print("🚀 Workflow Orchestrator Demo")
+        print("Workflow Orchestrator Demo")
         orchestrator = await quick_start_example()
-        print("✅ Demo completed!")
+        print("Demo completed!")
 
     asyncio.run(demo())

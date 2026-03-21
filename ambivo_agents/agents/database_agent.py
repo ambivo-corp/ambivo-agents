@@ -337,7 +337,7 @@ Always prioritize data security and provide clear, formatted results."""
         """Stream database processing with real-time updates"""
         try:
             yield StreamChunk(
-                text="🔍 Analyzing database request...",
+                text="Analyzing database request...",
                 sub_type=StreamSubType.STATUS,
                 metadata={"agent": "database", "step": "analysis"},
             )
@@ -368,7 +368,7 @@ Always prioritize data security and provide clear, formatted results."""
 
         except Exception as e:
             yield StreamChunk(
-                text=f"❌ Error: {str(e)}",
+                text=f"Error: {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"agent": "database", "error": str(e)},
             )
@@ -516,7 +516,7 @@ Always prioritize data security and provide clear, formatted results."""
                             "uri": None,
                         }
                     else:
-                        return "❌ Could not parse connection details. Please provide clear connection information."
+                        return "Could not parse connection details. Please provide clear connection information."
             except (json.JSONDecodeError, AttributeError):
                 # Final fallback for known test format
                 if (
@@ -533,7 +533,7 @@ Always prioritize data security and provide clear, formatted results."""
                         "uri": None,
                     }
                 else:
-                    return "❌ Could not parse connection details. Please provide clear connection information."
+                    return "Could not parse connection details. Please provide clear connection information."
 
             # Create database config
             db_config = DatabaseConfig(
@@ -550,17 +550,17 @@ Always prioritize data security and provide clear, formatted results."""
             connection_result = await self._test_connection(db_config)
             if connection_result["success"]:
                 self._current_db_config = db_config
-                return f"✅ Successfully connected to {db_config.db_type.value} database: {db_config.database}"
+                return f"Successfully connected to {db_config.db_type.value} database: {db_config.database}"
             else:
-                return f"❌ Connection failed: {connection_result['error']}"
+                return f"Connection failed: {connection_result['error']}"
 
         except Exception as e:
-            return f"❌ Connection error: {str(e)}"
+            return f"Connection error: {str(e)}"
 
     async def _handle_schema_request(self, message_content: str) -> str:
         """Handle schema inspection requests"""
         if not self._current_db_config:
-            return "❌ No database connection established. Please connect to a database first."
+            return "No database connection established. Please connect to a database first."
 
         try:
             if self._current_db_config.db_type == DatabaseType.MONGODB:
@@ -568,12 +568,12 @@ Always prioritize data security and provide clear, formatted results."""
             elif self._current_db_config.db_type in [DatabaseType.MYSQL, DatabaseType.POSTGRESQL]:
                 return await self._get_sql_schema()
         except Exception as e:
-            return f"❌ Schema inspection error: {str(e)}"
+            return f"Schema inspection error: {str(e)}"
 
     async def _handle_query_request(self, message_content: str, context: str) -> str:
         """Handle data query requests with optional analytics handoff"""
         if not self._current_db_config:
-            return "❌ No database connection established. Please connect to a database first."
+            return "No database connection established. Please connect to a database first."
 
         try:
             # Check if analytics is requested
@@ -765,7 +765,7 @@ Always prioritize data security and provide clear, formatted results."""
             self.logger.info(f"Query safety check: {is_safe} for query: {query}")
 
             if not is_safe:
-                return f"❌ Query blocked by safety filters. Generated query: {query}"
+                return f"Query blocked by safety filters. Generated query: {query}"
 
             # Execute query
             result = await self._execute_query(query)
@@ -787,12 +787,12 @@ Always prioritize data security and provide clear, formatted results."""
                     formatted_result = await self._format_query_result(result)
                     # Provide both absolute and relative paths for flexibility
                     relative_path = os.path.relpath(handoff_result["csv_path"])
-                    return f"{formatted_result}\n\n📊 **Data exported for analytics**: {handoff_result['csv_path']}\n\n🔄 **Analytics handoff ready** - Data available at: `{relative_path}`\n\n💡 You can now ask for visualization and analysis of this data."
+                    return f"{formatted_result}\n\n**Data exported for analytics**: {handoff_result['csv_path']}\n\n**Analytics handoff ready** - Data available at: `{relative_path}`\n\nYou can now ask for visualization and analysis of this data."
 
             return await self._format_query_result(result)
 
         except Exception as e:
-            return f"❌ Query execution error: {str(e)}"
+            return f"Query execution error: {str(e)}"
 
     async def _is_analytics_requested(self, message: str) -> bool:
         """Check if user is requesting analytics/visualization along with query"""
@@ -1345,14 +1345,14 @@ Always prioritize data security and provide clear, formatted results."""
     async def _format_query_result(self, result: QueryResult) -> str:
         """Format query result for display"""
         if not result.success:
-            return f"❌ Query failed: {result.error}"
+            return f"Query failed: {result.error}"
 
         if not result.data:
-            return f"✅ Query executed successfully. No results returned. (Execution time: {result.execution_time_ms:.1f}ms)"
+            return f"Query executed successfully. No results returned. (Execution time: {result.execution_time_ms:.1f}ms)"
 
         output = []
         output.append(
-            f"✅ Query Results ({result.row_count} rows, {result.execution_time_ms:.1f}ms):"
+            f"Query Results ({result.row_count} rows, {result.execution_time_ms:.1f}ms):"
         )
         output.append("")
 
@@ -1386,10 +1386,10 @@ Always prioritize data security and provide clear, formatted results."""
             result = await self._execute_sql_query(tables_query)
 
             if not result.success:
-                return f"❌ Failed to get schema: {result.error}"
+                return f"Failed to get schema: {result.error}"
 
             output = []
-            output.append(f"📊 {self._current_db_config.db_type.value.upper()} Database Schema:")
+            output.append(f"{self._current_db_config.db_type.value.upper()} Database Schema:")
             output.append(f"Database: {self._current_db_config.database}")
             output.append("")
 
@@ -1404,21 +1404,21 @@ Always prioritize data security and provide clear, formatted results."""
             return "\n".join(output)
 
         except Exception as e:
-            return f"❌ Schema error: {str(e)}"
+            return f"Schema error: {str(e)}"
 
     async def _get_mongodb_schema(self) -> str:
         """Get MongoDB schema information"""
         try:
             client = self._connections.get("mongodb")
             if not client:
-                return "❌ No MongoDB connection"
+                return "No MongoDB connection"
 
             # Check if we have a specific database selected
             if not self._current_db_config.database:
                 # List all databases if no specific database is selected
                 databases = client.list_database_names()
                 output = []
-                output.append(f"📊 MongoDB Server Schema:")
+                output.append(f"MongoDB Server Schema:")
                 output.append("No specific database selected.")
                 output.append("")
 
@@ -1428,7 +1428,7 @@ Always prioritize data security and provide clear, formatted results."""
                         output.append(f"  {i}. {db_name}")
                     output.append("")
                     output.append(
-                        "💡 Use 'use <database_name>' to select a database and see its collections."
+                        "Use 'use <database_name>' to select a database and see its collections."
                     )
                 else:
                     output.append("No databases found.")
@@ -1440,7 +1440,7 @@ Always prioritize data security and provide clear, formatted results."""
             collections = db.list_collection_names()
 
             output = []
-            output.append(f"📊 MongoDB Database Schema:")
+            output.append(f"MongoDB Database Schema:")
             output.append(f"Database: {self._current_db_config.database}")
             output.append("")
 
@@ -1454,7 +1454,7 @@ Always prioritize data security and provide clear, formatted results."""
             return "\n".join(output)
 
         except Exception as e:
-            return f"❌ Schema error: {str(e)}"
+            return f"Schema error: {str(e)}"
 
     async def export_to_csv(self, result: QueryResult, filename: Optional[str] = None) -> str:
         """Export query results to CSV file for analytics handoff"""
@@ -1594,7 +1594,7 @@ File paths to try:
 
 Use: `load data from {rel_path}` 
 
-🔄 **Ready for Analytics** - The data has been exported and is ready for visualization and analysis."""
+**Ready for Analytics** - The data has been exported and is ready for visualization and analysis."""
 
         return prompt
 
@@ -1923,7 +1923,7 @@ Use: `load data from {rel_path}`
                                     val = float(val)
                                 else:
                                     val = int(val)
-                            except:
+                            except (ValueError, TypeError) as e:
                                 pass  # Keep as string
                         values.append(val)
 
@@ -2053,7 +2053,7 @@ Use: `load data from {rel_path}`
 
             # Check if we have a database connection
             if not self._current_db_config:
-                return "❌ No database connection established. Please connect to a database first."
+                return "No database connection established. Please connect to a database first."
 
             # Extract file path and table/collection name using LLM
             db_type_context = (
@@ -2104,9 +2104,10 @@ Use: `load data from {rel_path}`
                             "database_name": None,
                         }
                     else:
-                        return "❌ Could not extract file path from request. Please specify the file path clearly."
-            except:
-                return "❌ Could not parse ingestion request. Please provide: 'ingest <file_path> [into <collection>]'"
+                        return "Could not extract file path from request. Please specify the file path clearly."
+            except Exception as e:
+                self.logger.warning(f"Failed to parse ingestion request: {e}")
+                return "Could not parse ingestion request. Please provide: 'ingest <file_path> [into <collection>]'"
 
             # Route to appropriate ingestion method based on database type
             if self._current_db_config.db_type == DatabaseType.MONGODB:
@@ -2126,14 +2127,14 @@ Use: `load data from {rel_path}`
             if result["success"]:
                 if self._current_db_config.db_type == DatabaseType.MONGODB:
                     # MongoDB response format
-                    return f"""✅ **File Ingestion Successful**
+                    return f"""**File Ingestion Successful**
 
-📁 **File**: `{result['file_info']['path']}` ({result['file_info']['size_mb']:.2f} MB)
-🗄️ **Database**: {result['database']}
-📂 **Collection**: {result['collection']}
-📊 **Documents Inserted**: {result['documents_inserted']:,}
-⏱️ **Execution Time**: {result['execution_time_ms']:.1f}ms
-📈 **Total Documents in Collection**: {result['collection_count']:,}
+**File**: `{result['file_info']['path']}` ({result['file_info']['size_mb']:.2f} MB)
+**Database**: {result['database']}
+**Collection**: {result['collection']}
+**Documents Inserted**: {result['documents_inserted']:,}
+⏱**Execution Time**: {result['execution_time_ms']:.1f}ms
+**Total Documents in Collection**: {result['collection_count']:,}
 
 Sample inserted IDs: {', '.join(result['sample_ids'])}
 
@@ -2143,25 +2144,25 @@ You can now query this data using:
 - `db.{result['collection']}.findOne()`"""
                 else:
                     # SQL response format
-                    return f"""✅ **File Ingestion Successful**
+                    return f"""**File Ingestion Successful**
 
-📁 **File**: `{result['file_info']['path']}` ({result['file_info']['size_mb']:.2f} MB)
-🗄️ **Database**: {result['database']}
-📊 **Table**: {result['table']}
-🔢 **Rows Inserted**: {result['rows_inserted']:,}
-⏱️ **Execution Time**: {result['execution_time_ms']:.1f}ms
-📈 **Total Rows in Table**: {result['total_rows']:,}
-📋 **Columns**: {', '.join(result['columns'])}
+**File**: `{result['file_info']['path']}` ({result['file_info']['size_mb']:.2f} MB)
+**Database**: {result['database']}
+**Table**: {result['table']}
+**Rows Inserted**: {result['rows_inserted']:,}
+⏱**Execution Time**: {result['execution_time_ms']:.1f}ms
+**Total Rows in Table**: {result['total_rows']:,}
+**Columns**: {', '.join(result['columns'])}
 
 You can now query this data using:
 - `SELECT * FROM {result['table']} LIMIT 10`
 - `SELECT COUNT(*) FROM {result['table']}`
 - `SELECT * FROM {result['table']} WHERE <condition>`"""
             else:
-                return f"❌ Ingestion failed: {result['error']}"
+                return f"Ingestion failed: {result['error']}"
 
         except Exception as e:
-            return f"❌ File ingestion error: {str(e)}"
+            return f"File ingestion error: {str(e)}"
 
     async def cleanup_session(self):
         """Clean up database connections and session resources"""

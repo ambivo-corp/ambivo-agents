@@ -39,16 +39,16 @@ class PythonCodeFormatter:
     def format_file(self, file_path: str) -> bool:
         """Main method to format a Python file"""
         if not os.path.exists(file_path):
-            print(f"❌ File not found: {file_path}")
+            print(f" File not found: {file_path}")
             return False
 
-        print(f"🔧 Processing: {file_path}")
+        print(f" Processing: {file_path}")
 
         # Create backup if requested
         if self.create_backup:
             backup_path = f"{file_path}.backup"
             shutil.copy2(file_path, backup_path)
-            print(f"💾 Backup created: {backup_path}")
+            print(f" Backup created: {backup_path}")
 
         try:
             # Read the file
@@ -70,17 +70,17 @@ class PythonCodeFormatter:
 
             # Validate the result
             if self._validate_syntax(content):
-                print(f"✅ File formatted successfully!")
-                print(f"🔍 Fixes applied: {len(self.fixes_applied)}")
+                print(f" File formatted successfully!")
+                print(f" Fixes applied: {len(self.fixes_applied)}")
                 for fix in self.fixes_applied:
-                    print(f"   • {fix}")
+                    print(f" • {fix}")
                 return True
             else:
-                print(f"⚠️ File formatted but may still have syntax issues")
+                print(f" File formatted but may still have syntax issues")
                 return False
 
         except Exception as e:
-            print(f"❌ Error processing file: {e}")
+            print(f" Error processing file: {e}")
             return False
 
     def _fix_basic_syntax_errors(self, content: str) -> str:
@@ -322,7 +322,7 @@ class PythonCodeFormatter:
             ast.parse(content)
             return True
         except SyntaxError as e:
-            print(f"⚠️ Syntax error remains: {e}")
+            print(f" Syntax error remains: {e}")
             return False
 
     def install_dependencies(self):
@@ -332,14 +332,14 @@ class PythonCodeFormatter:
         for tool in tools:
             try:
                 subprocess.run([tool, "--version"], capture_output=True, check=True)
-                print(f"✅ {tool} is available")
+                print(f" {tool} is available")
             except (subprocess.CalledProcessError, FileNotFoundError):
-                print(f"⚠️ {tool} not found, installing...")
+                print(f" {tool} not found, installing...")
                 try:
                     subprocess.check_call([sys.executable, "-m", "pip", "install", tool])
-                    print(f"✅ {tool} installed successfully")
+                    print(f" {tool} installed successfully")
                 except subprocess.CalledProcessError:
-                    print(f"❌ Failed to install {tool}")
+                    print(f" Failed to install {tool}")
 
 
 def batch_format_files(
@@ -352,10 +352,10 @@ def batch_format_files(
     files = list(path.glob(pattern))
 
     if not files:
-        print(f"❌ No Python files found in {directory}")
+        print(f" No Python files found in {directory}")
         return
 
-    print(f"🔍 Found {len(files)} Python files to format")
+    print(f" Found {len(files)} Python files to format")
 
     success_count = 0
     for file_path in files:
@@ -363,7 +363,7 @@ def batch_format_files(
         if formatter.format_file(str(file_path)):
             success_count += 1
 
-    print(f"\n🎉 Summary: {success_count}/{len(files)} files formatted successfully")
+    print(f"\n Summary: {success_count}/{len(files)} files formatted successfully")
 
 
 def format_code_string(code: str, aggressive: bool = False) -> str:
@@ -410,7 +410,7 @@ def main():
 
     # Check if path exists
     if not os.path.exists(args.file_or_directory):
-        print(f"❌ Path not found: {args.file_or_directory}")
+        print(f" Path not found: {args.file_or_directory}")
         return
 
     # Batch mode for directories
@@ -437,7 +437,7 @@ def fix_common_issues():
         },
         "wrong_indentation": {
             "pattern": r"^\s*\S",
-            "fix": lambda line: "    " + line.lstrip(),
+            "fix": lambda line: " " + line.lstrip(),
             "description": "Fix indentation to 4 spaces",
         },
         "trailing_whitespace": {
@@ -476,7 +476,7 @@ def quick_fix_code(code_string: str) -> str:
         if line.strip() and not line.startswith(" ") and not line.startswith("#"):
             # If previous line ended with colon, this line should be indented
             if fixed_lines and fixed_lines[-1].strip().endswith(":"):
-                line = "    " + line
+                line = " " + line
 
                 fixed_lines.append(line)
 
@@ -484,7 +484,7 @@ def quick_fix_code(code_string: str) -> str:
 
 
 if __name__ == "__main__":
-    print("🐍 Python Code Formatter & Fixer")
+    print(" Python Code Formatter & Fixer")
     print("=" * 50)
 
     main()

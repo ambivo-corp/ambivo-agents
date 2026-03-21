@@ -325,7 +325,7 @@ def load_config(config_path: str = None, use_env_vars: bool = None) -> Dict[str,
         try:
             config = _load_config_from_env()
             config_source = "environment variables"
-            # logging.info("✅ Configuration loaded from environment variables")
+            # logging.info("Configuration loaded from environment variables")
 
             # Validate env config
             _validate_config(config)
@@ -337,7 +337,7 @@ def load_config(config_path: str = None, use_env_vars: bool = None) -> Dict[str,
         except ConfigurationError as e:
             if _has_minimal_env_vars():
                 # If we have some env vars but they're incomplete, raise error
-                raise ConfigurationError(f"Incomplete environment variable configuration: {e}")
+                raise ConfigurationError(f"Incomplete environment variable configuration: {e}") from e
             else:
                 # Fall back to YAML file
                 logging.warning(f"Environment variable config incomplete: {e}")
@@ -355,7 +355,7 @@ def load_config(config_path: str = None, use_env_vars: bool = None) -> Dict[str,
                 config = yaml_config
                 config_source = "YAML file"
 
-            # logging.info(f"✅ Configuration loaded from {config_source}")
+            # logging.info(f"Configuration loaded from {config_source}")
 
         except ConfigurationError as e:
             if config:
@@ -459,9 +459,9 @@ def _load_config_from_yaml(config_path: str = None) -> Dict[str, Any]:
         return config
 
     except yaml.YAMLError as e:
-        raise ConfigurationError(f"Invalid YAML in agent_config.yaml: {e}")
+        raise ConfigurationError(f"Invalid YAML in agent_config.yaml: {e}") from e
     except Exception as e:
-        raise ConfigurationError(f"Failed to load agent_config.yaml: {e}")
+        raise ConfigurationError(f"Failed to load agent_config.yaml: {e}") from e
 
 
 def _get_minimal_defaults() -> Dict[str, Any]:
@@ -489,22 +489,22 @@ def _get_minimal_defaults() -> Dict[str, Any]:
         },
         "agents": {
             "moderator": {
-                "enabled": True,  # ModeratorAgent enabled by default
+                "enabled": True, # ModeratorAgent enabled by default
             },
             "analytics": {
-                "enabled": True,  # AnalyticsAgent enabled by default when Docker available
+                "enabled": True, # AnalyticsAgent enabled by default when Docker available
             },
             "code_executor": {
-                "enabled": True,  # CodeExecutorAgent enabled by default when Docker available
+                "enabled": True, # CodeExecutorAgent enabled by default when Docker available
             },
             "youtube_download": {
-                "enabled": True,  # YouTubeDownloadAgent enabled by default when Docker available
+                "enabled": True, # YouTubeDownloadAgent enabled by default when Docker available
             },
             "media_editor": {
-                "enabled": True,  # MediaEditorAgent enabled by default when Docker available
+                "enabled": True, # MediaEditorAgent enabled by default when Docker available
             },
             "web_scraper": {
-                "enabled": True,  # WebScraperAgent enabled by default when Docker available
+                "enabled": True, # WebScraperAgent enabled by default when Docker available
             },
         },
         "moderator": {"default_enabled_agents": ["assistant"]},
@@ -663,28 +663,28 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         ws.setdefault("timeout", 120)
         ws.setdefault("proxy_enabled", False)
         ws.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
-        ws.setdefault("output_dir", "./scraper_output")  # Docker-accessible with shared volume
-        ws.setdefault("docker_shared_mode", True)  # Enable Docker volume sharing
+        ws.setdefault("output_dir", "./scraper_output") # Docker-accessible with shared volume
+        ws.setdefault("docker_shared_mode", True) # Enable Docker volume sharing
 
     # Set YouTube download defaults with Docker-accessible directories
     if "youtube_download" in config:
         yt = config["youtube_download"]
-        yt.setdefault("download_dir", "./youtube_downloads")  # Docker-accessible with shared volume
+        yt.setdefault("download_dir", "./youtube_downloads") # Docker-accessible with shared volume
         yt.setdefault("timeout", 600)
         yt.setdefault("memory_limit", "1g")
         yt.setdefault("default_audio_only", True)
         yt.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
-        yt.setdefault("docker_shared_mode", True)  # Enable Docker volume sharing
+        yt.setdefault("docker_shared_mode", True) # Enable Docker volume sharing
 
     # Set media editor defaults with Docker-accessible directories
     if "media_editor" in config:
         me = config["media_editor"]
-        me.setdefault("input_dir", "./media_input")  # Docker-accessible with shared volume
-        me.setdefault("output_dir", "./media_output")  # Docker-accessible with shared volume
+        me.setdefault("input_dir", "./media_input") # Docker-accessible with shared volume
+        me.setdefault("output_dir", "./media_output") # Docker-accessible with shared volume
         me.setdefault("timeout", 300)
         me.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
         me.setdefault("work_dir", "/opt/ambivo/work_dir")
-        me.setdefault("docker_shared_mode", True)  # Enable Docker volume sharing
+        me.setdefault("docker_shared_mode", True) # Enable Docker volume sharing
 
     # Set agents defaults - ensure all agents are enabled by default when Docker available
     if "agents" not in config:
@@ -694,19 +694,19 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     agents.setdefault("moderator", {}).setdefault("enabled", True)
     agents.setdefault("analytics", {}).setdefault(
         "enabled", True
-    )  # Default to True when Docker available
+    ) # Default to True when Docker available
     agents.setdefault("code_executor", {}).setdefault(
         "enabled", True
-    )  # Default to True when Docker available
+    ) # Default to True when Docker available
     agents.setdefault("youtube_download", {}).setdefault(
         "enabled", True
-    )  # Default to True when Docker available
+    ) # Default to True when Docker available
     agents.setdefault("media_editor", {}).setdefault(
         "enabled", True
-    )  # Default to True when Docker available
+    ) # Default to True when Docker available
     agents.setdefault("web_scraper", {}).setdefault(
         "enabled", True
-    )  # Default to True when Docker available
+    ) # Default to True when Docker available
 
     # Set security defaults - file access restrictions
     if "security" not in config:
@@ -721,18 +721,18 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     file_access.setdefault(
         "restricted_directories",
         [
-            "/etc",  # System configuration files
-            "/root",  # Root user home directory
-            "/var/log",  # System logs
-            "/proc",  # Process filesystem
-            "/sys",  # System filesystem
-            "/dev",  # Device files
-            "/boot",  # Boot files
-            "~/.ssh",  # SSH keys
-            "~/.aws",  # AWS credentials
-            "~/.config",  # User configuration files
-            "/usr/bin",  # System binaries
-            "/usr/sbin",  # System admin binaries
+            "/etc", # System configuration files
+            "/root", # Root user home directory
+            "/var/log", # System logs
+            "/proc", # Process filesystem
+            "/sys", # System filesystem
+            "/dev", # Device files
+            "/boot", # Boot files
+            "~/.ssh", # SSH keys
+            "~/.aws", # AWS credentials
+            "~/.config", # User configuration files
+            "/usr/bin", # System binaries
+            "/usr/sbin", # System admin binaries
         ],
     )
 
@@ -749,7 +749,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         docker.setdefault("shared_base_dir", "./docker_shared")
         docker.setdefault(
             "legacy_fallback_dirs", ["docker_shared/input", "docker_shared"]
-        )  # Use docker_shared structure consistently
+        ) # Use docker_shared structure consistently
         docker.setdefault("network_disabled", True)
         docker.setdefault("auto_remove", True)
 
@@ -945,10 +945,10 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     if "retention" not in sqlite_config:
         sqlite_config["retention"] = {}
     retention = sqlite_config["retention"]
-    retention.setdefault("conversation_ttl", 2592000)  # 30 days
-    retention.setdefault("checkpoint_ttl", 604800)  # 7 days
-    retention.setdefault("session_ttl", 86400)  # 24 hours
-    retention.setdefault("cleanup_interval", 3600)  # 1 hour
+    retention.setdefault("conversation_ttl", 2592000) # 30 days
+    retention.setdefault("checkpoint_ttl", 604800) # 7 days
+    retention.setdefault("session_ttl", 86400) # 24 hours
+    retention.setdefault("cleanup_interval", 3600) # 1 hour
 
     # Redis defaults
     if "redis" not in workflow_persistence:
@@ -968,7 +968,7 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     file_config.setdefault("storage_directory", "./data/workflow_states")
     file_config.setdefault("compression", True)
     file_config.setdefault("encryption", False)
-    file_config.setdefault("max_file_size", 10485760)  # 10MB
+    file_config.setdefault("max_file_size", 10485760) # 10MB
 
     # General persistence defaults
     if "general" not in workflow_persistence:
@@ -1093,7 +1093,8 @@ def get_current_config_source() -> str:
     try:
         config = load_config()
         return config.get("_config_source", "unknown")
-    except:
+    except Exception as e:
+        logging.debug(f"Failed to get current config source: {e}")
         return "none"
 
 
@@ -1208,31 +1209,31 @@ def agent_type_to_capability(agent_type: str) -> str:
 
 def debug_env_vars():
     """Debug function to print all AMBIVO_AGENTS_ environment variables."""
-    print("🔍 AMBIVO_AGENTS Environment Variables Debug")
+    print(" AMBIVO_AGENTS Environment Variables Debug")
     print("=" * 50)
 
     env_vars = {k: v for k, v in os.environ.items() if k.startswith("AMBIVO_AGENTS_")}
 
     if not env_vars:
-        print("❌ No AMBIVO_AGENTS_ environment variables found")
+        print(" No AMBIVO_AGENTS_ environment variables found")
         return
 
-    print(f"✅ Found {len(env_vars)} environment variables:")
+    print(f" Found {len(env_vars)} environment variables:")
     for key, value in sorted(env_vars.items()):
         # Mask sensitive values
         if any(sensitive in key.lower() for sensitive in ["key", "password", "secret"]):
             masked_value = value[:8] + "..." if len(value) > 8 else "***"
-            print(f"  {key} = {masked_value}")
+            print(f" {key} = {masked_value}")
         else:
-            print(f"  {key} = {value}")
+            print(f" {key} = {value}")
 
-    print("\n🔧 Configuration loading test:")
+    print("\n Configuration loading test:")
     try:
         config = load_config()
-        print(f"✅ Config loaded successfully from: {config.get('_config_source', 'unknown')}")
-        print(f"📊 Sections: {list(config.keys())}")
+        print(f" Config loaded successfully from: {config.get('_config_source', 'unknown')}")
+        print(f" Sections: {list(config.keys())}")
     except Exception as e:
-        print(f"❌ Config loading failed: {e}")
+        print(f" Config loading failed: {e}")
 
 
 def check_config_health() -> Dict[str, Any]:

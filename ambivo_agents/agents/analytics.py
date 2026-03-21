@@ -256,7 +256,7 @@ Always provide clear, actionable insights and explain your analysis process. Use
 
         except Exception as e:
             self.logger.error(f"Error processing message: {e}")
-            error_content = f"❌ Analytics error: {str(e)}"
+            error_content = f"Analytics error: {str(e)}"
 
             # Return error as AgentMessage
             return AgentMessage(
@@ -287,7 +287,7 @@ Always provide clear, actionable insights and explain your analysis process. Use
             request_info = self._detect_request_type(message_text)
 
             yield StreamChunk(
-                text=f"🔍 **Analyzing request**: {request_info['type'].replace('_', ' ').title()}",
+                text=f"**Analyzing request**: {request_info['type'].replace('_', ' ').title()}",
                 sub_type=StreamSubType.STATUS,
             )
 
@@ -319,7 +319,7 @@ Always provide clear, actionable insights and explain your analysis process. Use
 
         except Exception as e:
             self.logger.error(f"Error processing message: {e}")
-            yield StreamChunk(text=f"❌ Analytics error: {str(e)}", sub_type=StreamSubType.ERROR)
+            yield StreamChunk(text=f"Analytics error: {str(e)}", sub_type=StreamSubType.ERROR)
 
     def _detect_request_type(self, message: str) -> dict:
         """Detect the type of analytics request"""
@@ -435,15 +435,15 @@ Always provide clear, actionable insights and explain your analysis process. Use
                 available_files = list(set(available_files))  # Remove duplicates
                 if available_files:
                     files_list = "\n".join([f"  - {f}" for f in available_files])
-                    return f"❌ No file path found. Available files in input directories:\n{files_list}\n\nPlease specify: `load data from filename.csv`"
+                    return f"No file path found. Available files in input directories:\n{files_list}\n\nPlease specify: `load data from filename.csv`"
                 else:
-                    return f"❌ No file path found and no data files in input directories. Please specify a CSV or XLS file path."
+                    return f"No file path found and no data files in input directories. Please specify a CSV or XLS file path."
             except Exception:
-                return "❌ No file path found. Please specify a CSV or XLS file path."
+                return "No file path found. Please specify a CSV or XLS file path."
 
         # Check if file exists
         if not os.path.exists(file_path):
-            return f"❌ File not found: `{file_path}`\n\nPlease check the file path and try again."
+            return f"File not found: `{file_path}`\n\nPlease check the file path and try again."
 
         try:
             # Load and analyze the data
@@ -458,17 +458,17 @@ Always provide clear, actionable insights and explain your analysis process. Use
                     analysis_result["field_info"], analysis_result["data"]
                 )
 
-                return f"""✅ **Data Loaded and Analyzed Successfully**
+                return f"""**Data Loaded and Analyzed Successfully**
 
 **File**: `{file_path}`
 **Rows**: {analysis_result['row_count']:,}
 **Columns**: {analysis_result['column_count']}
 **Size**: {analysis_result['file_size_mb']:.2f} MB
 
-📊 **Data Overview**:
+**Data Overview**:
 {analysis_result['summary']}
 
-🎯 **Recommended Visualizations**:
+**Recommended Visualizations**:
 {self._format_recommendations(recommendations[:5])}
 
 Ask me to:
@@ -477,26 +477,26 @@ Ask me to:
 - `what are the top sales?` - Run natural language queries
 - `create bar chart of sales by region` - Generate specific visualizations
 
-Ready for analysis! 🚀"""
+Ready for analysis! """
 
             else:
-                return f"❌ Error loading data: {analysis_result['error']}"
+                return f"Error loading data: {analysis_result['error']}"
 
         except Exception as e:
             self.logger.error(f"Error in data loading: {e}")
-            return f"❌ Error analyzing data: {str(e)}"
+            return f"Error analyzing data: {str(e)}"
 
     async def _handle_schema_exploration(self, message) -> str:
         """Handle schema exploration requests"""
         if not self.current_schema:
-            return """📋 **Schema Analysis**
+            return """**Schema Analysis**
 
-❌ No dataset loaded. Please load data first using:
+No dataset loaded. Please load data first using:
 `load data from filename.csv`
 
 Then I can show you detailed schema information."""
 
-        schema_lines = ["📋 **Dataset Schema Analysis**\n"]
+        schema_lines = ["**Dataset Schema Analysis**\n"]
 
         for col_name, col_info in self.current_schema.items():
             field_type = col_info.get("type", "unknown")
@@ -505,27 +505,27 @@ Then I can show you detailed schema information."""
             non_null_count = col_info.get("non_null_count", 0)
             total_count = col_info.get("total_count", 0)
 
-            # Add type emojis
+            # Add type indicators
             type_emoji = {
-                "integer": "🔢",
-                "float": "📊",
-                "string": "📝",
-                "boolean": "✅",
-                "datetime": "📅",
-            }.get(field_type, "❓")
+                "integer": "[int]",
+                "float": "[float]",
+                "string": "[str]",
+                "boolean": "[bool]",
+                "datetime": "[date]",
+            }.get(field_type, "")
 
             # Data quality indicator
             completeness = (non_null_count / total_count * 100) if total_count > 0 else 0
-            quality_emoji = "🟢" if completeness >= 90 else "🟡" if completeness >= 70 else "🔴"
+            quality_emoji = "[good]" if completeness >= 90 else "[ok]" if completeness >= 70 else "[low]"
 
             # Semantic type indicator
             semantic_emoji = {
-                "price": "💰",
-                "datetime": "🕐",
-                "identifier": "🆔",
-                "latitude": "🌍",
-                "longitude": "🌍",
-                "address": "📍",
+                "price": "[price]",
+                "datetime": "[time]",
+                "identifier": "[id]",
+                "latitude": "[geo]",
+                "longitude": "[geo]",
+                "address": "[addr]",
             }.get(semantic_type, "")
 
             schema_lines.append(f"**{col_name}** {type_emoji} {semantic_emoji}")
@@ -542,7 +542,7 @@ Then I can show you detailed schema information."""
             schema_lines.append("")  # Blank line between columns
 
         # Add summary insights
-        schema_lines.append("🎯 **Key Insights**:")
+        schema_lines.append("**Key Insights**:")
 
         # Count meaningful metrics
         meaningful_metrics = [
@@ -576,9 +576,9 @@ Then I can show you detailed schema information."""
     async def _handle_natural_language_query(self, query: str) -> str:
         """Handle natural language analytical queries"""
         if not self.current_dataset or not self.current_schema:
-            return f"""📊 **Query Analysis**
+            return f"""**Query Analysis**
 
-❌ No dataset loaded. Please load data first using:
+No dataset loaded. Please load data first using:
 `load data from filename.csv`
 
 Then I can process your query: "{query}" """
@@ -628,7 +628,7 @@ Then I can process your query: "{query}" """
                 if categorical_fields:
                     suggestions.append(f"• `count by {categorical_fields[0]}` - Group counts")
 
-                return f"""📊 **Query Processing**
+                return f"""**Query Processing**
 
 **Your query**: "{query}"
 
@@ -640,9 +640,9 @@ I understand you want to analyze the data, but I need a more specific query patt
 **Available columns**: {', '.join(list(self.current_schema.keys())[:6])}{"..." if len(self.current_schema) > 6 else ""}"""
 
         except Exception as e:
-            return f"""📊 **Query Error**
+            return f"""**Query Error**
 
-❌ Error processing query: {str(e)}
+Error processing query: {str(e)}
 
 Please try a simpler query pattern or load data first."""
 
@@ -661,7 +661,7 @@ Please try a simpler query pattern or load data first."""
             elif query_type == "summary":
                 code = self._generate_summary_query_code(query, params)
             else:
-                return "❌ Unknown query type"
+                return "Unknown query type"
 
             # Execute in Docker
             from ..executors.docker_executor import DockerCodeExecutor
@@ -686,10 +686,10 @@ Please try a simpler query pattern or load data first."""
                     # If no JSON, return raw output
                     return output.strip()
             else:
-                return f"❌ Docker execution error: {result.get('error', 'Unknown error')}"
+                return f"Docker execution error: {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ Error executing query in Docker: {str(e)}"
+            return f"Error executing query in Docker: {str(e)}"
 
     def _execute_query_sync(self, query_type: str, query: str, params: dict = None) -> str:
         """Execute analytical queries in Docker container synchronously"""
@@ -704,7 +704,7 @@ Please try a simpler query pattern or load data first."""
             elif query_type == "summary":
                 code = self._generate_summary_query_code(query, params)
             else:
-                return "❌ Unknown query type"
+                return "Unknown query type"
 
             # Execute in Docker
             from ..executors.docker_executor import DockerCodeExecutor
@@ -729,10 +729,10 @@ Please try a simpler query pattern or load data first."""
                     # If no JSON, return raw output
                     return output.strip()
             else:
-                return f"❌ Docker execution error: {result.get('error', 'Unknown error')}"
+                return f"Docker execution error: {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ Error executing query in Docker: {str(e)}"
+            return f"Error executing query in Docker: {str(e)}"
 
     def _handle_top_query(self, query: str) -> str:
         """Handle top N queries using Docker execution"""
@@ -745,7 +745,7 @@ Please try a simpler query pattern or load data first."""
             ]
 
             if not meaningful_metrics:
-                return "❌ No sortable numeric fields found in the dataset."
+                return "No sortable numeric fields found in the dataset."
 
             # Use the first meaningful metric
             sort_field = meaningful_metrics[0]
@@ -762,7 +762,7 @@ Please try a simpler query pattern or load data first."""
             return result
 
         except Exception as e:
-            return f"❌ Error processing top query: {str(e)}"
+            return f"Error processing top query: {str(e)}"
 
     def _handle_count_query(self, query: str) -> str:
         """Handle count queries using Docker execution"""
@@ -771,7 +771,7 @@ Please try a simpler query pattern or load data first."""
             return result
 
         except Exception as e:
-            return f"❌ Error processing count query: {str(e)}"
+            return f"Error processing count query: {str(e)}"
 
     def _handle_average_query(self, query: str) -> str:
         """Handle average/mean queries using Docker execution"""
@@ -780,7 +780,7 @@ Please try a simpler query pattern or load data first."""
             return result
 
         except Exception as e:
-            return f"❌ Error processing average query: {str(e)}"
+            return f"Error processing average query: {str(e)}"
 
     def _handle_summary_query(self, query: str) -> str:
         """Handle summary statistics queries using Docker execution"""
@@ -789,11 +789,11 @@ Please try a simpler query pattern or load data first."""
             return result
 
         except Exception as e:
-            return f"❌ Error processing summary query: {str(e)}"
+            return f"Error processing summary query: {str(e)}"
 
     async def _handle_sql_query(self, query: str) -> str:
         """Handle direct SQL queries"""
-        return f"""🔍 **SQL Query Execution**
+        return f"""**SQL Query Execution**
 
 **Query**: `{query}`
 
@@ -803,7 +803,7 @@ Please try a simpler query pattern or load data first."""
 
     async def _handle_visualization(self, message, chart_type: str) -> str:
         """Handle visualization requests"""
-        return f"""📈 **Visualization Generation**
+        return f"""**Visualization Generation**
 
 **Chart Type**: {chart_type}
 **Request**: "{message}"
@@ -1287,7 +1287,7 @@ df = pd.DataFrame(data_info['data'])
 if '{sort_field}' in df.columns:
     top_records = df.nlargest({n}, '{sort_field}')
     
-    result_lines = ["📊 **Top {n} Records by {sort_field}**\\n"]
+    result_lines = ["**Top {n} Records by {sort_field}**\\n"]
     
     for i, (_, row) in enumerate(top_records.iterrows(), 1):
         value = row['{sort_field}']
@@ -1299,7 +1299,7 @@ if '{sort_field}' in df.columns:
     
     result = '\\n'.join(result_lines)
 else:
-    result = "❌ Field '{sort_field}' not found in data"
+    result = "Field '{sort_field}' not found in data"
 
 print(json.dumps({{"result": result}}))
 """
@@ -1323,13 +1323,13 @@ categorical_fields = [col for col, info in schema.items()
                      and info.get('unique_ratio', 1.0) < 0.5]
 
 if not categorical_fields:
-    result = f"📊 **Count Analysis**\\n\\nTotal records in dataset: **{len(df):,}**"
+    result = f"**Count Analysis**\\n\\nTotal records in dataset: **{len(df):,}**"
 else:
     # Use the first categorical field
     group_field = categorical_fields[0]
     counts = df[group_field].value_counts()
     
-    result_lines = [f"📊 **Count by {group_field}**\\n"]
+    result_lines = [f"**Count by {group_field}**\\n"]
     
     for value, count in counts.head(10).items():
         result_lines.append(f"• **{value}**: {count:,} records")
@@ -1366,9 +1366,9 @@ for col, info in schema.items():
             meaningful_metrics.append(col)
 
 if not meaningful_metrics:
-    result = "❌ No numeric fields suitable for averaging found."
+    result = "No numeric fields suitable for averaging found."
 else:
-    result_lines = ["📊 **Average Values**\\n"]
+    result_lines = ["**Average Values**\\n"]
     
     for field in meaningful_metrics[:5]:
         if field in df.columns:
@@ -1404,9 +1404,9 @@ for col, info in schema.items():
             meaningful_metrics.append(col)
 
 if not meaningful_metrics:
-    result = "❌ No numeric fields found for summary statistics."
+    result = "No numeric fields found for summary statistics."
 else:
-    result_lines = ["📊 **Summary Statistics**\\n"]
+    result_lines = ["**Summary Statistics**\\n"]
     
     for field in meaningful_metrics[:3]:
         if field in df.columns:
@@ -1481,7 +1481,7 @@ print(json.dumps({"result": result}))
         recommendations.append(
             {
                 "type": "table",
-                "title": "📋 Data Table View",
+                "title": "Data Table View",
                 "description": "View raw data in tabular format",
                 "confidence": 1.0,
             }
@@ -1494,7 +1494,7 @@ print(json.dumps({"result": result}))
                     recommendations.append(
                         {
                             "type": "line_chart",
-                            "title": f"📈 {metric} over {date_field}",
+                            "title": f"{metric} over {date_field}",
                             "description": f"Track {metric} trends over time",
                             "confidence": 0.9,
                         }
@@ -1510,7 +1510,7 @@ print(json.dumps({"result": result}))
                         recommendations.append(
                             {
                                 "type": "bar_chart",
-                                "title": f"📊 {metric} by {category}",
+                                "title": f"{metric} by {category}",
                                 "description": f"Compare {metric} across {category} categories",
                                 "confidence": 0.85,
                             }
@@ -1524,7 +1524,7 @@ print(json.dumps({"result": result}))
                     recommendations.append(
                         {
                             "type": "pie_chart",
-                            "title": f"🥧 Distribution by {category}",
+                            "title": f"Distribution by {category}",
                             "description": f"See percentage breakdown of {category}",
                             "confidence": 0.8,
                         }
@@ -1535,7 +1535,7 @@ print(json.dumps({"result": result}))
             recommendations.append(
                 {
                     "type": "scatter_plot",
-                    "title": f"🔗 {numeric_fields[0]} vs {numeric_fields[1]}",
+                    "title": f"{numeric_fields[0]} vs {numeric_fields[1]}",
                     "description": f"Explore relationship between {numeric_fields[0]} and {numeric_fields[1]}",
                     "confidence": 0.75,
                 }
@@ -1546,7 +1546,7 @@ print(json.dumps({"result": result}))
             recommendations.append(
                 {
                     "type": "correlation_matrix",
-                    "title": "🔍 Correlation Analysis",
+                    "title": "Correlation Analysis",
                     "description": "Discover relationships between numeric variables",
                     "confidence": 0.7,
                 }
@@ -1562,7 +1562,7 @@ print(json.dumps({"result": result}))
         formatted = []
         for i, rec in enumerate(recommendations, 1):
             confidence_emoji = (
-                "🟢" if rec["confidence"] >= 0.8 else "🟡" if rec["confidence"] >= 0.6 else "🔴"
+                "[high]" if rec["confidence"] >= 0.8 else "[med]" if rec["confidence"] >= 0.6 else "[low]"
             )
             formatted.append(f"{i}. {rec['title']} {confidence_emoji}")
             formatted.append(f"   {rec['description']}")
@@ -1611,7 +1611,7 @@ except Exception as e:
     ) -> AsyncIterator[StreamChunk]:
         """Handle data loading requests with streaming"""
         yield StreamChunk(
-            text="📊 **Data Loading**\n\n",
+            text="**Data Loading**\n\n",
             sub_type=StreamSubType.STATUS,
             metadata={"phase": "data_loading"},
         )
@@ -1624,7 +1624,7 @@ except Exception as e:
     async def _handle_schema_exploration_stream(self, message: str) -> AsyncIterator[StreamChunk]:
         """Handle schema exploration with streaming"""
         yield StreamChunk(
-            text="🔍 **Schema Analysis**\n\n",
+            text="**Schema Analysis**\n\n",
             sub_type=StreamSubType.STATUS,
             metadata={"phase": "schema_analysis"},
         )
@@ -1636,7 +1636,7 @@ except Exception as e:
     async def _handle_sql_query_stream(self, query: str) -> AsyncIterator[StreamChunk]:
         """Handle SQL queries with streaming"""
         yield StreamChunk(
-            text=f"💾 **Executing Query**: `{query}`\n\n",
+            text=f"**Executing Query**: `{query}`\n\n",
             sub_type=StreamSubType.STATUS,
             metadata={"phase": "sql_execution"},
         )
@@ -1650,7 +1650,7 @@ except Exception as e:
     ) -> AsyncIterator[StreamChunk]:
         """Handle visualization requests with streaming"""
         yield StreamChunk(
-            text=f"📈 **Creating {chart_type}**\n\n",
+            text=f"**Creating {chart_type}**\n\n",
             sub_type=StreamSubType.STATUS,
             metadata={"phase": "visualization", "chart_type": chart_type},
         )
@@ -1662,7 +1662,7 @@ except Exception as e:
     async def _handle_natural_language_query_stream(self, query: str) -> AsyncIterator[StreamChunk]:
         """Handle natural language queries with streaming"""
         yield StreamChunk(
-            text=f"🧠 **Processing Query**: {query}\n\n",
+            text=f"**Processing Query**: {query}\n\n",
             sub_type=StreamSubType.STATUS,
             metadata={"phase": "nlq_processing"},
         )

@@ -381,22 +381,22 @@ Create a synthesized response that:
         
         return suggestions
     
-    async def process_message(self, message: str, **kwargs) -> Dict[str, Any]:
+    async def process_message(self, message, context=None) -> "AgentMessage":
         """
-        Process a message (mainly for testing the assessor directly).
-        In production, this agent is called by the EnhancedModeratorAgent.
+        Process a message conforming to the BaseAgent interface.
+        In production, this agent is typically called via assess_response() directly.
         """
-        # This is mainly for testing - in production, use assess_response directly
-        return {
-            'success': True,
-            'response': 'ResponseQualityAssessor is ready. Use assess_response() method for quality assessment.',
-            'agent': self.agent_id
-        }
-    
-    async def process_message_stream(self, message: str, **kwargs):
-        """Stream processing not implemented for assessor"""
-        yield {
-            'success': True,
-            'response': 'Streaming not supported for ResponseQualityAssessor',
-            'agent': self.agent_id
-        }
+        from ambivo_agents.core.base import AgentMessage, ExecutionContext, MessageType
+        msg_content = message.content if isinstance(message, AgentMessage) else str(message)
+        recipient_id = message.sender_id if isinstance(message, AgentMessage) else "caller"
+        return self.create_response(
+            content=f"ResponseQualityAssessor is ready. Use assess_response() for quality assessment. Query: {msg_content[:100]}",
+            recipient_id=recipient_id,
+            message_type=MessageType.AGENT_RESPONSE,
+            metadata={"agent_type": "response_quality_assessor", "ready": True},
+        )
+
+    async def process_message_stream(self, message, context=None):
+        """Stream processing via fallback (calls process_message under the hood)."""
+        async for chunk in self._fallback_stream(message, context):
+            yield chunk

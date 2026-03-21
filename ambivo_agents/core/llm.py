@@ -184,13 +184,16 @@ class MultiProviderLLMService(LLMServiceInterface):
                         logging.warning("LlamaIndex Settings not available")
 
         except Exception as e:
-            logging.error(f"Failed to initialize {self.current_provider}: {e}")
+            logging.error(f"Failed to initialize {self.current_provider}: {e}", exc_info=True)
             self.provider_tracker.record_error(self.current_provider, str(e))
             self._try_fallback_provider()
 
     def _setup_anthropic(self):
         """Setup Anthropic provider"""
-        os.environ["ANTHROPIC_API_KEY"] = self.config_data["anthropic_api_key"]
+        api_key = self.config_data.get("anthropic_api_key")
+        if not api_key:
+            raise ValueError("anthropic_api_key not configured")
+        os.environ["ANTHROPIC_API_KEY"] = api_key
         if self.config_data.get("voyage_api_key"):
             os.environ["VOYAGE_API_KEY"] = self.config_data["voyage_api_key"]
 
@@ -206,19 +209,28 @@ class MultiProviderLLMService(LLMServiceInterface):
 
     def _setup_openai(self):
         """Setup OpenAI provider"""
-        os.environ["OPENAI_API_KEY"] = self.config_data["openai_api_key"]
-        openai.api_key = self.config_data["openai_api_key"]
+        api_key = self.config_data.get("openai_api_key")
+        if not api_key:
+            raise ValueError("openai_api_key not configured")
+        os.environ["OPENAI_API_KEY"] = api_key
+        openai.api_key = api_key
 
         self.current_llm = ChatOpenAI(model="gpt-4o", temperature=self.temperature)
         self.current_embeddings = OpenAIEmbeddings()
 
     def _setup_bedrock(self):
         """Setup Bedrock provider"""
+        aws_access_key = self.config_data.get("aws_access_key_id")
+        if not aws_access_key:
+            raise ValueError("aws_access_key_id not configured")
+        aws_secret_key = self.config_data.get("aws_secret_access_key")
+        if not aws_secret_key:
+            raise ValueError("aws_secret_access_key not configured")
         boto3_client = boto3.client(
             "bedrock-runtime",
             region_name=self.config_data.get("aws_region", "us-east-1"),
-            aws_access_key_id=self.config_data["aws_access_key_id"],
-            aws_secret_access_key=self.config_data["aws_secret_access_key"],
+            aws_access_key_id=aws_access_key,
+            aws_secret_access_key=aws_secret_key,
         )
 
         self.current_llm = BedrockLLM(model="cohere.command-text-v14", client=boto3_client)
@@ -259,13 +271,13 @@ class MultiProviderLLMService(LLMServiceInterface):
                         logging.info(f"Restored provider {name} from cooldown")
 
         if fallback_providers:
-            # Sort by priority and error count - ✅ FIXED: Use .priority instead of ['priority']
+            # Sort by priority and error count - FIXED: Use .priority instead of ['priority']
             fallback_providers.sort(key=lambda x: (x[1].priority, x[1].error_count))
             old_provider = self.current_provider
             self.current_provider = fallback_providers[0][0]
             self.provider_tracker.current_provider = self.current_provider
 
-            print(f"LLM provider rotated: {old_provider} → {self.current_provider}")
+            logging.info(f"LLM provider rotated: {old_provider} → {self.current_provider}")
 
             # Re-initialize the new provider
             self._initialize_current_provider()
@@ -290,7 +302,7 @@ class MultiProviderLLMService(LLMServiceInterface):
 
             except Exception as e:
                 error_str = str(e).lower()
-                logging.error(f"Streaming error with {self.current_provider}: {e}")
+                logging.warning(f"Streaming error with {self.current_provider}: {e}")
 
                 # Record error
                 self.provider_tracker.record_error(self.current_provider, str(e))
@@ -306,7 +318,7 @@ class MultiProviderLLMService(LLMServiceInterface):
                 )
 
                 if should_retry:
-                    logging.warning(
+                    logging.info(
                         f"Attempting fallback from {self.current_provider} (attempt {retry_count + 1}/{max_retries})"
                     )
 
@@ -351,7 +363,7 @@ class MultiProviderLLMService(LLMServiceInterface):
                 )
 
                 if should_retry:
-                    logging.warning(
+                    logging.info(
                         f"Attempting fallback from {self.current_provider} (attempt {retry_count + 1}/{max_retries})"
                     )
 
@@ -374,13 +386,13 @@ class MultiProviderLLMService(LLMServiceInterface):
         if not self.current_llm:
             raise RuntimeError("No LLM provider available")
 
-        # 🔥 Build context-aware prompt BEFORE provider calls
+        # Build context-aware prompt BEFORE provider calls
         final_prompt = self._build_system_aware_prompt(prompt, context, system_message)
 
         def _generate():
             try:
                 if hasattr(self.current_llm, "invoke"):
-                    # 🔥 FIX: Use context-enhanced prompt
+                    # FIX: Use context-enhanced prompt
                     response = self.current_llm.invoke(final_prompt)
                     if hasattr(response, "content"):
                         return response.content
@@ -389,10 +401,10 @@ class MultiProviderLLMService(LLMServiceInterface):
                     else:
                         return str(response)
                 elif hasattr(self.current_llm, "predict"):
-                    # 🔥 FIX: Use context-enhanced prompt
+                    # FIX: Use context-enhanced prompt
                     return self.current_llm.predict(final_prompt)
                 elif hasattr(self.current_llm, "__call__"):
-                    # 🔥 FIX: Use context-enhanced prompt
+                    # FIX: Use context-enhanced prompt
                     response = self.current_llm(final_prompt)
                     if hasattr(response, "content"):
                         return response.content
@@ -401,10 +413,10 @@ class MultiProviderLLMService(LLMServiceInterface):
                     else:
                         return str(response)
                 else:
-                    # 🔥 FIX: Use context-enhanced prompt
+                    # FIX: Use context-enhanced prompt
                     return str(self.current_llm(final_prompt))
             except Exception as e:
-                logging.error(f"LLM generation error: {e}")
+                logging.error(f"LLM generation error: {e}", exc_info=True)
                 raise e
 
         try:
@@ -415,7 +427,7 @@ class MultiProviderLLMService(LLMServiceInterface):
     def _build_system_aware_prompt(
         self, user_prompt: str, context: Dict[str, Any] = None, system_message: str = None
     ) -> str:
-        """🆕 Build prompt with system message integration"""
+        """Build prompt with system message integration"""
 
         prompt_parts = []
 
@@ -451,7 +463,7 @@ class MultiProviderLLMService(LLMServiceInterface):
         return "\n".join(prompt_parts)
 
     def _build_context_aware_prompt(self, prompt: str, context: Dict[str, Any] = None) -> str:
-        """🔥 NEW: Build context-aware prompt that preserves conversation history across provider switches"""
+        """Build context-aware prompt that preserves conversation history across provider switches"""
         if not context:
             return prompt
 
@@ -485,10 +497,10 @@ class MultiProviderLLMService(LLMServiceInterface):
 
         enhanced_prompt = "\n".join(context_lines)
 
-        # 🔥 CRITICAL: Log provider switches with context preservation
+        # CRITICAL: Log provider switches with context preservation
         if hasattr(self, "_last_provider") and self._last_provider != self.current_provider:
-            logging.info(f"🔄 Provider switched: {self._last_provider} → {self.current_provider}")
-            logging.info(f"🧠 Context preserved: {len(conversation_history)} messages in history")
+            logging.info(f"Provider switched: {self._last_provider} → {self.current_provider}")
+            logging.info(f"Context preserved: {len(conversation_history)} messages in history")
 
         self._last_provider = self.current_provider
 
@@ -591,7 +603,8 @@ class MultiProviderLLMService(LLMServiceInterface):
                 async for chunk in self.current_llm.astream(prompt):
                     if hasattr(chunk, "content") and chunk.content:
                         yield chunk.content
-            except:
+            except Exception as e:
+                logging.debug(f"Anthropic streaming fallback triggered: {e}")
                 # Non-streaming fallback
                 response = await self.current_llm.ainvoke(prompt)
                 yield response.content if hasattr(response, "content") else str(response)
@@ -654,7 +667,8 @@ class MultiProviderLLMService(LLMServiceInterface):
             try:
                 response = await self.generate_response(prompt)
                 yield response
-            except:
+            except Exception as e2:
+                logging.debug(f"Bedrock streaming fallback failed: {e2}")
                 yield f"Bedrock streaming error: {str(e)}"
 
 

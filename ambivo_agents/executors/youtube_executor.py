@@ -5,6 +5,7 @@ YouTube Docker executor for downloading videos and audio from YouTube.
 
 import asyncio
 import json
+import logging
 import shutil
 import tempfile
 import time
@@ -176,7 +177,8 @@ ls -la /workspace/output/
                                     download_result = json.loads(line.strip())
                                     output_info.update(download_result)
                                     break
-                        except:
+                        except Exception as e:
+                            logging.debug(f"JSON parsing failed for download result: {e}")
                             pass  # JSON parsing failed, use basic info
 
                     return {

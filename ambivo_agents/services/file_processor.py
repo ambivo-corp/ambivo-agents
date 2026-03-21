@@ -137,7 +137,8 @@ class FileProcessorService:
         """Extract file extension from file path"""
         try:
             return os.path.splitext(file_path)[1].lstrip(".").lower()
-        except:
+        except Exception as e:
+            self.logger.debug(f"Failed to get file extension from {file_path}: {e}")
             return ""
 
     def is_supported_file(self, file_path: str) -> bool:

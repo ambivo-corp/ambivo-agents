@@ -242,7 +242,8 @@ Please provide analysis in JSON format:
         
         try:
             analysis_data = json.loads(response)
-        except:
+        except (json.JSONDecodeError, ValueError) as e:
+            self.logger.debug(f"Failed to parse JSON analysis response: {e}")
             # Fallback to adaptive strategy
             analysis_data = {
                 "query_type": "other",
@@ -635,72 +636,92 @@ Please provide analysis in JSON format:
             }
         }
     
-    async def process_message(self, message: str, **kwargs) -> Dict[str, Any]:
+    async def process_message(self, message, context=None, **kwargs):
         """
         Process user message with enhanced multi-source orchestration.
-        
-        Args:
-            message: User's message/query
-            **kwargs: Additional arguments including user_preferences
-            
-        Returns:
-            Response with quality assessment and metadata
+
+        Accepts both str and AgentMessage for backward compatibility.
+        Returns AgentMessage conforming to the BaseAgent contract.
         """
-        # Check for user preferences in message
+        from ambivo_agents.core.base import AgentMessage, ExecutionContext, MessageType, StreamChunk, StreamSubType, SSEEventType
+
+        if isinstance(message, AgentMessage):
+            message_text = message.content
+            recipient_id = message.sender_id
+        else:
+            message_text = str(message)
+            recipient_id = "caller"
+
         user_preferences = kwargs.get('user_preferences', {})
-        
-        # Check for explicit prioritization in message
-        message_lower = message.lower()
+
+        message_lower = message_text.lower()
         if 'prioritize web search' in message_lower or 'search the web' in message_lower:
             user_preferences['prioritize'] = 'web_search'
         elif 'prioritize knowledge base' in message_lower or 'check knowledge base' in message_lower:
             user_preferences['prioritize'] = 'knowledge_base'
         elif 'check all sources' in message_lower or 'comprehensive search' in message_lower:
             user_preferences['search_all'] = True
-        
-        # Process with quality assessment
-        result = await self.process_with_quality_assessment(message, user_preferences)
-        
-        # Add conversation history
-        await self.add_to_conversation_history(message, 'user')
-        await self.add_to_conversation_history(result['response'], 'assistant')
-        
-        return result
-    
-    async def process_message_stream(self, message: str, **kwargs):
+
+        result = await self.process_with_quality_assessment(message_text, user_preferences)
+
+        await self.add_to_conversation_history(message_text, 'user')
+        await self.add_to_conversation_history(result.get('response', ''), 'assistant')
+
+        return self.create_response(
+            content=result.get('response', ''),
+            recipient_id=recipient_id,
+            message_type=MessageType.AGENT_RESPONSE,
+            metadata={
+                "quality_assessment": result.get('quality_assessment', {}),
+                "query_analysis": result.get('query_analysis', {}),
+                "metadata": result.get('metadata', {}),
+            },
+        )
+
+    async def process_message_stream(self, message, context=None, **kwargs):
         """
         Stream processing with quality assessment.
-        Note: Quality assessment happens before streaming begins.
+        Quality assessment happens before streaming begins.
+        Yields StreamChunk objects conforming to the SSE protocol.
         """
-        # First, get the complete assessed response
-        result = await self.process_message(message, **kwargs)
-        
-        # Stream the final response
+        from ambivo_agents.core.base import AgentMessage, StreamChunk, StreamSubType, SSEEventType
+
+        if isinstance(message, AgentMessage):
+            message_text = message.content
+        else:
+            message_text = str(message)
+
+        yield StreamChunk(
+            text="", sub_type=StreamSubType.STATUS, event_type=SSEEventType.START,
+            metadata={"agent_id": self.agent_id},
+        )
+
+        result = await self.process_with_quality_assessment(
+            message_text, kwargs.get('user_preferences', {})
+        )
+
         response_text = result.get('response', '')
-        
-        # Stream quality info first
+
         quality_info = result.get('quality_assessment', {})
         if quality_info:
-            yield {
-                'type': 'quality_assessment',
-                'data': quality_info
-            }
-        
-        # Stream the response in chunks
-        chunk_size = 50  # characters per chunk
+            yield StreamChunk(
+                text="", sub_type=StreamSubType.STATUS, event_type=SSEEventType.STATUS,
+                metadata={"quality_assessment": quality_info},
+            )
+
+        chunk_size = 50
         for i in range(0, len(response_text), chunk_size):
-            chunk = response_text[i:i+chunk_size]
-            yield {
-                'type': 'content',
-                'data': chunk
-            }
-            await asyncio.sleep(0.01)  # Small delay for streaming effect
-        
-        # Stream final metadata
-        yield {
-            'type': 'complete',
-            'data': {
-                'metadata': result.get('metadata', {}),
-                'query_analysis': result.get('query_analysis', {})
-            }
-        }
+            chunk = response_text[i:i + chunk_size]
+            yield StreamChunk(
+                text=chunk, sub_type=StreamSubType.CONTENT, event_type=SSEEventType.CONTENT,
+            )
+            await asyncio.sleep(0.01)
+
+        yield StreamChunk(
+            text="", sub_type=StreamSubType.RESULT, event_type=SSEEventType.COMPLETE,
+            metadata={
+                "complete": True,
+                "metadata": result.get('metadata', {}),
+                "query_analysis": result.get('query_analysis', {}),
+            },
+        )

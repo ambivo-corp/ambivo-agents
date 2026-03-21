@@ -60,7 +60,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         **kwargs,
     ):
         """
-        🔧 FIXED: Constructor that properly handles system_message parameter
+        FIXED: Constructor that properly handles system_message parameter
         """
         if agent_id is None:
             agent_id = f"moderator_{str(uuid.uuid4())[:8]}"
@@ -75,7 +75,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     CORE RESPONSIBILITIES:
     - Analyze user requests to understand intent, complexity, and requirements
-    - Route requests to the most appropriate specialized agent based on their capabilities  
+    - Route requests to the most appropriate specialized agent based on their capabilities 
     - Consider conversation context and history when making routing decisions
     - Provide helpful responses when no specific agent is needed
     - Maintain conversation flow and context across agent interactions
@@ -138,7 +138,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             name="Moderator Agent",
             description="Intelligent orchestrator that routes queries to specialized agents",
             system_message=moderator_system,
-            **kwargs,  # Pass remaining kwargs to parent
+            **kwargs, # Pass remaining kwargs to parent
         )
 
         # Rest of the initialization code remains the same...
@@ -196,7 +196,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         # CRITICAL: Always ensure assistant is included
         if "assistant" not in enabled:
             enabled.append("assistant")
-            self.logger.info("✅ Assistant agent added to enabled agents list")
+            self.logger.info("Assistant agent added to enabled agents list")
 
         self.logger.info(f"Enabled agents: {enabled}")
         return enabled
@@ -217,7 +217,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             "web_scraper": "enable_web_scraping",
             "analytics": "enable_analytics",
             "database_agent": "enable_database_agent",
-            "assistant": True,  # Always enabled
+            "assistant": True, # Always enabled
         }
 
         if agent_type == "assistant":
@@ -320,9 +320,9 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
                         agent_imports["database_agent"] = DatabaseAgent
 
-                    self.logger.info(f"✅ Imported {agent_type}")
+                    self.logger.info(f"Imported {agent_type}")
                 except ImportError as import_error:
-                    self.logger.warning(f"❌ Failed to import {agent_type}: {import_error}")
+                    self.logger.warning(f"Failed to import {agent_type}: {import_error}")
                     agent_imports[agent_type] = None
 
             # Use the imported classes
@@ -340,9 +340,9 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
         # CRITICAL: Ensure AssistantAgent is available
         if not AssistantAgent:
-            self.logger.error("❌ CRITICAL: AssistantAgent not available")
+            self.logger.error("CRITICAL: AssistantAgent not available")
             AssistantAgent = self._create_fallback_assistant_agent()
-            self.logger.warning("🔧 Created fallback AssistantAgent")
+            self.logger.warning("Created fallback AssistantAgent")
 
         agent_classes = {
             "knowledge_base": KnowledgeBaseAgent,
@@ -355,7 +355,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             "api_agent": APIAgent,
             "analytics": AnalyticsAgent,
             "database_agent": DatabaseAgent,
-            "assistant": AssistantAgent,  # This should never be None now
+            "assistant": AssistantAgent, # This should never be None now
         }
 
         # Initialize agents with SHARED context and memory
@@ -372,7 +372,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             try:
                 self.logger.info(f"Creating {agent_type} agent with shared context...")
 
-                # 🔥 CRITICAL: Create agent with MODERATOR's session context
+                # CRITICAL: Create agent with MODERATOR's session context
                 if hasattr(agent_class, "create_simple"):
                     # Use create_simple but with moderator's context
                     agent_instance = agent_class.create_simple(
@@ -388,26 +388,27 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                         },
                     )
 
-                    # 🔥 CRITICAL: Override agent's context to match moderator
+                    # CRITICAL: Override agent's context to match moderator
                     agent_instance.context.session_id = self.context.session_id
                     agent_instance.context.conversation_id = self.context.conversation_id
                     agent_instance.context.user_id = self.context.user_id
                     agent_instance.context.tenant_id = self.context.tenant_id
 
-                    # 🔥 CRITICAL: Replace agent's memory with moderator's memory for consistency
-                    agent_instance.memory = self.memory
+                    # CRITICAL: Replace agent's memory with moderator's memory for consistency
+                    if self.memory:
+                        agent_instance.memory = self.memory
                     agent_instance.llm_service = self.llm_service
 
                 else:
                     # Fallback to direct instantiation
                     agent_instance = agent_class(
                         agent_id=f"{agent_type}_{self.agent_id}",
-                        memory_manager=self.memory,  # 🔥 SHARED MEMORY
-                        llm_service=self.llm_service,  # 🔥 SHARED LLM
+                        memory_manager=self.memory, # SHARED MEMORY
+                        llm_service=self.llm_service, # SHARED LLM
                         user_id=self.context.user_id,
                         tenant_id=self.context.tenant_id,
-                        session_id=self.context.session_id,  # 🔥 SAME SESSION
-                        conversation_id=self.context.conversation_id,  # 🔥 SAME CONVERSATION
+                        session_id=self.context.session_id, # SAME SESSION
+                        conversation_id=self.context.conversation_id, # SAME CONVERSATION
                         session_metadata={
                             "parent_moderator": self.agent_id,
                             "agent_type": agent_type,
@@ -417,23 +418,23 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
                 self.specialized_agents[agent_type] = agent_instance
                 self.logger.info(
-                    f"✅ Initialized {agent_type} with shared context (session: {self.context.session_id})"
+                    f"Initialized {agent_type} with shared context (session: {self.context.session_id})"
                 )
 
             except Exception as e:
-                self.logger.error(f"❌ Failed to initialize {agent_type} agent: {e}")
+                self.logger.error(f"Failed to initialize {agent_type} agent: {e}")
 
                 # Special handling for assistant agent failure
                 if agent_type == "assistant":
                     self.logger.error(
-                        "❌ CRITICAL: Assistant agent initialization failed, creating minimal fallback"
+                        "CRITICAL: Assistant agent initialization failed, creating minimal fallback"
                     )
                     try:
                         fallback_assistant = self._create_minimal_assistant_agent()
                         self.specialized_agents[agent_type] = fallback_assistant
-                        self.logger.warning("🔧 Emergency fallback assistant created")
+                        self.logger.warning("Emergency fallback assistant created")
                     except Exception as fallback_error:
-                        self.logger.error(f"❌ Even fallback assistant failed: {fallback_error}")
+                        self.logger.error(f"Even fallback assistant failed: {fallback_error}")
 
     def _create_fallback_assistant_agent(self):
         """Create a fallback AssistantAgent class when import fails"""
@@ -832,7 +833,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     "university",
                     "research",
                 ],
-                "priority": 2,  # Higher priority for academic data queries
+                "priority": 2, # Higher priority for academic data queries
             },
             "assistant": {
                 "keywords": [
@@ -855,7 +856,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                     r"please\s+(?:help|explain)",
                 ],
                 "indicators": ["help", "explain", "question", "general", "can you", "please"],
-                "priority": 3,  # Lower priority but catches general requests
+                "priority": 3, # Lower priority but catches general requests
             },
         }
 
@@ -1203,8 +1204,8 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
         # Check for ambiguous ingestion without clear destination
         ambiguous_patterns = [
-            r"ingest\s+.*\.(?:csv|json|txt)\s*$",  # Just "ingest file.csv" with no destination
-            r"(?:load|import)\s+.*\.(?:csv|json|txt)\s*$",  # "load file.csv" with no destination
+            r"ingest\s+.*\.(?:csv|json|txt)\s*$", # Just "ingest file.csv" with no destination
+            r"(?:load|import)\s+.*\.(?:csv|json|txt)\s*$", # "load file.csv" with no destination
         ]
 
         if any(re.search(pattern, message_lower) for pattern in ambiguous_patterns):
@@ -1304,7 +1305,7 @@ Which type of ingestion would you like?"""
         primary_agent = intent_analysis.get("primary_agent", "assistant")
 
         self.logger.info(
-            f"🔄 Enhanced fallback triggered for {primary_agent} (confidence: {confidence:.2f})"
+            f"Enhanced fallback triggered for {primary_agent} (confidence: {confidence:.2f})"
         )
 
         # First try assistant agent if it's not the primary agent and it's available
@@ -1314,7 +1315,7 @@ Which type of ingestion would you like?"""
             and confidence < 0.7
         ):
 
-            self.logger.info("🎯 Trying assistant agent as first fallback")
+            self.logger.info("Trying assistant agent as first fallback")
 
             assistant_response = await self._route_to_agent_with_context(
                 "assistant", user_message, context, llm_context
@@ -1325,7 +1326,7 @@ Which type of ingestion would you like?"""
 
         # Check if task could be solved with code execution
         if self._is_programmable_task(user_message):
-            self.logger.info("💻 Task appears programmable, attempting code execution fallback")
+            self.logger.info("Task appears programmable, attempting code execution fallback")
 
             if "code_executor" in self.specialized_agents:
                 # Setup file sharing for Docker execution
@@ -1360,11 +1361,11 @@ Which type of ingestion would you like?"""
                     output_files = self._check_output_files(output_dir) if output_dir else []
                     output_summary = ""
                     if output_files:
-                        output_summary = f"\n\n**📁 Generated Files:**\n" + "\n".join(
+                        output_summary = f"\n\n**Generated Files:**\n" + "\n".join(
                             [f"- {file}" for file in output_files]
                         )
 
-                    return f"""**✅ Task completed using code execution:**
+                    return f"""**Task completed using code execution:**
 
 {code_response.content}{output_summary}
 
@@ -1393,7 +1394,7 @@ Could you help me understand what's needed and provide guidance, or suggest an a
 
         # Ultimate fallback - error message
         error_details = primary_response.error if primary_response else "Agent routing failed"
-        return f"""**❌ Unable to Process Request**
+        return f"""**Unable to Process Request**
 
 I apologize, but I couldn't find an appropriate way to handle your request:
 
@@ -1560,7 +1561,7 @@ Please try a different approach or rephrase your request."""
         if file_paths or task_type == "File Format Conversion":
             file_sharing_instructions = f"""
 
-**🔗 File Access Instructions:**
+**File Access Instructions:**
 - Input files are available in the `/host_input/` directory inside Docker
 - Output files should be created in the `/host_output/` directory 
 - Use absolute paths like `/host_input/filename.csv` to read files
@@ -1573,7 +1574,7 @@ Please try a different approach or rephrase your request."""
 ```python
 # Read input file
 input_file = '/host_input/data.csv'
-# Save output file  
+# Save output file 
 output_file = '/host_output/converted_data.xlsx'
 ```"""
 
@@ -1629,9 +1630,9 @@ Please write and execute the code to solve this task, explaining each step clear
 
         # Common file path patterns
         file_patterns = [
-            r'["\']([^"\']+\.[a-zA-Z]{2,5})["\']',  # Quoted file paths
-            r"([^\s]+\.[a-zA-Z]{2,5})(?:\s|$)",  # Unquoted file paths
-            r"([./]+[^\s]*\.[a-zA-Z]{2,5})",  # Relative/absolute paths
+            r'["\']([^"\']+\.[a-zA-Z]{2,5})["\']', # Quoted file paths
+            r"([^\s]+\.[a-zA-Z]{2,5})(?:\s|$)", # Unquoted file paths
+            r"([./]+[^\s]*\.[a-zA-Z]{2,5})", # Relative/absolute paths
         ]
 
         file_paths = []
@@ -1658,7 +1659,7 @@ Please write and execute the code to solve this task, explaining each step clear
             if any(path.lower().endswith(ext) for ext in valid_extensions):
                 filtered_paths.append(path)
 
-        return list(set(filtered_paths))  # Remove duplicates
+        return list(set(filtered_paths)) # Remove duplicates
 
     def _setup_docker_file_sharing(self, user_message: str) -> Tuple[Optional[str], Optional[str]]:
         """Setup Docker input/output directories for file sharing"""
@@ -1687,7 +1688,7 @@ Please write and execute the code to solve this task, explaining each step clear
         output_dir = os.path.join(input_dir, "docker_output")
         os.makedirs(output_dir, exist_ok=True)
 
-        self.logger.info(f"🔗 Docker file sharing setup - Input: {input_dir}, Output: {output_dir}")
+        self.logger.info(f"Docker file sharing setup - Input: {input_dir}, Output: {output_dir}")
 
         return input_dir, output_dir
 
@@ -1883,7 +1884,7 @@ Please write and execute the code to solve this task, explaining each step clear
                         conversation_context_summary = "\n".join(context_parts)
 
                     self.logger.info(
-                        f"🧠 Retrieved {len(full_conversation_history)} messages for {agent_type}"
+                        f"Retrieved {len(full_conversation_history)} messages for {agent_type}"
                     )
 
                 except Exception as e:
@@ -1925,7 +1926,7 @@ Please write and execute the code to solve this task, explaining each step clear
                 enhanced_user_message = llm_context["intent_analysis"].get(
                     "enhanced_message", user_message
                 )
-                self.logger.info(f"🔄 Using enhanced message for database→analytics workflow")
+                self.logger.info(f"Using enhanced message for database→analytics workflow")
 
             # Add markdown formatting instruction
             enhanced_user_message = f"{enhanced_user_message}\n\n**Formatting Instruction:** Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
@@ -1955,7 +1956,7 @@ Please write and execute the code to solve this task, explaining each step clear
                     agent.context.session_id != session_id
                     or agent.context.conversation_id != conversation_id
                 ):
-                    self.logger.warning(f"🔧 Syncing {agent_type} context with moderator")
+                    self.logger.warning(f"Syncing {agent_type} context with moderator")
                     agent.context.session_id = session_id
                     agent.context.conversation_id = conversation_id
                     agent.context.user_id = user_id
@@ -1975,7 +1976,7 @@ Please write and execute the code to solve this task, explaining each step clear
             # Store the routing message in shared memory BEFORE processing
             if self.memory:
                 self.memory.store_message(agent_message)
-                self.logger.info(f"📝 Stored routing message in shared memory")
+                self.logger.info(f"Stored routing message in shared memory")
 
             # Process the message with the target agent
             response_message = await agent.process_message(agent_message, execution_context)
@@ -1987,7 +1988,7 @@ Please write and execute the code to solve this task, explaining each step clear
                     or response_message.conversation_id != conversation_id
                 ):
 
-                    self.logger.info(f"🔧 Correcting response session info for continuity")
+                    self.logger.info(f"Correcting response session info for continuity")
 
                     corrected_response = AgentMessage(
                         id=response_message.id,
@@ -2009,7 +2010,7 @@ Please write and execute the code to solve this task, explaining each step clear
                     )
 
                     self.memory.store_message(corrected_response)
-                    self.logger.info(f"📝 Stored corrected {agent_type} response in shared memory")
+                    self.logger.info(f"Stored corrected {agent_type} response in shared memory")
                 else:
                     response_message.metadata.update(
                         {
@@ -2019,7 +2020,7 @@ Please write and execute the code to solve this task, explaining each step clear
                         }
                     )
                     self.logger.info(
-                        f"✅ {agent_type} response properly stored with correct session info"
+                        f"{agent_type} response properly stored with correct session info"
                     )
 
             execution_time = time.time() - start_time
@@ -2043,7 +2044,7 @@ Please write and execute the code to solve this task, explaining each step clear
 
         except Exception as e:
             execution_time = time.time() - start_time
-            self.logger.error(f"❌ Error routing to {agent_type} agent: {e}")
+            self.logger.error(f"Error routing to {agent_type} agent: {e}")
             import traceback
 
             self.logger.error(f"Full traceback: {traceback.format_exc()}")
@@ -2127,13 +2128,13 @@ Please write and execute the code to solve this task, explaining each step clear
         # Ensure message uses moderator's session context
         if message.session_id != self.context.session_id:
             self.logger.info(
-                f"🔧 Correcting message session ID: {message.session_id} → {self.context.session_id}"
+                f"Correcting message session ID: {message.session_id} → {self.context.session_id}"
             )
             message.session_id = self.context.session_id
 
         if message.conversation_id != self.context.conversation_id:
             self.logger.info(
-                f"🔧 Correcting message conversation ID: {message.conversation_id} → {self.context.conversation_id}"
+                f"Correcting message conversation ID: {message.conversation_id} → {self.context.conversation_id}"
             )
             message.conversation_id = self.context.conversation_id
 
@@ -2168,18 +2169,18 @@ Please write and execute the code to solve this task, explaining each step clear
                         conversation_context = "\n".join(context_parts)
 
                     self.logger.info(
-                        f"🧠 Moderator retrieved {len(conversation_history)} messages for analysis"
+                        f"Moderator retrieved {len(conversation_history)} messages for analysis"
                     )
 
                 except Exception as e:
                     self.logger.warning(f"Could not get conversation history: {e}")
 
-            # 🆕 Check if assigned skills should handle this request BEFORE agent routing
+            # Check if assigned skills should handle this request BEFORE agent routing
             skill_result = await self._should_use_assigned_skills(user_message)
 
             if skill_result.get("should_use_skills"):
                 self.logger.info(
-                    f"🔧 ModeratorAgent using assigned skill: {skill_result['used_skill']}"
+                    f"ModeratorAgent using assigned skill: {skill_result['used_skill']}"
                 )
 
                 # Translate technical response to natural language
@@ -2211,7 +2212,7 @@ Please write and execute the code to solve this task, explaining each step clear
                     if self.memory:
                         self.memory.store_message(response)
 
-                    self.logger.info(f"✅ ModeratorAgent skill response completed successfully")
+                    self.logger.info(f"ModeratorAgent skill response completed successfully")
                     return response
                 else:
                     # Skill execution failed, continue with normal routing but add context
@@ -2234,7 +2235,7 @@ Please write and execute the code to solve this task, explaining each step clear
             # Override intent if academic data is required and no connection exists
             if academic_data_required and not database_handoff_detected:
                 self.logger.info(
-                    "🎓 Academic data query detected, creating database→analytics workflow"
+                    "Academic data query detected, creating database→analytics workflow"
                 )
                 intent_analysis = {
                     "primary_agent": "database_agent",
@@ -2248,7 +2249,7 @@ Please write and execute the code to solve this task, explaining each step clear
             # Override intent if database→analytics workflow is detected
             elif database_handoff_detected:
                 self.logger.info(
-                    "🔄 Database→Analytics handoff detected, routing to analytics workflow"
+                    "Database→Analytics handoff detected, routing to analytics workflow"
                 )
                 intent_analysis = await self._create_database_analytics_workflow(
                     user_message, database_handoff_detected, intent_analysis
@@ -2338,7 +2339,7 @@ Please write and execute the code to solve this task, explaining each step clear
             # Store response in shared memory
             if self.memory:
                 self.memory.store_message(response)
-                self.logger.info(f"📝 Stored moderator response in shared memory")
+                self.logger.info(f"Stored moderator response in shared memory")
 
             return response
 
@@ -2366,7 +2367,7 @@ Please write and execute the code to solve this task, explaining each step clear
     ) -> str:
         """Coordinate multiple agents with context preservation"""
         successful_responses = 0
-        response_parts = ["🔀 **Multi-Agent Analysis Results**\n\n"]
+        response_parts = ["**Multi-Agent Analysis Results**\n\n"]
 
         for i, agent_type in enumerate(agents, 1):
             try:
@@ -2474,27 +2475,27 @@ Please continue with the next step for {agent_type} processing."""
                 f"I wasn't able to complete the workflow. Failed agents: {', '.join(failed_agents)}"
             )
 
-        response_parts = [f"🔄 **Multi-Step Workflow Completed** ({len(workflow_results)} steps"]
+        response_parts = [f"**Multi-Step Workflow Completed** ({len(workflow_results)} steps"]
         if failed_agents:
             response_parts[0] += f", {len(failed_agents)} failed"
         response_parts[0] += ")\n\n"
 
         for result in workflow_results:
-            status_emoji = "✅" if result["success"] else "❌"
-            context_emoji = "🧠" if result.get("context_preserved") else "⚠️"
+            status_emoji = "[OK]" if result["success"] else "[FAIL]"
+            context_emoji = "[CTX]" if result.get("context_preserved") else "[WARN]"
 
             response_parts.append(
                 f"**Step {result['step']} - {result['agent'].replace('_', ' ').title()}:** {status_emoji} {context_emoji}\n"
             )
             response_parts.append(f"{result['content']}\n\n")
-            response_parts.append("─" * 50 + "\n\n")
+            response_parts.append("" * 50 + "\n\n")
 
         if failed_agents:
             response_parts.append(
-                f"\n⚠️ **Note:** Some agents failed: {', '.join(set(failed_agents))}"
+                f"\n**Note:** Some agents failed: {', '.join(set(failed_agents))}"
             )
 
-        response_parts.append(f"\n💾 **Context preserved throughout workflow**")
+        response_parts.append(f"\n**Context preserved throughout workflow**")
 
         return "".join(response_parts).strip()
 
@@ -2594,7 +2595,7 @@ Please continue with the next step for {agent_type} processing."""
             # PHASE 3: Stream Actual Processing with Context
             if intent_analysis.get("requires_multiple_agents", False):
                 if workflow_type == "sequential":
-                    yield "🔄 **Sequential Workflow Coordination...**\n\n"
+                    yield "**Sequential Workflow Coordination...**\n\n"
                     async for chunk in self._coordinate_multiple_agents_stream_with_context(
                         intent_analysis.get("agent_chain", [intent_analysis["primary_agent"]]),
                         user_message,
@@ -2603,7 +2604,7 @@ Please continue with the next step for {agent_type} processing."""
                     ):
                         yield chunk
                 else:
-                    yield "🔀 **Parallel Agent Coordination...**\n\n"
+                    yield "**Parallel Agent Coordination...**\n\n"
                     async for chunk in self._coordinate_multiple_agents_stream_with_context(
                         intent_analysis.get("agent_chain", [intent_analysis["primary_agent"]]),
                         user_message,
@@ -2655,7 +2656,7 @@ Please continue with the next step for {agent_type} processing."""
                         )
                     else:
                         yield StreamChunk(
-                            text=f"❌ Error: {str(e)}",
+                            text=f"Error: {str(e)}",
                             sub_type=StreamSubType.ERROR,
                             metadata={"error": str(e)},
                         )
@@ -2663,14 +2664,14 @@ Please continue with the next step for {agent_type} processing."""
             # PHASE 4: Completion Summary
             reasoning = intent_analysis.get("reasoning", "Standard routing")
             context_preserved = len(conversation_history) > 0
-            # yield f"\n\n*✅ Completed by: {agent_name}*\n*🧠 Reasoning: {reasoning}*"
+            # yield f"\n\n*Completed by: {agent_name}*\n*Reasoning: {reasoning}*"
             # if context_preserved:
-            #     yield f"\n*💾 Context: {len(conversation_history)} messages preserved*"
+            # yield f"\n*Context: {len(conversation_history)} messages preserved*"
             yield f"\n"
 
         except Exception as e:
             self.logger.error(f"ModeratorAgent streaming error: {e}")
-            yield f"\n\n❌ **Error:** {str(e)}"
+            yield f"\n\n**Error:** {str(e)}"
 
     async def _route_to_agent_stream_with_context(
         self,
@@ -2681,7 +2682,7 @@ Please continue with the next step for {agent_type} processing."""
     ) -> AsyncIterator[StreamChunk]:
         """Stream routing to a specific agent with context preservation"""
         if agent_type not in self.specialized_agents:
-            yield f"❌ Agent {agent_type} not available"
+            yield f"Agent {agent_type} not available"
             return
 
         try:
@@ -2722,7 +2723,7 @@ Please continue with the next step for {agent_type} processing."""
                     yield chunk
             else:
                 yield StreamChunk(
-                    text=f"⚠️ {agent_type} doesn't support streaming, using standard processing...\n\n",
+                    text=f"{agent_type} doesn't support streaming, using standard processing...\n\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"agent_type": agent_type, "fallback": True},
                 )
@@ -2737,7 +2738,7 @@ Please continue with the next step for {agent_type} processing."""
 
         except Exception as e:
             yield StreamChunk(
-                text=f"❌ Error routing to {agent_type}: {str(e)}",
+                text=f"Error routing to {agent_type}: {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"error": str(e), "agent_type": agent_type},
             )
@@ -2755,12 +2756,12 @@ Please continue with the next step for {agent_type} processing."""
         for i, agent_type in enumerate(agents, 1):
             try:
                 yield StreamChunk(
-                    text=f"**🤖 Agent {i}: {agent_type.replace('_', ' ').title()}**\n",
+                    text=f"**Agent {i}: {agent_type.replace('_', ' ').title()}**\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"agent_sequence": i, "agent_type": agent_type},
                 )
                 yield StreamChunk(
-                    text="─" * 50 + "\n",
+                    text="" * 50 + "\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"separator": True},
                 )
@@ -2771,7 +2772,7 @@ Please continue with the next step for {agent_type} processing."""
                     yield chunk
 
                 yield StreamChunk(
-                    text="\n" + "─" * 50 + "\n\n",
+                    text="\n" + "" * 50 + "\n\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"separator": True, "agent_completed": agent_type},
                 )
@@ -2780,13 +2781,13 @@ Please continue with the next step for {agent_type} processing."""
 
             except Exception as e:
                 yield StreamChunk(
-                    text=f"❌ Error with {agent_type}: {str(e)}\n\n",
+                    text=f"Error with {agent_type}: {str(e)}\n\n",
                     sub_type=StreamSubType.ERROR,
                     metadata={"agent_type": agent_type, "error": str(e)},
                 )
 
         yield StreamChunk(
-            text=f"✅ {successful_responses}/{len(agents)} agents completed with context preserved",
+            text=f"{successful_responses}/{len(agents)} agents completed with context preserved",
             sub_type=StreamSubType.STATUS,
             metadata={
                 "summary": True,
@@ -2934,7 +2935,7 @@ Please continue with the next step for {agent_type} processing."""
             return None
 
         # Look for ANALYTICS_HANDOFF messages in recent history
-        for message in conversation_history[-5:]:  # Check last 5 messages
+        for message in conversation_history[-5:]: # Check last 5 messages
             content = message.get("content", "")
             if "ANALYTICS_HANDOFF:" in content:
                 # Extract CSV path from handoff message
@@ -3095,7 +3096,7 @@ class EnhancedModeratorAgent(ModeratorAgent):
                     self.specialized_agents["knowledge_base"],
                 )
                 self.workflows["search_scrape_ingest"] = workflow
-                self.logger.info("✅ Registered search_scrape_ingest workflow")
+                self.logger.info("Registered search_scrape_ingest workflow")
 
             # Media processing workflow
             if all(agent in available_agents for agent in ["youtube_download", "media_editor"]):
@@ -3104,7 +3105,7 @@ class EnhancedModeratorAgent(ModeratorAgent):
                     self.specialized_agents["media_editor"],
                 )
                 self.workflows["media_processing"] = workflow
-                self.logger.info("✅ Registered media_processing workflow")
+                self.logger.info("Registered media_processing workflow")
 
         except Exception as e:
             self.logger.warning(f"Could not setup all workflows: {e}")
@@ -3197,10 +3198,10 @@ class EnhancedModeratorAgent(ModeratorAgent):
     def _format_workflow_response(self, result, original_message, workflow_name):
         """Format workflow result into response message"""
         if result.success:
-            content = f"🎉 **{workflow_name} Workflow Completed**\n\n"
-            content += f"⏱️ **Execution Time:** {result.execution_time:.2f} seconds\n"
-            content += f"🔧 **Steps Executed:** {' → '.join(result.nodes_executed)}\n"
-            content += f"💬 **Messages Generated:** {len(result.messages)}\n\n"
+            content = f"**{workflow_name} Workflow Completed**\n\n"
+            content += f"⏱**Execution Time:** {result.execution_time:.2f} seconds\n"
+            content += f"**Steps Executed:** {' → '.join(result.nodes_executed)}\n"
+            content += f"**Messages Generated:** {len(result.messages)}\n\n"
 
             # Include final result
             if result.messages:
@@ -3216,7 +3217,7 @@ class EnhancedModeratorAgent(ModeratorAgent):
                 conversation_id=original_message.conversation_id,
             )
         else:
-            error_content = f"❌ **{workflow_name} Workflow Failed**\n\n"
+            error_content = f"**{workflow_name} Workflow Failed**\n\n"
             error_content += f"**Errors:**\n" + "\n".join(result.errors)
 
             return self.create_response(
@@ -3229,24 +3230,24 @@ class EnhancedModeratorAgent(ModeratorAgent):
 
     def _get_workflow_help(self) -> str:
         """Get help text for available workflows"""
-        help_text = "🔄 **Available Workflows**\n\n"
+        help_text = "**Available Workflows**\n\n"
 
         if "search_scrape_ingest" in self.workflows:
-            help_text += "🔍 **Search → Scrape → Ingest**\n"
-            help_text += "   Searches web, scrapes results, stores in knowledge base\n"
-            help_text += "   *Example: 'Search scrape ingest information about quantum computing into my_kb'*\n\n"
+            help_text += "**Search → Scrape → Ingest**\n"
+            help_text += " Searches web, scrapes results, stores in knowledge base\n"
+            help_text += " *Example: 'Search scrape ingest information about quantum computing into my_kb'*\n\n"
 
         if "media_processing" in self.workflows:
-            help_text += "🎬 **Download → Process**\n"
-            help_text += "   Downloads from YouTube and processes media\n"
+            help_text += "**Download → Process**\n"
+            help_text += " Downloads from YouTube and processes media\n"
             help_text += (
-                "   *Example: 'Download and process https://youtube.com/watch?v=abc123 as MP3'*\n\n"
+                " *Example: 'Download and process https://youtube.com/watch?v=abc123 as MP3'*\n\n"
             )
 
         if not self.workflows:
-            help_text += "⚠️ No workflows available. Required agents may not be configured.\n\n"
+            help_text += "No workflows available. Required agents may not be configured.\n\n"
 
-        help_text += "💡 **How to use:**\n"
+        help_text += "**How to use:**\n"
         help_text += "Simply describe what you want to do using natural language!\n"
         help_text += "The moderator will detect workflow patterns and execute them automatically."
 
@@ -3259,7 +3260,7 @@ class EnhancedModeratorAgent(ModeratorAgent):
 async def setup_workflow_system():
     """Easy setup script to add workflows to existing ambivo_agents"""
 
-    print("🚀 Setting up Ambivo Agents Workflow System...")
+    print("Setting up Ambivo Agents Workflow System...")
 
     # Create enhanced moderator with all available agents
     from ambivo_agents.agents import ModeratorAgent
@@ -3293,7 +3294,7 @@ async def setup_workflow_system():
             moderator.specialized_agents["web_scraper"],
             moderator.specialized_agents["knowledge_base"],
         )
-        print("✅ Research workflow ready")
+        print("Research workflow ready")
 
     # Media processing workflow
     if all(agent in moderator.specialized_agents for agent in ["youtube_download", "media_editor"]):
@@ -3301,9 +3302,9 @@ async def setup_workflow_system():
             moderator.specialized_agents["youtube_download"],
             moderator.specialized_agents["media_editor"],
         )
-        print("✅ Media workflow ready")
+        print("Media workflow ready")
 
-    print(f"\n🎉 Workflow system ready with {len(workflows)} workflows!")
+    print(f"\nWorkflow system ready with {len(workflows)} workflows!")
     return moderator, workflows
 
 
@@ -3318,7 +3319,7 @@ async def quick_workflow_examples():
 
     # Example 1: Research workflow
     if "research" in workflows:
-        print("\n🔍 Testing Research Workflow...")
+        print("\nTesting Research Workflow...")
         response = await moderator.chat(
             "Search scrape ingest information about renewable energy trends into energy_research knowledge base"
         )
@@ -3326,14 +3327,14 @@ async def quick_workflow_examples():
 
     # Example 2: Media workflow
     if "media" in workflows:
-        print("\n🎬 Testing Media Workflow...")
+        print("\nTesting Media Workflow...")
         response = await moderator.chat(
             "Download and process https://youtube.com/watch?v=example as high quality MP3"
         )
         print(f"Response: {response[:200]}...")
 
     # Example 3: Two-agent conversation
-    print("\n💬 Testing Two-Agent Conversation...")
+    print("\nTesting Two-Agent Conversation...")
 
     # Create two agents for conversation
     researcher = moderator.specialized_agents.get("assistant")
@@ -3346,7 +3347,7 @@ async def quick_workflow_examples():
 
         # Could continue conversation with another agent
 
-    print("\n✅ All examples completed!")
+    print("\nAll examples completed!")
 
 
 # 4. Integration with Your Existing Chat Interface
@@ -3406,11 +3407,11 @@ class WorkflowEnabledChat:
         if not self.workflows:
             return "No workflows available. Check agent configuration."
 
-        response = "🔄 **Available Workflows:**\n\n"
+        response = "**Available Workflows:**\n\n"
         for name, workflow in self.workflows.items():
             response += f"• **{name.title()}**: {len(workflow.nodes)} steps\n"
 
-        response += "\n💡 Just describe what you want to do naturally!"
+        response += "\nJust describe what you want to do naturally!"
         return response
 
 
@@ -3428,15 +3429,15 @@ async def example_application_usage():
         "Search scrape ingest information about climate change into research_db",
         "Download and convert https://youtube.com/watch?v=abc123 to MP3",
         "What workflows are available?",
-        "How is quantum computing advancing?",  # Regular chat
+        "How is quantum computing advancing?", # Regular chat
     ]
 
-    print("🎯 Example Application Usage:\n")
+    print("Example Application Usage:\n")
 
     for i, example in enumerate(examples, 1):
-        print(f"👤 User: {example}")
+        print(f"User: {example}")
         response = await chat.chat(example)
-        print(f"🤖 Agent: {response[:150]}...\n")
+        print(f"Agent: {response[:150]}...\n")
 
         if i < len(examples):
             print("-" * 50)
@@ -3446,7 +3447,7 @@ async def example_application_usage():
 if __name__ == "__main__":
     import asyncio
 
-    print("🚀 Ambivo Agents Workflow Integration Demo\n")
+    print("Ambivo Agents Workflow Integration Demo\n")
 
     async def main():
         # Run quick examples

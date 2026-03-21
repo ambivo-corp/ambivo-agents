@@ -975,7 +975,7 @@ async def create_interactive_realtor_workflow():
 
     # Define interaction handler
     async def interaction_handler(interaction: UserInteraction) -> Optional[str]:
-        print(f"\n🔔 {interaction.prompt}")
+        print(f"\n{interaction.prompt}")
         if interaction.options:
             print(f"Options: {', '.join(interaction.options)}")
 
@@ -1003,9 +1003,9 @@ if __name__ == "__main__":
     import asyncio
 
     async def demo():
-        print("🚀 Interactive Workflow System Demo")
+        print("Interactive Workflow System Demo")
         result, executor = await create_interactive_realtor_workflow()
-        print(f"✅ Workflow completed: {result.success}")
-        print(f"📊 Resource usage: {result.metadata.get('resource_usage', {})}")
+        print(f"Workflow completed: {result.success}")
+        print(f"Resource usage: {result.metadata.get('resource_usage', {})}")
 
     asyncio.run(demo())

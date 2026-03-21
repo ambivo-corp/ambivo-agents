@@ -117,63 +117,71 @@ class SimpleDockerExecutor:
 
         try:
             # Create scraping script for Docker
-            script_content = f"""
+            # User-provided values are passed via environment variables
+            # to prevent command injection through crafted URLs.
+            script_content = """
 import asyncio
+import os
 from playwright.async_api import async_playwright
 import json
 
 async def scrape_url():
+    scrape_url_val = os.environ['SCRAPE_URL']
+    scrape_timeout = int(os.environ['SCRAPE_TIMEOUT'])
+    extract_links = os.environ.get('SCRAPE_EXTRACT_LINKS', 'true').lower() == 'true'
+    extract_images = os.environ.get('SCRAPE_EXTRACT_IMAGES', 'true').lower() == 'true'
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
         try:
-            response = await page.goto('{task.url}', timeout={task.timeout * 1000})
+            response = await page.goto(scrape_url_val, timeout=scrape_timeout)
             title = await page.title()
             content = await page.inner_text('body')
 
             # Extract links if requested
             links = []
-            if {task.extract_links}:
+            if extract_links:
                 link_elements = await page.query_selector_all('a[href]')
-                for link in link_elements[:50]:  # Limit to 50 links
+                for link in link_elements[:50]: # Limit to 50 links
                     href = await link.get_attribute('href')
                     text = await link.inner_text()
                     if href and text:
-                        links.append({{'url': href, 'text': text[:100]}})
+                        links.append({'url': href, 'text': text[:100]})
 
             # Extract images if requested
             images = []
-            if {task.extract_images}:
+            if extract_images:
                 img_elements = await page.query_selector_all('img[src]')
-                for img in img_elements[:25]:  # Limit to 25 images
+                for img in img_elements[:25]: # Limit to 25 images
                     src = await img.get_attribute('src')
                     alt = await img.get_attribute('alt') or ''
                     if src:
-                        images.append({{'url': src, 'alt': alt}})
+                        images.append({'url': src, 'alt': alt})
 
-            result = {{
+            result = {
                 'success': True,
-                'url': '{task.url}',
+                'url': scrape_url_val,
                 'title': title,
-                'content': content,  # Full content preserved
+                'content': content, # Full content preserved
                 'content_length': len(content),
                 'links': links,
                 'images': images,
                 'status_code': response.status if response else None,
                 'method': 'docker_playwright',
                 'execution_mode': 'docker'
-            }}
+            }
 
             print(json.dumps(result))
 
         except Exception as e:
-            error_result = {{
+            error_result = {
                 'success': False,
                 'error': str(e),
-                'url': '{task.url}',
+                'url': scrape_url_val,
                 'execution_mode': 'docker'
-            }}
+            }
             print(json.dumps(error_result))
 
         finally:
@@ -192,6 +200,12 @@ asyncio.run(scrape_url())
                 stdout=True,
                 stderr=True,
                 timeout=self.timeout,
+                environment={
+                    'SCRAPE_URL': task.url,
+                    'SCRAPE_TIMEOUT': str(task.timeout * 1000),
+                    'SCRAPE_EXTRACT_LINKS': str(task.extract_links).lower(),
+                    'SCRAPE_EXTRACT_IMAGES': str(task.extract_images).lower(),
+                },
             )
 
             # Parse result
@@ -417,7 +431,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                     limit=5, include_metadata=True
                 )
 
-            #  Get conversation context AND conversation history
+            # Get conversation context AND conversation history
             conversation_context = self._get_scraping_conversation_context_summary()
 
             # Build LLM context with conversation history
@@ -586,16 +600,16 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
         response = (
             "I'm your Web Scraper Agent! I can help you with:\n\n"
-            "🕷️ **Web Scraping**\n"
+            " **Web Scraping**\n"
             "- Extract content from web pages\n"
             "- Scrape multiple URLs at once\n"
             "- Extract links and images\n"
             "- Take screenshots\n\n"
-            "🔧 **Multiple Execution Modes**\n"
+            " **Multiple Execution Modes**\n"
             "- Proxy support (ScraperAPI compatible)\n"
             "- Docker-based secure execution\n"
             "- Local fallback methods\n\n"
-            "🧠 **Smart Context Features**\n"
+            " **Smart Context Features**\n"
             "- Remembers URLs from previous messages\n"
             "- Understands 'that website' and 'this page'\n"
             "- Maintains conversation state\n\n"
@@ -603,17 +617,17 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
         # Add current context information
         if state.current_resource:
-            response += f"🎯 **Current URL:** {state.current_resource}\n"
+            response += f" **Current URL:** {state.current_resource}\n"
 
-        response += f"\n🔧 **Current Mode:** {self.execution_mode.upper()}\n"
-        response += f"📡 **Proxy Enabled:** {'✅' if self.proxy_config else '❌'}\n"
-        response += f"🐳 **Docker Available:** {'✅' if self.docker_executor and self.docker_executor.available else '❌'}\n"
+        response += f"\n **Current Mode:** {self.execution_mode.upper()}\n"
+        response += f" **Proxy Enabled:** {'' if self.proxy_config else ''}\n"
+        response += f" **Docker Available:** {'' if self.docker_executor and self.docker_executor.available else ''}\n"
 
-        response += "\n💡 **Examples:**\n"
+        response += "\n **Examples:**\n"
         response += "• 'scrape https://example.com'\n"
         response += "• 'batch scrape https://site1.com https://site2.com'\n"
         response += "• 'check if https://example.com is accessible'\n"
-        response += "\nI understand context from our conversation! 🚀"
+        response += "\nI understand context from our conversation! "
 
         return response
 
@@ -634,7 +648,8 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                         context_summary.append(f"Previous URL: {urls[0]}")
 
             return "\n".join(context_summary) if context_summary else "No previous scraping context"
-        except:
+        except Exception as e:
+            self.logger.debug(f"Failed to get scraping context: {e}")
             return "No previous scraping context"
 
     async def _route_scraping_with_llm_analysis(
@@ -687,18 +702,18 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 extract_links=extraction_prefs.get("extract_links", True),
                 extract_images=extraction_prefs.get("extract_images", True),
                 take_screenshot=extraction_prefs.get("take_screenshot", False),
-                **kwargs,  # Pass through topic, external_handoff_dir, etc.
+                **kwargs, # Pass through topic, external_handoff_dir, etc.
             )
 
             if result["success"]:
-                return f"""✅ **Web Scraping Completed**
+                return f""" **Web Scraping Completed**
 
-🌐 **URL:** {result['url']}
-🔧 **Method:** {result.get('method', 'unknown')}
-🏃 **Mode:** {result['execution_mode']}
-📊 **Status:** {result.get('status_code', 'N/A')}
-📄 **Content:** {result['content_length']:,} characters
-⏱️ **Time:** {result['response_time']:.2f}s
+ **URL:** {result['url']}
+ **Method:** {result.get('method', 'unknown')}
+ **Mode:** {result['execution_mode']}
+ **Status:** {result.get('status_code', 'N/A')}
+ **Content:** {result['content_length']:,} characters
+⏱ **Time:** {result['response_time']:.2f}s
 
 **Title:** {result.get('title', 'No title')}
 
@@ -708,10 +723,10 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 **Links Found:** {len(result.get('links', []))}
 **Images Found:** {len(result.get('images', []))}"""
             else:
-                return f"❌ **Scraping failed:** {result['error']}"
+                return f" **Scraping failed:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error during scraping:** {str(e)}"
+            return f" **Error during scraping:** {str(e)}"
 
     async def _handle_batch_scrape(
         self, urls: List[str], extraction_prefs: Dict[str, Any], user_message: str, **kwargs
@@ -731,9 +746,9 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 failed = result["failed"]
                 total = result["total_urls"]
 
-                response = f"""📦 **Batch Web Scraping Completed**
+                response = f""" **Batch Web Scraping Completed**
 
-📊 **Summary:**
+ **Summary:**
 - **Total URLs:** {total}
 - **Successful:** {successful}
 - **Failed:** {failed}
@@ -742,26 +757,26 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 """
 
                 if successful > 0:
-                    response += "✅ **Successfully Scraped:**\n"
+                    response += " **Successfully Scraped:**\n"
                     for i, scrape_result in enumerate(result["results"], 1):
                         if scrape_result.get("success", False):
                             response += f"{i}. {scrape_result.get('url', 'Unknown')}\n"
 
                 if failed > 0:
-                    response += f"\n❌ **Failed Scrapes:** {failed}\n"
+                    response += f"\n **Failed Scrapes:** {failed}\n"
                     for i, scrape_result in enumerate(result["results"], 1):
                         if not scrape_result.get("success", False):
                             response += f"{i}. {scrape_result.get('url', 'Unknown')}: {scrape_result.get('error', 'Unknown error')}\n"
 
                 response += (
-                    f"\n🎉 Batch scraping completed with {successful}/{total} successful scrapes!"
+                    f"\n Batch scraping completed with {successful}/{total} successful scrapes!"
                 )
                 return response
             else:
-                return f"❌ **Batch scraping failed:** {result['error']}"
+                return f" **Batch scraping failed:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error during batch scraping:** {str(e)}"
+            return f" **Error during batch scraping:** {str(e)}"
 
     async def _handle_accessibility_check(self, urls: List[str], user_message: str) -> str:
         """Handle accessibility check"""
@@ -778,21 +793,21 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             result = await self._check_accessibility(url)
 
             if result["success"]:
-                status = "✅ Accessible" if result.get("accessible", False) else "❌ Not Accessible"
-                return f"""🔍 **Accessibility Check Results**
+                status = " Accessible" if result.get("accessible", False) else " Not Accessible"
+                return f""" **Accessibility Check Results**
 
-🌐 **URL:** {result['url']}
-🚦 **Status:** {status}
-📊 **HTTP Status:** {result.get('status_code', 'Unknown')}
-⏱️ **Response Time:** {result.get('response_time', 0):.2f}s
-📅 **Checked:** {result.get('timestamp', 'Unknown')}
+ **URL:** {result['url']}
+ **Status:** {status}
+ **HTTP Status:** {result.get('status_code', 'Unknown')}
+⏱ **Response Time:** {result.get('response_time', 0):.2f}s
+ **Checked:** {result.get('timestamp', 'Unknown')}
 
 {'The website is accessible and responding normally.' if result.get('accessible', False) else 'The website is not accessible or not responding.'}"""
             else:
-                return f"❌ **Accessibility check failed:** {result['error']}"
+                return f" **Accessibility check failed:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error during accessibility check:** {str(e)}"
+            return f" **Error during accessibility check:** {str(e)}"
 
     async def _handle_scraping_help_request(self, user_message: str) -> str:
         """Handle scraping help requests with conversation context"""
@@ -800,16 +815,16 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
         response = (
             "I'm your Web Scraper Agent! I can help you with:\n\n"
-            "🕷️ **Web Scraping**\n"
+            " **Web Scraping**\n"
             "- Extract content from web pages\n"
             "- Scrape multiple URLs at once\n"
             "- Extract links and images\n"
             "- Take screenshots\n\n"
-            "🔧 **Multiple Execution Modes**\n"
+            " **Multiple Execution Modes**\n"
             "- Proxy support (ScraperAPI compatible)\n"
             "- Docker-based secure execution\n"
             "- Local fallback methods\n\n"
-            "🧠 **Smart Context Features**\n"
+            " **Smart Context Features**\n"
             "- Remembers URLs from previous messages\n"
             "- Understands 'that website' and 'this page'\n"
             "- Maintains conversation state\n\n"
@@ -817,17 +832,17 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
         # Add current context information
         if state.current_resource:
-            response += f"🎯 **Current URL:** {state.current_resource}\n"
+            response += f" **Current URL:** {state.current_resource}\n"
 
-        response += f"\n🔧 **Current Mode:** {self.execution_mode.upper()}\n"
-        response += f"📡 **Proxy Enabled:** {'✅' if self.proxy_config else '❌'}\n"
-        response += f"🐳 **Docker Available:** {'✅' if self.docker_executor and self.docker_executor.available else '❌'}\n"
+        response += f"\n **Current Mode:** {self.execution_mode.upper()}\n"
+        response += f" **Proxy Enabled:** {'' if self.proxy_config else ''}\n"
+        response += f" **Docker Available:** {'' if self.docker_executor and self.docker_executor.available else ''}\n"
 
-        response += "\n💡 **Examples:**\n"
+        response += "\n **Examples:**\n"
         response += "• 'scrape https://example.com'\n"
         response += "• 'batch scrape https://site1.com https://site2.com'\n"
         response += "• 'check if https://example.com is accessible'\n"
-        response += "\nI understand context from our conversation! 🚀"
+        response += "\nI understand context from our conversation! "
 
         return response
 
@@ -993,7 +1008,8 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 base_path = getattr(shared_manager, "base_path", None) or getattr(
                     shared_manager, "shared_path", "./docker_shared"
                 )
-            except:
+            except Exception as e:
+                self.logger.debug(f"Failed to get shared path from config: {e}")
                 base_path = "./docker_shared"
 
             # Create session-based topic-specific subdirectory for content isolation
@@ -1002,7 +1018,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
             # Use session_id if available, otherwise create session-based identifier
             if hasattr(self, "session_id") and self.session_id:
-                session_identifier = self.session_id[:8]  # First 8 chars of session ID
+                session_identifier = self.session_id[:8] # First 8 chars of session ID
             elif hasattr(self, "user_id") and self.user_id:
                 session_identifier = f"{self.user_id}_{datetime.now().strftime('%Y%m%d_%H%M')}"
             else:
@@ -1030,8 +1046,8 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             "raw_content": scraped_data.get("content", ""),
             "status_code": scraped_data.get("status_code", 0),
             "method": scraped_data.get("method", "unknown"),
-            "links": scraped_data.get("links", [])[:10],  # First 10 links
-            "images": scraped_data.get("images", [])[:5],  # First 5 images
+            "links": scraped_data.get("links", [])[:10], # First 10 links
+            "images": scraped_data.get("images", [])[:5], # First 5 images
         }
 
         # Save to JSON file
@@ -1180,7 +1196,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                     "success": True,
                     "url": url,
                     "title": title,
-                    "content": content,  # Full content preserved
+                    "content": content, # Full content preserved
                     "content_length": len(content),
                     "links": links,
                     "images": images,
@@ -1223,10 +1239,10 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 headers=headers,
                 proxies=proxies,
                 timeout=self.scraper_config.get("timeout", 60),
-                verify=False,  # Disable SSL verification
+                verify=False, # Disable SSL verification
                 allow_redirects=True,
             )
-            response.raise_for_status()  # Raise exception for bad status codes
+            response.raise_for_status() # Raise exception for bad status codes
             response_time = time.time() - start_time
 
             soup = BeautifulSoup(response.content, "html.parser")
@@ -1251,7 +1267,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 for link in soup.find_all("a", href=True)[:max_links]:
                     href = link["href"]
                     text = link.get_text().strip()[:100]
-                    if href and text:  # Only add if both href and text exist
+                    if href and text: # Only add if both href and text exist
                         links.append({"url": urljoin(url, href), "text": text})
 
             if kwargs.get("extract_images", True):
@@ -1259,14 +1275,14 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 for img in soup.find_all("img", src=True)[:max_images]:
                     src = img["src"]
                     alt = img.get("alt", "")
-                    if src:  # Only add if src exists
+                    if src: # Only add if src exists
                         images.append({"url": urljoin(url, src), "alt": alt})
 
             return {
                 "success": True,
                 "url": url,
                 "title": title,
-                "content": content,  # Full content preserved
+                "content": content, # Full content preserved
                 "content_length": len(content),
                 "links": links,
                 "images": images,
@@ -1293,7 +1309,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 "execution_mode": "proxy",
             }
         finally:
-            session.close()  # Always close the session
+            session.close() # Always close the session
 
     async def _scrape_locally(self, url: str, method: str, **kwargs) -> Dict[str, Any]:
         """Scrape using local methods (no proxy, no Docker)"""
@@ -1332,7 +1348,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 "success": True,
                 "url": url,
                 "title": title,
-                "content": content,  # Full content preserved
+                "content": content, # Full content preserved
                 "content_length": len(content),
                 "status_code": response.status if response else None,
                 "response_time": response_time,
@@ -1367,7 +1383,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             "success": True,
             "url": url,
             "title": title,
-            "content": content,  # Full content preserved
+            "content": content, # Full content preserved
             "content_length": len(content),
             "status_code": response.status_code,
             "response_time": response_time,
@@ -1446,7 +1462,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 metadata={"agent": "web_scraper", "phase": "initialization"},
             )
 
-            # 🔥 FIX: Get conversation context for streaming
+            # FIX: Get conversation context for streaming
             conversation_context = self._get_scraping_conversation_context_summary()
             conversation_history = await self.get_conversation_history(
                 limit=5, include_metadata=True
@@ -1459,7 +1475,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             )
 
             llm_context = {
-                "conversation_history": conversation_history,  # 🔥 KEY FIX
+                "conversation_history": conversation_history, # KEY FIX
                 "conversation_id": message.conversation_id,
                 "streaming": True,
             }
@@ -1510,7 +1526,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 if self.llm_service:
                     help_prompt = f"As a web scraping assistant, help with: {user_message}"
 
-                    # 🔥 FIX: Stream with conversation context
+                    # FIX: Stream with conversation context
                     async for chunk in self.llm_service.generate_response_stream(
                         help_prompt,
                         context=llm_context,
@@ -1555,24 +1571,24 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             result = await self._check_accessibility(url)
 
             if result["success"]:
-                status = "✅ Accessible" if result.get("accessible", False) else "❌ Not Accessible"
+                status = " Accessible" if result.get("accessible", False) else " Not Accessible"
                 yield f"**Status:** {status}\n"
                 yield f"**HTTP Status:** {result.get('status_code', 'Unknown')}\n"
                 yield f"**Response Time:** {result.get('response_time', 0):.2f}s\n"
                 yield f"**Checked:** {result.get('timestamp', 'Unknown')}\n\n"
 
                 if result.get("accessible", False):
-                    yield "✅ The website is accessible and responding normally.\n"
+                    yield " The website is accessible and responding normally.\n"
                 else:
-                    yield "❌ The website is not accessible or not responding.\n"
+                    yield " The website is not accessible or not responding.\n"
 
-                # 🔥 FIX: Use LLM with context for intelligent follow-up suggestions
+                # FIX: Use LLM with context for intelligent follow-up suggestions
                 if self.llm_service and llm_context.get("conversation_history"):
                     try:
                         enhanced_system_message = self.get_system_message_for_llm(llm_context)
                         follow_up_prompt = f"""Based on the accessibility check result for {url}, provide helpful next steps or troubleshooting suggestions."""
 
-                        yield "\n💡 **Suggestions:**\n"
+                        yield "\n **Suggestions:**\n"
                         async for chunk in self.llm_service.generate_response_stream(
                             follow_up_prompt,
                             context=llm_context,
@@ -1582,10 +1598,10 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                     except Exception:
                         pass
             else:
-                yield f"❌ **Check failed:** {result['error']}\n"
+                yield f" **Check failed:** {result['error']}\n"
 
         except Exception as e:
-            yield f"❌ **Accessibility check error:** {str(e)}"
+            yield f" **Accessibility check error:** {str(e)}"
 
     async def _stream_single_scrape(
         self, urls: list, intent_analysis: dict, user_message: str
@@ -1593,7 +1609,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         """Stream single URL scraping with detailed progress"""
         try:
             if not urls:
-                yield "⚠️ No URL provided. Please specify a website to scrape.\n"
+                yield " No URL provided. Please specify a website to scrape.\n"
                 return
 
             url = urls[0]
@@ -1601,7 +1617,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
             yield f"**Target URL:** {url}\n"
             yield f"**Method:** {self.execution_mode.upper()}\n"
-            yield f"**Proxy:** {'✅ Enabled' if self.proxy_config else '❌ Disabled'}\n\n"
+            yield f"**Proxy:** {' Enabled' if self.proxy_config else ' Disabled'}\n\n"
 
             yield "Initializing scraper...\n"
             await asyncio.sleep(0.2)
@@ -1635,13 +1651,13 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 preview_length = self.scraper_config.get("max_content_length", 75000)
                 content_preview = result.get("content", "")[:preview_length]
                 if content_preview:
-                    yield f"📄 **Content Preview:**\n{content_preview}{'...' if len(result.get('content', '')) > preview_length else ''}\n"
+                    yield f" **Content Preview:**\n{content_preview}{'...' if len(result.get('content', '')) > preview_length else ''}\n"
 
             else:
-                yield f"❌ **Scraping failed:** {result['error']}\n"
+                yield f" **Scraping failed:** {result['error']}\n"
 
         except Exception as e:
-            yield f"❌ **Error during scraping:** {str(e)}"
+            yield f" **Error during scraping:** {str(e)}"
 
     async def _stream_batch_scrape(
         self, urls: list, intent_analysis: dict, user_message: str
@@ -1649,16 +1665,16 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         """Stream batch scraping with per-URL progress"""
         try:
             if not urls:
-                yield "⚠️ No URLs provided. Please specify websites to scrape.\n"
+                yield " No URLs provided. Please specify websites to scrape.\n"
                 return
 
-            yield f"📦 **Batch Scraping {len(urls)} URLs**\n\n"
+            yield f" **Batch Scraping {len(urls)} URLs**\n\n"
 
             successful = 0
             failed = 0
 
             for i, url in enumerate(urls, 1):
-                yield f"🌐 **URL {i}/{len(urls)}:** {url}\n"
+                yield f" **URL {i}/{len(urls)}:** {url}\n"
 
                 try:
                     yield f"⏳ Processing...\n"
@@ -1666,23 +1682,23 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
                     if result.get("success", False):
                         successful += 1
-                        yield f"✅ Success - {result['content_length']:,} chars, {result['response_time']:.1f}s\n\n"
+                        yield f" Success - {result['content_length']:,} chars, {result['response_time']:.1f}s\n\n"
                     else:
                         failed += 1
-                        yield f"❌ Failed - {result.get('error', 'Unknown error')}\n\n"
+                        yield f" Failed - {result.get('error', 'Unknown error')}\n\n"
 
                 except Exception as e:
                     failed += 1
-                    yield f"❌ Error - {str(e)}\n\n"
+                    yield f" Error - {str(e)}\n\n"
 
                 # Brief pause between URLs
                 if i < len(urls):
                     await asyncio.sleep(0.5)
 
-            yield f"📊 **Batch Complete:** {successful} successful, {failed} failed\n"
+            yield f" **Batch Complete:** {successful} successful, {failed} failed\n"
 
         except Exception as e:
-            yield f"❌ **Batch scraping error:** {str(e)}"
+            yield f" **Batch scraping error:** {str(e)}"
 
     async def _stream_accessibility_check(
         self, urls: list, user_message: str
@@ -1690,29 +1706,29 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         """Stream accessibility checking"""
         try:
             if not urls:
-                yield "⚠️ No URL provided. Please specify a website to check.\n"
+                yield " No URL provided. Please specify a website to check.\n"
                 return
 
             url = urls[0]
-            yield f"🔍 **Checking Accessibility:** {url}\n\n"
+            yield f" **Checking Accessibility:** {url}\n\n"
 
             yield "⏳ Testing connection...\n"
 
             result = await self._check_accessibility(url)
 
             if result["success"]:
-                status = "✅ Accessible" if result.get("accessible", False) else "❌ Not Accessible"
-                yield f"🚦 **Status:** {status}\n"
-                yield f"📊 **HTTP Status:** {result.get('status_code', 'Unknown')}\n"
-                yield f"⏱️ **Response Time:** {result.get('response_time', 0):.2f}s\n"
-                yield f"📅 **Checked:** {result.get('timestamp', 'Unknown')}\n\n"
+                status = " Accessible" if result.get("accessible", False) else " Not Accessible"
+                yield f" **Status:** {status}\n"
+                yield f" **HTTP Status:** {result.get('status_code', 'Unknown')}\n"
+                yield f"⏱ **Response Time:** {result.get('response_time', 0):.2f}s\n"
+                yield f" **Checked:** {result.get('timestamp', 'Unknown')}\n\n"
 
                 if result.get("accessible", False):
-                    yield "✅ The website is accessible and responding normally.\n"
+                    yield " The website is accessible and responding normally.\n"
                 else:
-                    yield "❌ The website is not accessible or not responding.\n"
+                    yield " The website is not accessible or not responding.\n"
             else:
-                yield f"❌ **Check failed:** {result['error']}\n"
+                yield f" **Check failed:** {result['error']}\n"
 
         except Exception as e:
-            yield f"❌ **Accessibility check error:** {str(e)}"
+            yield f" **Accessibility check error:** {str(e)}"

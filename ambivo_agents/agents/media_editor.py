@@ -276,7 +276,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 timestamp=datetime.now(),
             )
 
-        self.memory.store_message(original_message)
+        if self.memory:
+            self.memory.store_message(original_message)
 
         try:
 
@@ -322,7 +323,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 conversation_id=original_message.conversation_id,
             )
 
-            self.memory.store_message(response)
+            if self.memory:
+                self.memory.store_message(response)
             return response
 
         except Exception as e:
@@ -496,17 +498,17 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         response = (
             "I'm your Media Editor Agent! I can help you with:\n\n"
-            "🎥 **Video Processing**\n"
+            " **Video Processing**\n"
             "- Extract audio from videos\n"
             "- Convert between formats (MP4, AVI, MOV, MKV)\n"
             "- Resize and scale videos\n"
             "- Create thumbnails and frames\n"
             "- Trim and cut clips\n\n"
-            "🎵 **Audio Processing**\n"
+            " **Audio Processing**\n"
             "- Convert audio formats (MP3, WAV, AAC, FLAC)\n"
             "- Extract from videos\n"
             "- Adjust quality settings\n\n"
-            "🖼️ **Image Processing**\n"
+            " **Image Processing**\n"
             "- Resize and scale images\n"
             "- Crop images to specific areas\n"
             "- Rotate and flip images\n"
@@ -515,7 +517,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             "- Adjust brightness, contrast, and saturation\n"
             "- Apply blur, sharpen, and other filters\n"
             "- Batch process multiple images\n\n"
-            "🧠 **Smart Context Features**\n"
+            " **Smart Context Features**\n"
             "- Remembers files from previous messages\n"
             "- Understands 'that video', 'this image', and 'that file'\n"
             "- Maintains working context\n\n"
@@ -523,14 +525,14 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         # Add current context information
         if state.current_resource:
-            response += f"🎯 **Current File:** {state.current_resource}\n"
+            response += f" **Current File:** {state.current_resource}\n"
 
         if state.working_files:
-            response += f"📁 **Working Files:** {len(state.working_files)} files\n"
-            for file in state.working_files[-3:]:  # Show last 3
-                response += f"   • {file}\n"
+            response += f" **Working Files:** {len(state.working_files)} files\n"
+            for file in state.working_files[-3:]: # Show last 3
+                response += f" • {file}\n"
 
-        response += "\n💡 **Examples:**\n"
+        response += "\n **Examples:**\n"
         response += "• 'Extract audio from video.mp4 as MP3'\n"
         response += "• 'Convert that video to MP4'\n"
         response += "• 'Resize it to 720p'\n"
@@ -540,7 +542,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         response += "• 'Rotate photo.jpg by 90 degrees'\n"
         response += "• 'Convert image to grayscale'\n"
         response += "• 'Batch process all PNG files'\n"
-        response += "\nI understand context from our conversation! 🚀"
+        response += "\nI understand context from our conversation! "
 
         return response
 
@@ -564,7 +566,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                         context_summary.append(f"Previous file: {file_paths[0]}")
 
             return "\n".join(context_summary) if context_summary else "No previous media context"
-        except:
+        except Exception as e:
+            self.logger.debug(f"Failed to retrieve previous media context: {e}")
             return "No previous media context"
 
     async def _route_media_with_llm_analysis(
@@ -661,19 +664,19 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Audio Extraction Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"🎵 **Output:** {result.get('output_file', 'Unknown')}\n"
-                    f"📊 **Format:** {output_format.upper()}\n"
-                    f"🎚️ **Quality:** {quality}\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
-                    f"Your audio file is ready! 🎉"
+                    f" **Audio Extraction Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', 'Unknown')}\n"
+                    f" **Format:** {output_format.upper()}\n"
+                    f" **Quality:** {quality}\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your audio file is ready! "
                 )
             else:
-                return f"❌ **Audio extraction failed:** {result.get('error', 'Unknown error')}"
+                return f" **Audio extraction failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during audio extraction:** {str(e)}"
+            return f" **Error during audio extraction:** {str(e)}"
 
     async def _handle_video_conversion(
         self, media_files: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -701,19 +704,19 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Video Conversion Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"🎬 **Output:** {result.get('output_file', 'Unknown')}\n"
-                    f"📊 **Format:** {output_format.upper()}\n"
-                    f"🔧 **Codec:** {video_codec}\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
-                    f"Your converted video is ready! 🎉"
+                    f" **Video Conversion Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', 'Unknown')}\n"
+                    f" **Format:** {output_format.upper()}\n"
+                    f" **Codec:** {video_codec}\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your converted video is ready! "
                 )
             else:
-                return f"❌ **Video conversion failed:** {result.get('error', 'Unknown error')}"
+                return f" **Video conversion failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during video conversion:** {str(e)}"
+            return f" **Error during video conversion:** {str(e)}"
 
     async def _create_video_thumbnail(
         self,
@@ -819,7 +822,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             last_error = None
             for i, ffmpeg_command in enumerate(scale_commands):
                 try:
-                    print(f"🔄 Trying resize method {i + 1}: {width}x{height}")
+                    print(f" Trying resize method {i + 1}: {width}x{height}")
 
                     result = self.media_executor.execute_ffmpeg_command(
                         ffmpeg_command=ffmpeg_command,
@@ -839,11 +842,11 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                         }
                     else:
                         last_error = result.get("error", "Unknown error")
-                        print(f"❌ Method {i + 1} failed: {last_error[:100]}...")
+                        print(f" Method {i + 1} failed: {last_error[:100]}...")
 
                 except Exception as approach_error:
                     last_error = str(approach_error)
-                    print(f"❌ Method {i + 1} exception: {last_error}")
+                    print(f" Method {i + 1} exception: {last_error}")
 
             return {
                 "success": False,
@@ -930,7 +933,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 try:
                     width, height = dimensions_str.split("x")
                     return int(width), int(height)
-                except:
+                except Exception as e:
+                    self.logger.debug(f"Failed to parse video dimensions from '{dimensions_str}': {e}")
                     pass
 
         # Parse from user message with improved patterns
@@ -1035,24 +1039,24 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         # Validate dimensions
         if width < 100 or height < 100:
             return (
-                f"❌ **Invalid dimensions:** {width}x{height} is too small.\n"
+                f" **Invalid dimensions:** {width}x{height} is too small.\n"
                 f"Minimum supported size is 100x100 pixels."
             )
 
         if width > 7680 or height > 4320:
             return (
-                f"❌ **Invalid dimensions:** {width}x{height} is too large.\n"
+                f" **Invalid dimensions:** {width}x{height} is too large.\n"
                 f"Maximum supported size is 7680x4320 (8K)."
             )
 
         try:
             # Show what we're attempting
             processing_msg = (
-                f"🎬 **Processing Video Resize**\n\n"
-                f"📁 **Input:** {input_file}\n"
-                f"📏 **Target:** {width}x{height}\n"
-                f"⚙️ **Method:** Multiple fallback approaches\n\n"
-                f"🔄 Processing..."
+                f" **Processing Video Resize**\n\n"
+                f" **Input:** {input_file}\n"
+                f" **Target:** {width}x{height}\n"
+                f" **Method:** Multiple fallback approaches\n\n"
+                f" Processing..."
             )
 
             # Actually perform the resize
@@ -1060,14 +1064,14 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Video Resize Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"🎬 **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
-                    f"📏 **Dimensions:** {result.get('final_dimensions', f'{width}x{height}')}\n"
-                    f"⚙️ **Method:** {result.get('method_used', 'Unknown')}/{result.get('attempted_methods', 'N/A')}\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n"
-                    f"📊 **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
-                    f"Your resized video is ready! 🎉"
+                    f" **Video Resize Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f" **Dimensions:** {result.get('final_dimensions', f'{width}x{height}')}\n"
+                    f" **Method:** {result.get('method_used', 'Unknown')}/{result.get('attempted_methods', 'N/A')}\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n"
+                    f" **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
+                    f"Your resized video is ready! "
                 )
             else:
                 error_msg = result.get("error", "Unknown error")
@@ -1075,10 +1079,10 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
                 # Provide helpful troubleshooting
                 return (
-                    f"❌ **Video Resize Failed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"📏 **Target:** {result.get('target_dimensions', f'{width}x{height}')}\n"
-                    f"🔧 **Attempted:** {attempted} different methods\n\n"
+                    f" **Video Resize Failed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Target:** {result.get('target_dimensions', f'{width}x{height}')}\n"
+                    f" **Attempted:** {attempted} different methods\n\n"
                     f"**Error Details:**\n"
                     f"{error_msg[:300]}...\n\n"
                     f"**Possible Solutions:**\n"
@@ -1090,9 +1094,9 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         except Exception as e:
             return (
-                f"❌ **Error during video resize:** {str(e)}\n\n"
-                f"📁 **File:** {input_file}\n"
-                f"📏 **Target:** {width}x{height}\n\n"
+                f" **Error during video resize:** {str(e)}\n\n"
+                f" **File:** {input_file}\n"
+                f" **Target:** {width}x{height}\n\n"
                 f"Please try again or contact support if the problem continues."
             )
 
@@ -1141,19 +1145,19 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Media Trim Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"🎬 **Output:** {result.get('output_file', 'Unknown')}\n"
-                    f"⏱️ **Start:** {start_time}\n"
+                    f" **Media Trim Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', 'Unknown')}\n"
+                    f"⏱ **Start:** {start_time}\n"
                     f"⏰ **Duration:** {duration}\n"
-                    f"🕐 **Time:** {result.get('execution_time', 0):.2f}s\n\n"
-                    f"Your trimmed media is ready! 🎉"
+                    f" **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your trimmed media is ready! "
                 )
             else:
-                return f"❌ **Media trim failed:** {result.get('error', 'Unknown error')}"
+                return f" **Media trim failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during media trim:** {str(e)}"
+            return f" **Error during media trim:** {str(e)}"
 
     async def _handle_thumbnail_creation(
         self, media_files: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -1182,19 +1186,19 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Thumbnail Created**\n\n"
-                    f"📁 **Video:** {input_file}\n"
-                    f"🖼️ **Thumbnail:** {result.get('output_file', 'Unknown')}\n"
-                    f"⏱️ **Timestamp:** {timestamp}\n"
-                    f"📊 **Format:** {output_format.upper()}\n"
-                    f"🕐 **Time:** {result.get('execution_time', 0):.2f}s\n\n"
-                    f"Your thumbnail is ready! 🎉"
+                    f" **Thumbnail Created**\n\n"
+                    f" **Video:** {input_file}\n"
+                    f" **Thumbnail:** {result.get('output_file', 'Unknown')}\n"
+                    f"⏱ **Timestamp:** {timestamp}\n"
+                    f" **Format:** {output_format.upper()}\n"
+                    f" **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your thumbnail is ready! "
                 )
             else:
-                return f"❌ **Thumbnail creation failed:** {result.get('error', 'Unknown error')}"
+                return f" **Thumbnail creation failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during thumbnail creation:** {str(e)}"
+            return f" **Error during thumbnail creation:** {str(e)}"
 
     async def _handle_media_info(self, media_files: List[str], user_message: str) -> str:
         """Handle media info requests with LLM analysis"""
@@ -1217,21 +1221,21 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             if result["success"]:
                 info = result.get("media_info", {})
                 return (
-                    f"📊 **Media Information for {input_file}**\n\n"
-                    f"**📄 File:** {info.get('filename', 'Unknown')}\n"
-                    f"**📦 Format:** {info.get('format', 'Unknown')}\n"
-                    f"**⏱️ Duration:** {info.get('duration', 'Unknown')}\n"
-                    f"**📏 Resolution:** {info.get('resolution', 'Unknown')}\n"
-                    f"**🎬 Video Codec:** {info.get('video_codec', 'Unknown')}\n"
-                    f"**🎵 Audio Codec:** {info.get('audio_codec', 'Unknown')}\n"
-                    f"**📊 File Size:** {info.get('file_size', 'Unknown')}\n\n"
-                    f"🎉 Information retrieval completed!"
+                    f" **Media Information for {input_file}**\n\n"
+                    f"** File:** {info.get('filename', 'Unknown')}\n"
+                    f"** Format:** {info.get('format', 'Unknown')}\n"
+                    f"**⏱ Duration:** {info.get('duration', 'Unknown')}\n"
+                    f"** Resolution:** {info.get('resolution', 'Unknown')}\n"
+                    f"** Video Codec:** {info.get('video_codec', 'Unknown')}\n"
+                    f"** Audio Codec:** {info.get('audio_codec', 'Unknown')}\n"
+                    f"** File Size:** {info.get('file_size', 'Unknown')}\n\n"
+                    f" Information retrieval completed!"
                 )
             else:
-                return f"❌ **Failed to get media info:** {result.get('error', 'Unknown error')}"
+                return f" **Failed to get media info:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error getting media info:** {str(e)}"
+            return f" **Error getting media info:** {str(e)}"
 
     async def _handle_media_help_request(self, user_message: str) -> str:
         """Handle media help requests with conversation context"""
@@ -1240,17 +1244,17 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         response = (
             "I'm your Media Editor Agent! I can help you with:\n\n"
-            "🎥 **Video Processing**\n"
+            " **Video Processing**\n"
             "- Extract audio from videos\n"
             "- Convert between formats (MP4, AVI, MOV, MKV)\n"
             "- Resize and scale videos\n"
             "- Create thumbnails and frames\n"
             "- Trim and cut clips\n\n"
-            "🎵 **Audio Processing**\n"
+            " **Audio Processing**\n"
             "- Convert audio formats (MP3, WAV, AAC, FLAC)\n"
             "- Extract from videos\n"
             "- Adjust quality settings\n\n"
-            "🖼️ **Image Processing**\n"
+            " **Image Processing**\n"
             "- Resize and scale images\n"
             "- Crop images to specific areas\n"
             "- Rotate and flip images\n"
@@ -1259,7 +1263,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             "- Adjust brightness, contrast, and saturation\n"
             "- Apply blur, sharpen, and other filters\n"
             "- Batch process multiple images\n\n"
-            "🧠 **Smart Context Features**\n"
+            " **Smart Context Features**\n"
             "- Remembers files from previous messages\n"
             "- Understands 'that video', 'this image', and 'that file'\n"
             "- Maintains working context\n\n"
@@ -1267,14 +1271,14 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
         # Add current context information
         if state.current_resource:
-            response += f"🎯 **Current File:** {state.current_resource}\n"
+            response += f" **Current File:** {state.current_resource}\n"
 
         if state.working_files:
-            response += f"📁 **Working Files:** {len(state.working_files)} files\n"
-            for file in state.working_files[-3:]:  # Show last 3
-                response += f"   • {file}\n"
+            response += f" **Working Files:** {len(state.working_files)} files\n"
+            for file in state.working_files[-3:]: # Show last 3
+                response += f" • {file}\n"
 
-        response += "\n💡 **Examples:**\n"
+        response += "\n **Examples:**\n"
         response += "• 'Extract audio from video.mp4 as MP3'\n"
         response += "• 'Convert that video to MP4'\n"
         response += "• 'Resize it to 720p'\n"
@@ -1284,7 +1288,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         response += "• 'Rotate photo.jpg by 90 degrees'\n"
         response += "• 'Convert image to grayscale'\n"
         response += "• 'Batch process all PNG files'\n"
-        response += "\nI understand context from our conversation! 🚀"
+        response += "\nI understand context from our conversation! "
 
         return response
 
@@ -2184,7 +2188,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             minutes = int((duration % 3600) // 60)
             seconds = int(duration % 60)
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-        except:
+        except Exception as e:
+            self.logger.debug(f"Failed to format duration from '{duration_str}': {e}")
             return str(duration_str)
 
     def _format_file_size(self, size_str):
@@ -2201,7 +2206,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 return f"{size / (1024 * 1024):.1f} MB"
             else:
                 return f"{size / (1024 * 1024 * 1024):.1f} GB"
-        except:
+        except Exception as e:
+            self.logger.debug(f"Failed to format file size from '{size_str}': {e}")
             return str(size_str)
 
     def _get_resolution(self, video_stream):
@@ -2440,7 +2446,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 # FFmpeg eq filter: brightness range -1.0 to 1.0
                 brightness = (
                     float(adjustments["brightness"]) / 100.0
-                )  # Convert percentage to decimal
+                ) # Convert percentage to decimal
                 filters.append(f"eq=brightness={brightness}")
 
             if "contrast" in adjustments:
@@ -2745,7 +2751,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffmpeg_command,
-                input_files={},  # No input files needed
+                input_files={}, # No input files needed
                 output_filename=output_filename,
             )
 
@@ -2812,7 +2818,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 try:
                     width, height = dimensions_str.split("x")
                     return int(width), int(height)
-                except:
+                except Exception as e:
+                    self.logger.debug(f"Failed to parse image dimensions from '{dimensions_str}': {e}")
                     pass
 
         # Parse from user message
@@ -2829,7 +2836,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         if percent_match:
             # Return special values to indicate percentage scaling
             percent = int(percent_match.group(1))
-            return percent, percent  # Will be handled specially by caller
+            return percent, percent # Will be handled specially by caller
 
         return None, None
 
@@ -2845,7 +2852,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         width, height = map(int, dimension_matches[0])
 
         # Look for position
-        position = "center"  # default
+        position = "center" # default
         if "top" in user_message.lower() and "left" in user_message.lower():
             position = "top-left"
         elif "top" in user_message.lower() and "right" in user_message.lower():
@@ -2947,7 +2954,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             return None
 
         # Determine intensity
-        intensity = "medium"  # default
+        intensity = "medium" # default
         if "slight" in message_lower or "light" in message_lower:
             intensity = "slight"
         elif "strong" in message_lower or "heavy" in message_lower:
@@ -2986,7 +2993,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         elif "*.gif" in user_message or "gif files" in message_lower:
             result["pattern"] = "*.gif"
         else:
-            result["pattern"] = "*.*"  # All files
+            result["pattern"] = "*.*" # All files
 
         # Parse operation-specific parameters
         if operation == "resize":
@@ -3020,7 +3027,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         elif "center" in message_lower:
             params["position"] = "center"
         else:
-            params["position"] = "bottom-right"  # default
+            params["position"] = "bottom-right" # default
 
         # Parse opacity
         opacity_match = re.search(r"opacity[:\s]*(\d+)%?", message_lower)
@@ -3074,7 +3081,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         elif "black" in message_lower:
             params["background_color"] = "black"
         else:
-            params["background_color"] = "white"  # default
+            params["background_color"] = "white" # default
 
         # Parse similarity tolerance
         similarity_match = re.search(
@@ -3207,7 +3214,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             result = self.media_executor.execute_ffmpeg_command(
                 ffmpeg_command=ffprobe_command,
                 input_files={"input_file": file_path},
-                output_filename=None,  # No output file for info
+                output_filename=None, # No output file for info
             )
 
             if result["success"]:
@@ -3363,7 +3370,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 timestamp=datetime.now(),
             )
 
-        self.memory.store_message(original_message)
+        if self.memory:
+            self.memory.store_message(original_message)
 
         try:
             self.update_conversation_state(user_message)
@@ -3408,7 +3416,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if primary_intent == "extract_audio":
                 yield StreamChunk(
-                    text="🎵 **Audio Extraction**\n\n",
+                    text=" **Audio Extraction**\n\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"operation": "extract_audio"},
                 )
@@ -3426,7 +3434,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             elif primary_intent == "convert_video":
                 yield StreamChunk(
-                    text="🎬 **Video Conversion**\n\n",
+                    text=" **Video Conversion**\n\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"operation": "convert_video"},
                 )
@@ -3444,7 +3452,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             elif primary_intent == "resize_video":
                 yield StreamChunk(
-                    text="📏 **Video Resize**\n\n",
+                    text=" **Video Resize**\n\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"operation": "resize_video"},
                 )
@@ -3456,7 +3464,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 yield response_content
 
             elif primary_intent == "trim_media":
-                yield "✂️ **Media Trim**\n\n"
+                yield " **Media Trim**\n\n"
                 response_content = await self._handle_media_trim(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),
@@ -3465,7 +3473,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 yield response_content
 
             elif primary_intent == "create_thumbnail":
-                yield "🖼️ **Thumbnail Creation**\n\n"
+                yield " **Thumbnail Creation**\n\n"
                 response_content = await self._handle_thumbnail_creation(
                     intent_analysis.get("media_files", []),
                     intent_analysis.get("output_preferences", {}),
@@ -3474,7 +3482,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 yield response_content
 
             elif primary_intent == "get_info":
-                yield "📊 **Media Information**\n\n"
+                yield " **Media Information**\n\n"
                 response_content = await self._handle_media_info(
                     intent_analysis.get("media_files", []), user_message
                 )
@@ -3498,7 +3506,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     yield response_content
 
         except Exception as e:
-            yield f"❌ **Media Editor Error:** {str(e)}"
+            yield f" **Media Editor Error:** {str(e)}"
 
     async def _handle_audio_extraction_with_context(
         self,
@@ -3529,8 +3537,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
 
                 # Enhance the result with context-aware messaging
-                if "✅" in result:
-                    result += f"\n\n💡 **Context Note:** {guidance[:100]}..."
+                if "" in result:
+                    result += f"\n\n **Context Note:** {guidance[:100]}..."
 
                 return result
 
@@ -3570,8 +3578,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                 )
 
                 # Enhance the result with context-aware messaging
-                if "✅" in result:
-                    result += f"\n\n💡 **Context Note:** {guidance[:100]}..."
+                if "" in result:
+                    result += f"\n\n **Context Note:** {guidance[:100]}..."
 
                 return result
 
@@ -3626,19 +3634,19 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Image Resize Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"🖼️ **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
-                    f"📏 **Dimensions:** {width}x{height}\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n"
-                    f"📊 **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
-                    f"Your resized image is ready! 🎉"
+                    f" **Image Resize Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f" **Dimensions:** {width}x{height}\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n"
+                    f" **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
+                    f"Your resized image is ready! "
                 )
             else:
-                return f"❌ **Image resize failed:** {result.get('error', 'Unknown error')}"
+                return f" **Image resize failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during image resize:** {str(e)}"
+            return f" **Error during image resize:** {str(e)}"
 
     async def _handle_image_crop(
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -3679,19 +3687,19 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Image Crop Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"✂️ **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
-                    f"📏 **Crop Area:** {crop_params.get('width')}x{crop_params.get('height')}\n"
-                    f"📍 **Position:** {crop_params.get('position', 'center')}\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
-                    f"Your cropped image is ready! 🎉"
+                    f" **Image Crop Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f" **Crop Area:** {crop_params.get('width')}x{crop_params.get('height')}\n"
+                    f" **Position:** {crop_params.get('position', 'center')}\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your cropped image is ready! "
                 )
             else:
-                return f"❌ **Image crop failed:** {result.get('error', 'Unknown error')}"
+                return f" **Image crop failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during image crop:** {str(e)}"
+            return f" **Error during image crop:** {str(e)}"
 
     async def _handle_image_rotate(
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -3732,18 +3740,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Image Rotation Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"🔄 **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
-                    f"📐 **Rotation:** {angle}°\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
-                    f"Your rotated image is ready! 🎉"
+                    f" **Image Rotation Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f" **Rotation:** {angle}°\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your rotated image is ready! "
                 )
             else:
-                return f"❌ **Image rotation failed:** {result.get('error', 'Unknown error')}"
+                return f" **Image rotation failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during image rotation:** {str(e)}"
+            return f" **Error during image rotation:** {str(e)}"
 
     async def _handle_image_convert(
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -3787,21 +3795,21 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Image Format Conversion Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"🔄 **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
-                    f"📊 **Format:** {target_format.upper()}\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n"
-                    f"📁 **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
-                    f"Your converted image is ready! 🎉"
+                    f" **Image Format Conversion Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f" **Format:** {target_format.upper()}\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n"
+                    f" **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
+                    f"Your converted image is ready! "
                 )
             else:
                 return (
-                    f"❌ **Image format conversion failed:** {result.get('error', 'Unknown error')}"
+                    f" **Image format conversion failed:** {result.get('error', 'Unknown error')}"
                 )
 
         except Exception as e:
-            return f"❌ **Error during image format conversion:** {str(e)}"
+            return f" **Error during image format conversion:** {str(e)}"
 
     async def _handle_image_grayscale(
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -3825,18 +3833,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"✅ **Grayscale Conversion Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"⚫ **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
-                    f"🎨 **Effect:** Black & White\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
-                    f"Your grayscale image is ready! 🎉"
+                    f" **Grayscale Conversion Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f" **Effect:** Black & White\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your grayscale image is ready! "
                 )
             else:
-                return f"❌ **Grayscale conversion failed:** {result.get('error', 'Unknown error')}"
+                return f" **Grayscale conversion failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during grayscale conversion:** {str(e)}"
+            return f" **Error during grayscale conversion:** {str(e)}"
 
     async def _handle_image_adjust(
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -3879,18 +3887,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             if result["success"]:
                 adj_desc = ", ".join([f"{k}: {v}" for k, v in adjustments.items()])
                 return (
-                    f"✅ **Image Adjustment Completed**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"🎨 **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
-                    f"⚙️ **Adjustments:** {adj_desc}\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
-                    f"Your adjusted image is ready! 🎉"
+                    f" **Image Adjustment Completed**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f" **Adjustments:** {adj_desc}\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your adjusted image is ready! "
                 )
             else:
-                return f"❌ **Image adjustment failed:** {result.get('error', 'Unknown error')}"
+                return f" **Image adjustment failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during image adjustment:** {str(e)}"
+            return f" **Error during image adjustment:** {str(e)}"
 
     async def _handle_image_blur(
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -3933,18 +3941,18 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
             if result["success"]:
                 effect_desc = f"{effect_params.get('type', 'blur')} (intensity: {effect_params.get('intensity', 'medium')})"
                 return (
-                    f"✅ **Image Effect Applied**\n\n"
-                    f"📁 **Input:** {input_file}\n"
-                    f"✨ **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
-                    f"🎭 **Effect:** {effect_desc}\n"
-                    f"⏱️ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
-                    f"Your processed image is ready! 🎉"
+                    f" **Image Effect Applied**\n\n"
+                    f" **Input:** {input_file}\n"
+                    f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
+                    f" **Effect:** {effect_desc}\n"
+                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"Your processed image is ready! "
                 )
             else:
-                return f"❌ **Image effect failed:** {result.get('error', 'Unknown error')}"
+                return f" **Image effect failed:** {result.get('error', 'Unknown error')}"
 
         except Exception as e:
-            return f"❌ **Error during image effect processing:** {str(e)}"
+            return f" **Error during image effect processing:** {str(e)}"
 
     async def _handle_batch_image_processing(
         self, image_files: List[str], output_prefs: Dict[str, Any], user_message: str
@@ -3974,7 +3982,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
 
             if not images_to_process:
                 return (
-                    f"❌ **No images found** matching pattern: {batch_operation.get('pattern', 'N/A')}\n\n"
+                    f" **No images found** matching pattern: {batch_operation.get('pattern', 'N/A')}\n\n"
                     f"**Searched in:**\n"
                     f"• docker_shared/input/media/\n"
                     f"• Current directory\n\n"
@@ -4001,29 +4009,29 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                         continue
 
                     if result["success"]:
-                        results.append(f"✅ {Path(image_file).name}")
+                        results.append(f" {Path(image_file).name}")
                     else:
-                        results.append(f"❌ {Path(image_file).name}")
+                        results.append(f" {Path(image_file).name}")
                         failed_count += 1
 
                 except Exception:
-                    results.append(f"❌ {Path(image_file).name}")
+                    results.append(f" {Path(image_file).name}")
                     failed_count += 1
 
             success_count = len(images_to_process) - failed_count
 
             return (
-                f"✅ **Batch Processing Completed**\n\n"
-                f"📊 **Results:** {success_count}/{len(images_to_process)} successful\n"
-                f"⚙️ **Operation:** {batch_operation['operation']}\n"
-                f"📁 **Processed files:**\n"
+                f" **Batch Processing Completed**\n\n"
+                f" **Results:** {success_count}/{len(images_to_process)} successful\n"
+                f" **Operation:** {batch_operation['operation']}\n"
+                f" **Processed files:**\n"
                 + "\n".join(results[:10])
                 + (f"\n... and {len(results) - 10} more" if len(results) > 10 else "")
-                + f"\n\n🎉 Batch processing complete!"
+                + f"\n\n Batch processing complete!"
             )
 
         except Exception as e:
-            return f"❌ **Error during batch processing:** {str(e)}"
+            return f" **Error during batch processing:** {str(e)}"
 
     def get_agent_status(self) -> Dict[str, Any]:
         """Get current agent status and configuration"""
@@ -4133,14 +4141,14 @@ async def _handle_watermark_application(
             if recent_file:
                 input_image = recent_file
             else:
-                return "❌ **No image specified.** Please provide an image file to watermark."
+                return " **No image specified.** Please provide an image file to watermark."
         else:
             input_image = image_files[0]
 
         # Get watermark image from parameters
         watermark_image = watermark_params.get("watermark_file")
         if not watermark_image:
-            return "❌ **No watermark image specified.** Please provide a watermark image file."
+            return " **No watermark image specified.** Please provide a watermark image file."
 
         # Apply image watermark
         result = await self._apply_image_watermark(
@@ -4154,21 +4162,21 @@ async def _handle_watermark_application(
 
         if result["success"]:
             return (
-                f"✅ **Watermark Applied Successfully!**\n\n"
-                f"📁 **Source:** {input_image}\n"
-                f"🖼️ **Watermark:** {watermark_image}\n"
-                f"📍 **Position:** {watermark_params.get('position', 'bottom-right')}\n"
-                f"🎨 **Opacity:** {watermark_params.get('opacity', 1.0)*100:.0f}%\n"
-                f"📏 **Scale:** {watermark_params.get('scale', 1.0)*100:.0f}%\n"
-                f"💾 **Output:** {result['output_file']}\n"
-                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
-                f"Your watermarked image is ready! 🎉"
+                f" **Watermark Applied Successfully!**\n\n"
+                f" **Source:** {input_image}\n"
+                f" **Watermark:** {watermark_image}\n"
+                f" **Position:** {watermark_params.get('position', 'bottom-right')}\n"
+                f" **Opacity:** {watermark_params.get('opacity', 1.0)*100:.0f}%\n"
+                f" **Scale:** {watermark_params.get('scale', 1.0)*100:.0f}%\n"
+                f" **Output:** {result['output_file']}\n"
+                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your watermarked image is ready! "
             )
         else:
-            return f"❌ **Watermark application failed:** {result.get('error', 'Unknown error')}"
+            return f" **Watermark application failed:** {result.get('error', 'Unknown error')}"
 
     except Exception as e:
-        return f"❌ **Error during watermark application:** {str(e)}"
+        return f" **Error during watermark application:** {str(e)}"
 
 
 async def _handle_text_watermark_application(
@@ -4199,7 +4207,7 @@ async def _handle_text_watermark_application(
             if recent_file:
                 input_image = recent_file
             else:
-                return "❌ **No image specified.** Please provide an image file to watermark."
+                return " **No image specified.** Please provide an image file to watermark."
         else:
             input_image = image_files[0]
 
@@ -4217,23 +4225,23 @@ async def _handle_text_watermark_application(
 
         if result["success"]:
             return (
-                f"✅ **Text Watermark Applied Successfully!**\n\n"
-                f"📁 **Source:** {input_image}\n"
-                f"📝 **Text:** {watermark_text}\n"
-                f"📍 **Position:** {watermark_params.get('position', 'bottom-right')}\n"
-                f"🎨 **Color:** {watermark_params.get('font_color', 'white')}\n"
-                f"📏 **Size:** {watermark_params.get('font_size', 24)}px\n"
-                f"💾 **Output:** {result['output_file']}\n"
-                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
-                f"Your text watermarked image is ready! 🎉"
+                f" **Text Watermark Applied Successfully!**\n\n"
+                f" **Source:** {input_image}\n"
+                f" **Text:** {watermark_text}\n"
+                f" **Position:** {watermark_params.get('position', 'bottom-right')}\n"
+                f" **Color:** {watermark_params.get('font_color', 'white')}\n"
+                f" **Size:** {watermark_params.get('font_size', 24)}px\n"
+                f" **Output:** {result['output_file']}\n"
+                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your text watermarked image is ready! "
             )
         else:
             return (
-                f"❌ **Text watermark application failed:** {result.get('error', 'Unknown error')}"
+                f" **Text watermark application failed:** {result.get('error', 'Unknown error')}"
             )
 
     except Exception as e:
-        return f"❌ **Error during text watermark application:** {str(e)}"
+        return f" **Error during text watermark application:** {str(e)}"
 
 
 async def _handle_background_removal(
@@ -4251,7 +4259,7 @@ async def _handle_background_removal(
             if recent_file:
                 input_image = recent_file
             else:
-                return "❌ **No image specified.** Please provide an image file for background removal."
+                return " **No image specified.** Please provide an image file for background removal."
         else:
             input_image = image_files[0]
 
@@ -4265,20 +4273,20 @@ async def _handle_background_removal(
 
         if result["success"]:
             return (
-                f"✅ **Background Removed Successfully!**\n\n"
-                f"📁 **Source:** {input_image}\n"
-                f"🎨 **Background Color:** {transparency_params.get('background_color', 'white')}\n"
-                f"🎯 **Similarity:** {transparency_params.get('similarity', 0.3)*100:.0f}%\n"
-                f"🌀 **Blend:** {transparency_params.get('blend', 0.1)*100:.0f}%\n"
-                f"💾 **Output:** {result['output_file']}\n"
-                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
-                f"Your transparent image is ready! 🎉"
+                f" **Background Removed Successfully!**\n\n"
+                f" **Source:** {input_image}\n"
+                f" **Background Color:** {transparency_params.get('background_color', 'white')}\n"
+                f" **Similarity:** {transparency_params.get('similarity', 0.3)*100:.0f}%\n"
+                f" **Blend:** {transparency_params.get('blend', 0.1)*100:.0f}%\n"
+                f" **Output:** {result['output_file']}\n"
+                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your transparent image is ready! "
             )
         else:
-            return f"❌ **Background removal failed:** {result.get('error', 'Unknown error')}"
+            return f" **Background removal failed:** {result.get('error', 'Unknown error')}"
 
     except Exception as e:
-        return f"❌ **Error during background removal:** {str(e)}"
+        return f" **Error during background removal:** {str(e)}"
 
 
 async def _handle_transparent_canvas_creation(
@@ -4308,20 +4316,20 @@ async def _handle_transparent_canvas_creation(
 
         if result["success"]:
             return (
-                f"✅ **Transparent Canvas Created Successfully!**\n\n"
-                f"📏 **Dimensions:** {width}x{height}\n"
-                f"🎨 **Type:** Transparent RGBA\n"
-                f"💾 **Output:** {result['output_file']}\n"
-                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
-                f"Your transparent canvas is ready! 🎉"
+                f" **Transparent Canvas Created Successfully!**\n\n"
+                f" **Dimensions:** {width}x{height}\n"
+                f" **Type:** Transparent RGBA\n"
+                f" **Output:** {result['output_file']}\n"
+                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your transparent canvas is ready! "
             )
         else:
             return (
-                f"❌ **Transparent canvas creation failed:** {result.get('error', 'Unknown error')}"
+                f" **Transparent canvas creation failed:** {result.get('error', 'Unknown error')}"
             )
 
     except Exception as e:
-        return f"❌ **Error during transparent canvas creation:** {str(e)}"
+        return f" **Error during transparent canvas creation:** {str(e)}"
 
 
 async def _handle_alpha_mask_application(
@@ -4350,7 +4358,7 @@ async def _handle_alpha_mask_application(
             if recent_file:
                 input_image = recent_file
             else:
-                return "❌ **No image specified.** Please provide an image file for alpha mask application."
+                return " **No image specified.** Please provide an image file for alpha mask application."
         else:
             input_image = image_files[0]
 
@@ -4362,15 +4370,15 @@ async def _handle_alpha_mask_application(
 
         if result["success"]:
             return (
-                f"✅ **Alpha Mask Applied Successfully!**\n\n"
-                f"📁 **Source:** {input_image}\n"
-                f"🎭 **Mask:** {mask_image}\n"
-                f"💾 **Output:** {result['output_file']}\n"
-                f"⏱️ **Time:** {result.get('execution_time', 'N/A')}\n\n"
-                f"Your masked image is ready! 🎉"
+                f" **Alpha Mask Applied Successfully!**\n\n"
+                f" **Source:** {input_image}\n"
+                f" **Mask:** {mask_image}\n"
+                f" **Output:** {result['output_file']}\n"
+                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"Your masked image is ready! "
             )
         else:
-            return f"❌ **Alpha mask application failed:** {result.get('error', 'Unknown error')}"
+            return f" **Alpha mask application failed:** {result.get('error', 'Unknown error')}"
 
     except Exception as e:
-        return f"❌ **Error during alpha mask application:** {str(e)}"
+        return f" **Error during alpha mask application:** {str(e)}"

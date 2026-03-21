@@ -7,10 +7,12 @@ exported to PDF or PPTX. Designed to work with the Executive Communication Desig
 """
 
 import asyncio
+import html
 import json
 import tempfile
 import os
 import shutil
+import urllib.parse
 from typing import Dict, Any, List, Optional, Union, Tuple
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -25,13 +27,13 @@ class PresentationTheme:
     """Modern presentation theme configuration"""
 
     # Color scheme
-    primary_color: str = "#2563eb"  # Modern Blue
-    secondary_color: str = "#10b981"  # Emerald Green
-    accent_color: str = "#f59e0b"  # Amber
-    text_primary: str = "#1f2937"  # Dark Gray
-    text_secondary: str = "#6b7280"  # Medium Gray
-    background: str = "#ffffff"  # White
-    surface: str = "#f9fafb"  # Light Gray
+    primary_color: str = "#2563eb" # Modern Blue
+    secondary_color: str = "#10b981" # Emerald Green
+    accent_color: str = "#f59e0b" # Amber
+    text_primary: str = "#1f2937" # Dark Gray
+    text_secondary: str = "#6b7280" # Medium Gray
+    background: str = "#ffffff" # White
+    surface: str = "#f9fafb" # Light Gray
 
     # Typography
     font_family: str = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
@@ -49,7 +51,7 @@ class PresentationTheme:
     # Branding
     logo_url: Optional[str] = None
     company_name: str = ""
-    brand_accent: str = "#8b5cf6"  # Purple
+    brand_accent: str = "#8b5cf6" # Purple
 
     # Animation
     transition_duration: str = "0.3s"
@@ -60,15 +62,15 @@ class PresentationTheme:
 class SlideCard:
     """Configuration for a single slide card"""
 
-    slide_type: str  # hero, insight, chart, bullets, conclusion, full_image
+    slide_type: str # hero, insight, chart, bullets, conclusion, full_image
     title: str
     subtitle: Optional[str] = None
     content: List[str] = None
     chart_config: Optional[Dict[str, Any]] = None
     image_url: Optional[str] = None
     background_gradient: Optional[str] = None
-    layout: str = "standard"  # standard, centered, split, full
-    animation: str = "fade"  # fade, slide, zoom
+    layout: str = "standard" # standard, centered, split, full
+    animation: str = "fade" # fade, slide, zoom
 
     def __post_init__(self):
         if self.content is None:
@@ -186,7 +188,7 @@ class ModernPresentationGenerator:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title}</title>
+    <title>{html.escape(title or "")}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
@@ -200,7 +202,7 @@ class ModernPresentationGenerator:
         <!-- Navigation -->
         <nav class="presentation-nav">
             <div class="nav-content">
-                <h1 class="presentation-title">{title}</h1>
+                <h1 class="presentation-title">{html.escape(title or "")}</h1>
                 <div class="nav-controls">
                     <button class="nav-btn" onclick="previousSlide()">←</button>
                     <span class="slide-counter">
@@ -234,7 +236,7 @@ class ModernPresentationGenerator:
     def _generate_slide_html(self, slide: SlideCard, theme: PresentationTheme, index: int) -> str:
         """Generate HTML for a single slide card"""
 
-        slide_class = f"slide slide-{slide.slide_type}"
+        slide_class = f"slide slide-{html.escape(slide.slide_type or '', quote=True)}"
         if index == 0:
             slide_class += " active"
 
@@ -251,25 +253,36 @@ class ModernPresentationGenerator:
         else:
             return self._generate_standard_slide(slide, theme, slide_class)
 
+    def _safe_url(self, url: str) -> str:
+        """Sanitize URL for use in HTML attributes."""
+        if not url:
+            return ""
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ('http', 'https', 'data', ''):
+            return ""
+        return html.escape(url, quote=True)
+
     def _generate_hero_slide(
         self, slide: SlideCard, theme: PresentationTheme, slide_class: str
     ) -> str:
         """Generate hero slide HTML"""
         background_style = ""
         if slide.background_gradient:
-            background_style = f"background: {slide.background_gradient};"
+            background_style = f"background: {html.escape(slide.background_gradient or '', quote=True)};"
 
         logo_html = ""
         if theme.logo_url:
-            logo_html = f'<img src="{theme.logo_url}" alt="Logo" class="hero-logo">'
+            safe_logo_url = self._safe_url(theme.logo_url)
+            if safe_logo_url:
+                logo_html = f'<img src="{safe_logo_url}" alt="Logo" class="hero-logo">'
 
         return f"""
         <section class="{slide_class}" style="{background_style}">
             <div class="slide-content hero-content" data-aos="fade-up">
                 {logo_html}
-                <h1 class="hero-title">{slide.title}</h1>
-                {f'<p class="hero-subtitle">{slide.subtitle}</p>' if slide.subtitle else ''}
-                {f'<p class="hero-company">{theme.company_name}</p>' if theme.company_name else ''}
+                <h1 class="hero-title">{html.escape(slide.title or "")}</h1>
+                {f'<p class="hero-subtitle">{html.escape(slide.subtitle or "")}</p>' if slide.subtitle else ''}
+                {f'<p class="hero-company">{html.escape(theme.company_name or "")}</p>' if theme.company_name else ''}
             </div>
         </section>
         """
@@ -279,7 +292,7 @@ class ModernPresentationGenerator:
         if not sources:
             return ""
 
-        source_items = [f'<div class="source-item">{source}</div>' for source in sources]
+        source_items = [f'<div class="source-item">{html.escape(source or "")}</div>' for source in sources]
         return f"""
         <div class="source-references">
             <div class="source-references-title">Sources:</div>
@@ -294,7 +307,7 @@ class ModernPresentationGenerator:
         content_html = ""
         if slide.content:
             content_items = [
-                f'<li class="insight-item" data-aos="fade-up" data-aos-delay="{i*100}">{item}</li>'
+                f'<li class="insight-item" data-aos="fade-up" data-aos-delay="{i*100}">{html.escape(item or "")}</li>'
                 for i, item in enumerate(slide.content)
             ]
             content_html = f'<ul class="insight-list">{"".join(content_items)}</ul>'
@@ -308,8 +321,8 @@ class ModernPresentationGenerator:
         <section class="{slide_class}">
             <div class="slide-content insight-content">
                 <div class="insight-card" data-aos="zoom-in">
-                    <h2 class="insight-title">{slide.title}</h2>
-                    {f'<p class="insight-subtitle">{slide.subtitle}</p>' if slide.subtitle else ''}
+                    <h2 class="insight-title">{html.escape(slide.title or "")}</h2>
+                    {f'<p class="insight-subtitle">{html.escape(slide.subtitle or "")}</p>' if slide.subtitle else ''}
                     {content_html}
                     {sources_html}
                 </div>
@@ -332,8 +345,8 @@ class ModernPresentationGenerator:
         <section class="{slide_class}">
             <div class="slide-content chart-content">
                 <div class="chart-card" data-aos="fade-up">
-                    <h2 class="chart-title">{slide.title}</h2>
-                    {f'<p class="chart-subtitle">{slide.subtitle}</p>' if slide.subtitle else ''}
+                    <h2 class="chart-title">{html.escape(slide.title or "")}</h2>
+                    {f'<p class="chart-subtitle">{html.escape(slide.subtitle or "")}</p>' if slide.subtitle else ''}
                     <div class="chart-container">
                         <canvas id="{chart_id}"></canvas>
                     </div>
@@ -366,7 +379,7 @@ class ModernPresentationGenerator:
         content_html = ""
         if slide.content:
             content_items = [
-                f'<li class="bullet-item" data-aos="fade-right" data-aos-delay="{i*150}">{item}</li>'
+                f'<li class="bullet-item" data-aos="fade-right" data-aos-delay="{i*150}">{html.escape(item or "")}</li>'
                 for i, item in enumerate(slide.content)
             ]
             content_html = f'<ul class="bullet-list">{"".join(content_items)}</ul>'
@@ -380,8 +393,8 @@ class ModernPresentationGenerator:
         <section class="{slide_class}">
             <div class="slide-content bullets-content">
                 <div class="bullets-card" data-aos="fade-up">
-                    <h2 class="bullets-title">{slide.title}</h2>
-                    {f'<p class="bullets-subtitle">{slide.subtitle}</p>' if slide.subtitle else ''}
+                    <h2 class="bullets-title">{html.escape(slide.title or "")}</h2>
+                    {f'<p class="bullets-subtitle">{html.escape(slide.subtitle or "")}</p>' if slide.subtitle else ''}
                     {content_html}
                     {sources_html}
                 </div>
@@ -396,7 +409,7 @@ class ModernPresentationGenerator:
         content_html = ""
         if slide.content:
             content_items = [
-                f'<div class="conclusion-item" data-aos="zoom-in" data-aos-delay="{i*100}">{item}</div>'
+                f'<div class="conclusion-item" data-aos="zoom-in" data-aos-delay="{i*100}">{html.escape(item or "")}</div>'
                 for i, item in enumerate(slide.content)
             ]
             content_html = f'<div class="conclusion-items">{"".join(content_items)}</div>'
@@ -410,8 +423,8 @@ class ModernPresentationGenerator:
         <section class="{slide_class}">
             <div class="slide-content conclusion-content">
                 <div class="conclusion-card" data-aos="fade-up">
-                    <h2 class="conclusion-title">{slide.title}</h2>
-                    {f'<p class="conclusion-subtitle">{slide.subtitle}</p>' if slide.subtitle else ''}
+                    <h2 class="conclusion-title">{html.escape(slide.title or "")}</h2>
+                    {f'<p class="conclusion-subtitle">{html.escape(slide.subtitle or "")}</p>' if slide.subtitle else ''}
                     {content_html}
                     {sources_html}
                 </div>
@@ -426,7 +439,7 @@ class ModernPresentationGenerator:
         content_html = ""
         if slide.content:
             content_items = [
-                f'<p class="content-item" data-aos="fade-up" data-aos-delay="{i*100}">{item}</p>'
+                f'<p class="content-item" data-aos="fade-up" data-aos-delay="{i*100}">{html.escape(item or "")}</p>'
                 for i, item in enumerate(slide.content)
             ]
             content_html = f'<div class="content-items">{"".join(content_items)}</div>'
@@ -440,8 +453,8 @@ class ModernPresentationGenerator:
         <section class="{slide_class}">
             <div class="slide-content standard-content">
                 <div class="content-card" data-aos="fade-up">
-                    <h2 class="content-title">{slide.title}</h2>
-                    {f'<p class="content-subtitle">{slide.subtitle}</p>' if slide.subtitle else ''}
+                    <h2 class="content-title">{html.escape(slide.title or "")}</h2>
+                    {f'<p class="content-subtitle">{html.escape(slide.subtitle or "")}</p>' if slide.subtitle else ''}
                     {content_html}
                     {sources_html}
                 </div>
@@ -995,9 +1008,9 @@ class ModernPresentationGenerator:
 
         # Create research theme
         theme = PresentationTheme(
-            primary_color="#1F4E79",  # Research Blue
-            secondary_color="#70AD47",  # Growth Green
-            accent_color="#E74C3C",  # Alert Red
+            primary_color="#1F4E79", # Research Blue
+            secondary_color="#70AD47", # Growth Green
+            accent_color="#E74C3C", # Alert Red
             company_name="Research Consulting",
             font_family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         )
@@ -1065,22 +1078,22 @@ class ModernPresentationGenerator:
         ):
             return "conclusion"
         elif any(word in title for word in ["executive summary", "key strategic insights"]):
-            return "insight"  # Executive summary should be narrative, not chart
+            return "insight" # Executive summary should be narrative, not chart
         elif any(word in title for word in ["risks", "unknowns", "recommendations", "next steps"]):
-            return "insight"  # Risk and recommendations should be narrative
+            return "insight" # Risk and recommendations should be narrative
         elif has_chart and any(
             word in title for word in ["market", "growth", "opportunities", "implications"]
         ):
-            return "chart"  # Only market/data slides get charts
+            return "chart" # Only market/data slides get charts
         elif len(bullet_points) > 4:
-            return "insight"  # Long bullet lists are narrative-focused
+            return "insight" # Long bullet lists are narrative-focused
         elif any(
             word in title
             for word in ["strategic narrative", "competitive landscape", "innovation trends"]
         ):
-            return "insight"  # Strategic content is narrative
+            return "insight" # Strategic content is narrative
         else:
-            return "insight"  # Default to insight/narrative instead of chart
+            return "insight" # Default to insight/narrative instead of chart
 
     def _convert_visualization_to_chart_config(self, viz_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Convert ExecutiveCommunicationDesigner visualization to Chart.js config"""
@@ -1093,7 +1106,7 @@ class ModernPresentationGenerator:
             "bar chart": "bar",
             "waterfall": "bar",
             "scatter plot": "scatter",
-            "heat map": "bar",  # Fallback
+            "heat map": "bar", # Fallback
             "line chart": "line",
         }
 
@@ -1114,11 +1127,11 @@ class ModernPresentationGenerator:
                         "label": "Strategic Metrics",
                         "data": sample_values[: len(data_points)],
                         "backgroundColor": [
-                            "rgba(31, 78, 121, 0.8)",  # Research Blue
-                            "rgba(112, 173, 71, 0.8)",  # Growth Green
-                            "rgba(231, 76, 60, 0.8)",  # Alert Red
-                            "rgba(149, 165, 166, 0.8)",  # Gray
-                            "rgba(243, 156, 18, 0.8)",  # Orange
+                            "rgba(31, 78, 121, 0.8)", # Research Blue
+                            "rgba(112, 173, 71, 0.8)", # Growth Green
+                            "rgba(231, 76, 60, 0.8)", # Alert Red
+                            "rgba(149, 165, 166, 0.8)", # Gray
+                            "rgba(243, 156, 18, 0.8)", # Orange
                         ],
                         "borderColor": [
                             "rgba(31, 78, 121, 1)",
@@ -1153,9 +1166,9 @@ def create_slide_cards_from_insights(insights: List[Dict[str, Any]]) -> List[Dic
         slide = {
             "title": insight.get("headline", "Strategic Insight"),
             "bullet_points": [
-                f"📊 Evidence: {insight.get('evidence', 'Supporting data analysis')}",
-                f"💡 Implication: {insight.get('implication', 'Strategic consideration required')}",
-                f"🎯 Action: Implement strategic response within 90 days",
+                f" Evidence: {insight.get('evidence', 'Supporting data analysis')}",
+                f" Implication: {insight.get('implication', 'Strategic consideration required')}",
+                f" Action: Implement strategic response within 90 days",
             ],
             "executive_focus": "Strategic decision support with actionable recommendations",
             "visualization": {
@@ -1197,9 +1210,9 @@ async def example_gamma_style_presentation():
         {
             "title": "Strategic Recommendations",
             "bullet_points": [
-                "🚀 Launch digital acceleration program within 30 days",
-                "🤝 Establish AI technology partnerships by Q2",
-                "📈 Implement success metrics and tracking framework",
+                " Launch digital acceleration program within 30 days",
+                " Establish AI technology partnerships by Q2",
+                " Implement success metrics and tracking framework",
             ],
             "executive_focus": "Immediate action required for competitive positioning",
         }

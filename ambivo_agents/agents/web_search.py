@@ -534,7 +534,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             # Update conversation state
             self.update_conversation_state(user_message)
 
-            # 🔥 FIX: Get conversation context AND conversation history
+            # FIX: Get conversation context AND conversation history
             conversation_context = self._get_conversation_context_summary()
             conversation_history = []
 
@@ -545,15 +545,15 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             except Exception as e:
                 print(f"Could not get conversation history: {e}")
 
-            # 🔥 FIX: Build LLM context with conversation history
+            # FIX: Build LLM context with conversation history
             llm_context = {
-                "conversation_history": conversation_history,  # 🔥 KEY FIX
+                "conversation_history": conversation_history, # KEY FIX
                 "conversation_id": message.conversation_id,
                 "user_id": message.sender_id,
                 "agent_type": "web_search",
             }
 
-            # 🔥 FIX: Use LLM to analyze intent WITH CONTEXT
+            # FIX: Use LLM to analyze intent WITH CONTEXT
             intent_analysis = await self._llm_analyze_intent_with_context(
                 user_message, conversation_context, llm_context
             )
@@ -665,7 +665,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             return await self._handle_academic_search(search_query, requirements)
         elif primary_intent == "refine_search":
             return await self._handle_search_refinement(search_query, user_message)
-        else:  # search_general
+        else: # search_general
             return await self._handle_general_search(search_query, requirements)
 
     async def _handle_help_request_with_context(
@@ -693,17 +693,17 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
 
         base_message = (
             "I'm your Web Search Agent! I can help you with:\n\n"
-            "🔍 **Web Search** - General information search\n"
-            "📰 **News Search** - Latest news and current events  \n"
-            "🎓 **Academic Search** - Research papers and studies\n\n"
-            "💡 **Examples:**\n"
+            " **Web Search** - General information search\n"
+            " **News Search** - Latest news and current events \n"
+            " **Academic Search** - Research papers and studies\n\n"
+            " **Examples:**\n"
             "• 'Search for AI trends in 2025'\n"
             "• 'Find latest news about quantum computing'\n"
             "• 'Look up machine learning research papers'\n"
         )
 
         if recent_search:
-            base_message += f"\n🎯 **Your last search:** {recent_search}\n"
+            base_message += f"\n **Your last search:** {recent_search}\n"
             base_message += "You can say things like 'more about this' or 'find similar topics'"
 
         return base_message
@@ -728,7 +728,8 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                         context_summary.append(f"Previous message: {content[:50]}...")
 
             return "\n".join(context_summary) if context_summary else "No previous context"
-        except:
+        except Exception as e:
+            self.logger.debug(f"Failed to get conversation context summary: {e}")
             return "No previous context"
 
     async def _route_with_llm_analysis(
@@ -755,7 +756,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             return await self._handle_academic_search(search_query, requirements)
         elif primary_intent == "refine_search":
             return await self._handle_search_refinement(search_query, user_message)
-        else:  # search_general
+        else: # search_general
             return await self._handle_general_search(search_query, requirements)
 
     def _resolve_contextual_query(self, user_message: str) -> str:
@@ -784,10 +785,10 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             if result["success"]:
                 return self._format_search_results(result, "General Search")
             else:
-                return f"❌ **Search failed:** {result['error']}"
+                return f" **Search failed:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error during search:** {str(e)}"
+            return f" **Error during search:** {str(e)}"
 
     async def _handle_news_search(self, query: str, requirements: Dict[str, Any]) -> str:
         """Handle news search"""
@@ -801,10 +802,10 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             if result["success"]:
                 return self._format_search_results(result, "News Search")
             else:
-                return f"❌ **News search failed:** {result['error']}"
+                return f" **News search failed:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error during news search:** {str(e)}"
+            return f" **Error during news search:** {str(e)}"
 
     async def _handle_academic_search(self, query: str, requirements: Dict[str, Any]) -> str:
         """Handle academic search"""
@@ -818,10 +819,10 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             if result["success"]:
                 return self._format_search_results(result, "Academic Search")
             else:
-                return f"❌ **Academic search failed:** {result['error']}"
+                return f" **Academic search failed:** {result['error']}"
 
         except Exception as e:
-            return f"❌ **Error during academic search:** {str(e)}"
+            return f" **Error during academic search:** {str(e)}"
 
     async def _handle_search_refinement(self, query: str, user_message: str) -> str:
         """Handle search refinement requests"""
@@ -833,13 +834,13 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
 
             if result["success"]:
                 return (
-                    f"🔍 **Refined Search Results**\n\n"
+                    f" **Refined Search Results**\n\n"
                     f"**Original:** {recent_search}\n"
                     f"**Refined:** {refined_query}\n\n"
                     + self._format_search_results(result, "Refined Search", show_header=False)
                 )
             else:
-                return f"❌ **Refined search failed:** {result['error']}"
+                return f" **Refined search failed:** {result['error']}"
         else:
             return await self._handle_general_search(query, {"max_results": 5})
 
@@ -855,20 +856,20 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         query = result.get("query", "")
 
         if show_header:
-            response = f"🔍 **{search_type} Results for:** {query}\n\n"
+            response = f" **{search_type} Results for:** {query}\n\n"
         else:
             response = ""
 
         if results:
-            response += f"📊 **Found {len(results)} results:**\n\n"
+            response += f" **Found {len(results)} results:**\n\n"
             for i, res in enumerate(results[:3], 1):
                 response += f"**{i}. {res['title']}**\n"
-                response += f"🔗 {res['url']}\n"
-                response += f"📝 {res['snippet'][:150]}...\n\n"
+                response += f" {res['url']}\n"
+                response += f" {res['snippet'][:150]}...\n\n"
 
             provider = result.get("provider", "search engine")
             search_time = result.get("search_time", 0)
-            response += f"⏱️ **Search completed in {search_time:.2f}s using {provider}**"
+            response += f"⏱ **Search completed in {search_time:.2f}s using {provider}**"
         else:
             response += "No results found. Try a different search term."
 
@@ -882,16 +883,16 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         query = result.get("query", "")
 
         if show_header:
-            response = f"🔍 **{search_type} Results for:** {query}\n\n"
+            response = f" **{search_type} Results for:** {query}\n\n"
         else:
             response = ""
 
         if results:
-            response += f"📊 **Found {len(results)} results:**\n\n"
+            response += f" **Found {len(results)} results:**\n\n"
 
             # FIXED: Safe iteration over results
             for i, res in enumerate(results):
-                if i >= 3:  # Limit to 3 results
+                if i >= 3: # Limit to 3 results
                     break
 
                 # FIXED: Safe access to result properties
@@ -905,8 +906,8 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     snippet_preview += "..."
 
                 response += f"**{i + 1}. {title}**\n"
-                response += f"🔗 {url}\n"
-                response += f"📝 {snippet_preview}\n\n"
+                response += f" {url}\n"
+                response += f" {snippet_preview}\n\n"
 
             # FIXED: Safe access to result metadata
             provider = result.get("provider", "search engine")
@@ -916,7 +917,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             if not isinstance(search_time, (int, float)):
                 search_time = 0
 
-            response += f"⏱️ **Search completed in {search_time:.2f}s using {provider}**"
+            response += f"⏱ **Search completed in {search_time:.2f}s using {provider}**"
         else:
             response += "No results found. Try a different search term."
 
@@ -939,10 +940,10 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 return self._format_search_results(result, "General Search")
             else:
                 error_msg = result.get("error", "Unknown error")
-                return f"❌ **Search failed:** {error_msg}"
+                return f" **Search failed:** {error_msg}"
 
         except Exception as e:
-            return f"❌ **Error during search:** {str(e)}"
+            return f" **Error during search:** {str(e)}"
 
     def _get_search_help_message(self) -> str:
         """Get contextual help message"""
@@ -950,17 +951,17 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
 
         base_message = (
             "I'm your Web Search Agent! I can help you with:\n\n"
-            "🔍 **Web Search** - General information search\n"
-            "📰 **News Search** - Latest news and current events  \n"
-            "🎓 **Academic Search** - Research papers and studies\n\n"
-            "💡 **Examples:**\n"
+            " **Web Search** - General information search\n"
+            " **News Search** - Latest news and current events \n"
+            " **Academic Search** - Research papers and studies\n\n"
+            " **Examples:**\n"
             "• 'Search for AI trends in 2025'\n"
             "• 'Find latest news about quantum computing'\n"
             "• 'Look up machine learning research papers'\n"
         )
 
         if recent_search:
-            base_message += f"\n🎯 **Your last search:** {recent_search}\n"
+            base_message += f"\n **Your last search:** {recent_search}\n"
             base_message += "You can say things like 'more about this' or 'find similar topics'"
 
         return base_message
@@ -1185,7 +1186,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 metadata={"agent": "web_search", "phase": "initialization"},
             )
 
-            # 🔥 FIX: Get conversation context for streaming
+            # FIX: Get conversation context for streaming
             conversation_context = self._get_conversation_context_summary()
             conversation_history = await self.get_conversation_history(
                 limit=5, include_metadata=True
@@ -1197,9 +1198,9 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 metadata={"agent": "web_search", "phase": "analysis"},
             )
 
-            # 🔥 FIX: Build LLM context for streaming
+            # FIX: Build LLM context for streaming
             llm_context = {
-                "conversation_history": conversation_history,  # 🔥 KEY FIX
+                "conversation_history": conversation_history, # KEY FIX
                 "conversation_id": message.conversation_id,
                 "streaming": True,
             }
@@ -1338,8 +1339,8 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                             sub_type=StreamSubType.CONTENT,
                             metadata={"type": "suggestions"},
                         )
-                    except:
-                        pass
+                    except Exception as e:
+                        self.logger.debug(f"Failed to generate follow-up suggestions: {e}")
 
                 yield StreamChunk(
                     text=f"**Search completed using {provider_name}**\n",
@@ -1348,14 +1349,14 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 )
             else:
                 yield StreamChunk(
-                    text=f"❌ **Search failed:** {result.get('error', 'Unknown error')}\n",
+                    text=f" **Search failed:** {result.get('error', 'Unknown error')}\n",
                     sub_type=StreamSubType.ERROR,
                     metadata={"error": result.get("error")},
                 )
 
         except Exception as e:
             yield StreamChunk(
-                text=f"❌ **Error during search:** {str(e)}",
+                text=f" **Error during search:** {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"error": str(e)},
             )
@@ -1367,7 +1368,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         try:
             if not query:
                 yield StreamChunk(
-                    text="⚠️ Please provide a search query.\n", sub_type=StreamSubType.ERROR
+                    text=" Please provide a search query.\n", sub_type=StreamSubType.ERROR
                 )
                 return
 
@@ -1412,7 +1413,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                         metadata={"result_index": i, "title": res.get("title")},
                     )
                     yield StreamChunk(
-                        text=f"🔗 {res.get('url', 'No URL')}\n",
+                        text=f" {res.get('url', 'No URL')}\n",
                         sub_type=StreamSubType.RESULT,
                         metadata={"url": res.get("url")},
                     )
@@ -1421,7 +1422,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     if len(snippet) > 150:
                         snippet = snippet[:150] + "..."
                     yield StreamChunk(
-                        text=f"📝 {snippet}\n\n",
+                        text=f" {snippet}\n\n",
                         sub_type=StreamSubType.RESULT,
                         metadata={"snippet": snippet},
                     )
@@ -1437,14 +1438,14 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 )
             else:
                 yield StreamChunk(
-                    text=f"❌ **Search failed:** {result.get('error', 'Unknown error')}\n",
+                    text=f" **Search failed:** {result.get('error', 'Unknown error')}\n",
                     sub_type=StreamSubType.ERROR,
                     metadata={"error": result.get("error")},
                 )
 
         except Exception as e:
             yield StreamChunk(
-                text=f"❌ **Error during search:** {str(e)}",
+                text=f" **Error during search:** {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"error": str(e)},
             )
@@ -1456,13 +1457,13 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         try:
             if not query:
                 yield StreamChunk(
-                    text="⚠️ Please provide a news topic to search for.\n",
+                    text=" Please provide a news topic to search for.\n",
                     sub_type=StreamSubType.ERROR,
                 )
                 return
 
             yield StreamChunk(
-                text=f"📰 **Searching news for:** {query}\n\n",
+                text=f" **Searching news for:** {query}\n\n",
                 sub_type=StreamSubType.STATUS,
                 metadata={"query": query, "search_type": "news"},
             )
@@ -1477,7 +1478,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             if result["success"]:
                 results = result.get("results", [])
                 yield StreamChunk(
-                    text=f"📊 **Found {len(results)} news articles**\n\n",
+                    text=f" **Found {len(results)} news articles**\n\n",
                     sub_type=StreamSubType.RESULT,
                     metadata={"result_count": len(results), "search_type": "news"},
                 )
@@ -1485,17 +1486,17 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 # Stream news results
                 for i, res in enumerate(results, 1):
                     yield StreamChunk(
-                        text=f"📰 **{i}. {res.get('title', 'No title')}**\n",
+                        text=f" **{i}. {res.get('title', 'No title')}**\n",
                         sub_type=StreamSubType.RESULT,
                         metadata={"result_index": i, "title": res.get("title")},
                     )
                     yield StreamChunk(
-                        text=f"🔗 {res.get('url', 'No URL')}\n",
+                        text=f" {res.get('url', 'No URL')}\n",
                         sub_type=StreamSubType.RESULT,
                         metadata={"url": res.get("url")},
                     )
                     yield StreamChunk(
-                        text=f"📝 {res.get('snippet', 'No description')[:150]}...\n\n",
+                        text=f" {res.get('snippet', 'No description')[:150]}...\n\n",
                         sub_type=StreamSubType.RESULT,
                         metadata={"snippet": res.get("snippet", "")[:150]},
                     )
@@ -1510,14 +1511,14 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 )
             else:
                 yield StreamChunk(
-                    text=f"❌ **News search failed:** {result.get('error', 'Unknown error')}\n",
+                    text=f" **News search failed:** {result.get('error', 'Unknown error')}\n",
                     sub_type=StreamSubType.ERROR,
                     metadata={"error": result.get("error")},
                 )
 
         except Exception as e:
             yield StreamChunk(
-                text=f"❌ **Error during news search:** {str(e)}",
+                text=f" **Error during news search:** {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"error": str(e)},
             )
@@ -1529,13 +1530,13 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         try:
             if not query:
                 yield StreamChunk(
-                    text="⚠️ Please provide an academic topic to search for.\n",
+                    text=" Please provide an academic topic to search for.\n",
                     sub_type=StreamSubType.ERROR,
                 )
                 return
 
             yield StreamChunk(
-                text=f"🎓 **Searching academic content for:** {query}\n\n",
+                text=f" **Searching academic content for:** {query}\n\n",
                 sub_type=StreamSubType.STATUS,
                 metadata={"query": query, "search_type": "academic"},
             )
@@ -1550,7 +1551,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             if result["success"]:
                 results = result.get("results", [])
                 yield StreamChunk(
-                    text=f"📊 **Found {len(results)} academic sources**\n\n",
+                    text=f" **Found {len(results)} academic sources**\n\n",
                     sub_type=StreamSubType.RESULT,
                     metadata={"result_count": len(results), "search_type": "academic"},
                 )
@@ -1558,17 +1559,17 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 # Stream academic results
                 for i, res in enumerate(results, 1):
                     yield StreamChunk(
-                        text=f"🎓 **{i}. {res.get('title', 'No title')}**\n",
+                        text=f" **{i}. {res.get('title', 'No title')}**\n",
                         sub_type=StreamSubType.RESULT,
                         metadata={"result_index": i, "title": res.get("title")},
                     )
                     yield StreamChunk(
-                        text=f"🔗 {res.get('url', 'No URL')}\n",
+                        text=f" {res.get('url', 'No URL')}\n",
                         sub_type=StreamSubType.RESULT,
                         metadata={"url": res.get("url")},
                     )
                     yield StreamChunk(
-                        text=f"📝 {res.get('snippet', 'No description')[:150]}...\n\n",
+                        text=f" {res.get('snippet', 'No description')[:150]}...\n\n",
                         sub_type=StreamSubType.RESULT,
                         metadata={"snippet": res.get("snippet", "")[:150]},
                     )
@@ -1583,14 +1584,14 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 )
             else:
                 yield StreamChunk(
-                    text=f"❌ **Academic search failed:** {result.get('error', 'Unknown error')}\n",
+                    text=f" **Academic search failed:** {result.get('error', 'Unknown error')}\n",
                     sub_type=StreamSubType.ERROR,
                     metadata={"error": result.get("error")},
                 )
 
         except Exception as e:
             yield StreamChunk(
-                text=f"❌ **Error during academic search:** {str(e)}",
+                text=f" **Error during academic search:** {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"error": str(e)},
             )
@@ -1674,8 +1675,8 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                             sub_type=StreamSubType.CONTENT,
                             metadata={"type": "suggestions"},
                         )
-                    except:
-                        pass
+                    except Exception as e:
+                        self.logger.debug(f"Failed to generate news follow-up suggestions: {e}")
 
                 yield StreamChunk(
                     text="**News search completed**\n",
@@ -1684,14 +1685,14 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 )
             else:
                 yield StreamChunk(
-                    text=f"❌ **News search failed:** {result.get('error', 'Unknown error')}\n",
+                    text=f" **News search failed:** {result.get('error', 'Unknown error')}\n",
                     sub_type=StreamSubType.ERROR,
                     metadata={"error": result.get("error")},
                 )
 
         except Exception as e:
             yield StreamChunk(
-                text=f"❌ **Error during news search:** {str(e)}",
+                text=f" **Error during news search:** {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"error": str(e)},
             )
@@ -1775,8 +1776,8 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                             sub_type=StreamSubType.CONTENT,
                             metadata={"type": "suggestions"},
                         )
-                    except:
-                        pass
+                    except Exception as e:
+                        self.logger.debug(f"Failed to generate academic follow-up suggestions: {e}")
 
                 yield StreamChunk(
                     text="**Academic search completed**\n",
@@ -1785,14 +1786,14 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 )
             else:
                 yield StreamChunk(
-                    text=f"❌ **Academic search failed:** {result.get('error', 'Unknown error')}\n",
+                    text=f" **Academic search failed:** {result.get('error', 'Unknown error')}\n",
                     sub_type=StreamSubType.ERROR,
                     metadata={"error": result.get("error")},
                 )
 
         except Exception as e:
             yield StreamChunk(
-                text=f"❌ **Error during academic search:** {str(e)}",
+                text=f" **Error during academic search:** {str(e)}",
                 sub_type=StreamSubType.ERROR,
                 metadata={"error": str(e)},
             )
