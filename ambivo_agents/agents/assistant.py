@@ -5,6 +5,7 @@ Complete AssistantAgent with System Message, LLM Context, and Memory Preservatio
 
 import json
 import logging
+import re
 import uuid
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict
@@ -138,14 +139,17 @@ class AssistantAgent(BaseAgent, BaseAgentHistoryMixin):
         """Fallback keyword-based analysis"""
         content_lower = user_message.lower()
 
-        # Detect intent
-        if any(
-            word in content_lower
+        # Detect intent — greetings/farewells only for SHORT messages
+        # (long prompts containing "hi" or "hey" as substrings are not greetings)
+        is_short = len(content_lower.split()) <= 8
+        if is_short and any(
+            re.search(r'\b' + re.escape(word) + r'\b', content_lower)
             for word in ["hello", "hi", "hey", "good morning", "good afternoon"]
         ):
             intent = "greeting"
-        elif any(
-            word in content_lower for word in ["bye", "goodbye", "thanks", "thank you", "see you"]
+        elif is_short and any(
+            re.search(r'\b' + re.escape(word) + r'\b', content_lower)
+            for word in ["bye", "goodbye", "thanks", "thank you", "see you"]
         ):
             intent = "farewell"
         elif any(word in content_lower for word in ["what", "how", "why", "when", "where", "who"]):
