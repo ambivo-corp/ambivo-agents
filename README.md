@@ -2686,6 +2686,47 @@ asyncio.run(test())
 "
 ```
 
+## Publishing to PyPI
+
+### Build & Upload
+
+```bash
+# Clean previous builds
+rm -rf dist/ build/
+
+# Build — IMPORTANT: use setuptools < 75 to produce Metadata-Version 2.1.
+# setuptools >= 75 generates Metadata-Version 2.4 which adds a `license-file`
+# field that twine 6.x rejects ("unrecognized or malformed field 'license-file'")
+# and twine 5.x rejects ("Metadata is missing required fields: Name, Version").
+# Pinning setuptools below 75 avoids this entirely.
+pip install 'setuptools>=61.0,<75' wheel
+python -m build --no-isolation
+
+# Verify metadata is 2.1 (not 2.4)
+python -c "from pkginfo import Wheel; w = Wheel('dist/ambivo_agents-*.whl'); print(w.metadata_version)"
+# Expected: 2.1
+
+# Upload to PyPI
+python -m twine upload dist/*
+```
+
+### Tag & Push
+
+```bash
+# Tag the release
+git tag -a v1.x.x -m "v1.x.x - Description"
+git push origin main --tags
+```
+
+### Why `setuptools < 75`?
+
+`setuptools >= 75` produces `Metadata-Version: 2.4` which includes a `license-file` field. This field is not recognized by current versions of `twine` (both 5.x and 6.x), causing upload failures:
+
+- **twine 5.x**: `InvalidDistribution: Metadata is missing required fields: Name, Version` (pkginfo can't parse 2.4)
+- **twine 6.x**: `InvalidDistribution: Invalid distribution metadata: unrecognized or malformed field 'license-file'`
+
+Building with `setuptools < 75` produces `Metadata-Version: 2.1` which is fully compatible. The `--no-isolation` flag ensures the locally installed setuptools is used instead of an auto-downloaded latest version.
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.

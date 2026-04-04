@@ -199,7 +199,6 @@ asyncio.run(scrape_url())
                 network_disabled=False,  # Need network for scraping
                 stdout=True,
                 stderr=True,
-                timeout=self.timeout,
                 environment={
                     'SCRAPE_URL': task.url,
                     'SCRAPE_TIMEOUT': str(task.timeout * 1000),

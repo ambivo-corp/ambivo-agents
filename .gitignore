@@ -75,3 +75,10 @@ Thumbs.db
 /temp/
 *.log
 /instance/CLAUDE.md
+
+# Credentials and local config
+.pypirc
+set_env.sh
+
+# Runtime output
+docker_shared/

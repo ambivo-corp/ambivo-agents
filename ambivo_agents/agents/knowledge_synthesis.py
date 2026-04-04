@@ -77,17 +77,25 @@ Quality Standards:
         # Extract our specific parameters
         self.max_iterations = kwargs.pop('max_iterations', 3)
         self.quality_threshold = kwargs.pop('quality_threshold', QualityLevel.GOOD)
-        self.enable_auto_scraping = kwargs.pop('enable_auto_scraping', True) 
+        self.enable_auto_scraping = kwargs.pop('enable_auto_scraping', True)
         self.max_scrape_urls = kwargs.pop('max_scrape_urls', 3)
         self.source_timeouts = kwargs.pop('source_timeouts', {
             'knowledge_base': 10,
             'web_search': 15,
             'web_scrape': 30
         })
-        
+
         # Available KB collections (will be populated from metadata)
         self.available_collections = []
-        
+
+        # Prevent infinite recursion: ModeratorAgent.__init__ creates all enabled
+        # agents, which would include KnowledgeSynthesisAgent again (since it extends
+        # ModeratorAgent). Filter it out of any explicitly passed enabled_agents list.
+        if 'enabled_agents' in kwargs and kwargs['enabled_agents'] is not None:
+            kwargs['enabled_agents'] = [
+                a for a in kwargs['enabled_agents'] if a != 'knowledge_synthesis'
+            ]
+
         # Initialize parent ModeratorAgent
         super().__init__(**kwargs)
         
@@ -98,6 +106,11 @@ Quality Standards:
         # Load available collections from context metadata if available
         self._load_available_collections()
     
+    def _get_default_enabled_agents(self) -> list:
+        """Override to exclude knowledge_synthesis from sub-agents, preventing infinite recursion."""
+        agents = super()._get_default_enabled_agents()
+        return [a for a in agents if a != 'knowledge_synthesis']
+
     def _load_available_collections(self):
         """Load available KB collections from context metadata"""
         if hasattr(self, 'context') and self.context:
