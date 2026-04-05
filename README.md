@@ -559,7 +559,7 @@ final_answer = await synthesize_responses(sources, query)
 - **Export Integration**: Seamless handoff to AnalyticsAgent for complex analysis
 - **Intentionally Limited**: Simple queries only (no JOINs, window functions, CTEs)
 - **Use Cases**: Data exploration, basic queries, file imports, database connections
-- **Note**: Requires installation with `pip install ambivo-agents[database]`
+- **Note**: Requires manual installation of database drivers (pymongo, mysql-connector-python, or psycopg2-binary)
 
 ### Analytics Agent 
 **Best for: Complex data analysis, advanced SQL, and statistical operations**
@@ -760,8 +760,8 @@ export AMBIVO_AGENTS_API_AGENT_TIMEOUT_SECONDS=46 # Custom timeout in seconds
 # Or in agent_config.yaml
 api_agent:
   timeout_seconds: 46 # Request timeout
-  max_safe_timeout: 8 # Requests above this use Docker for safety
-  force_docker_above_timeout: true # Enable Docker for long-running requests
+  max_safe_timeout: 46 # Requests above this use Docker for safety
+  force_docker_above_timeout: false # Enable Docker for long-running requests
 ```
 
 **Localhost and Domain Access:**
@@ -995,24 +995,27 @@ moderator, context = ModeratorAgent.create(
 
 ### 1. Install Dependencies
 
-**Core Installation (without database support):**
+**Core Installation:**
 ```bash
-pip install -r requirements.txt
+pip install ambivo-agents
 ```
 
-**With Optional Database Support:**
+**With Optional Features:**
 ```bash
-# Install with database capabilities (MongoDB, MySQL, PostgreSQL)
-pip install ambivo-agents[database]
+# Web scraping capabilities
+pip install ambivo-agents[web]
 
-# Or install all optional features including database support
-pip install ambivo-agents[all]
+# Media processing (YouTube downloads)
+pip install ambivo-agents[media]
+
+# All optional features
+pip install ambivo-agents[full]
 ```
 
-The database agents are optional and require additional dependencies:
-- **MongoDB**: `pymongo>=4.0.0`
-- **MySQL**: `mysql-connector-python>=8.0.0`
-- **PostgreSQL**: `psycopg2-binary>=2.9.0`
+**Database agent** requires manual installation of drivers:
+- **MongoDB**: `pip install pymongo>=4.0.0`
+- **MySQL**: `pip install mysql-connector-python>=8.0.0`
+- **PostgreSQL**: `pip install psycopg2-binary>=2.9.0`
 
 ### 2. Setup Docker Images
 ```bash
@@ -1105,10 +1108,12 @@ youtube_download:
 
 analytics:
   docker_image: "sgosain/amb-ubuntu-python-public-pod"
-  timeout: 300
-  memory_limit: "1g"
-  enable_url_ingestion: true
-  max_file_size_mb: 100
+  input_subdir: "analytics"
+  output_subdir: "analytics"
+  temp_subdir: "analytics"
+  handoff_subdir: "analytics"
+  timeout: 120
+  memory_limit: "2g"
 
 docker:
   timeout: 60
@@ -1148,13 +1153,12 @@ export AMBIVO_AGENTS_REDIS_PORT="6379"
 export AMBIVO_AGENTS_REDIS_PASSWORD="your-redis-password"
 
 # Required - At least one LLM provider
-export AMBIVO_AGENTS_OPENAI_API_KEY="sk-your-openai-key"
+export AMBIVO_AGENTS_LLM_OPENAI_API_KEY="sk-your-openai-key"
 
 # Optional - Enable specific agents
-export AMBIVO_AGENTS_ENABLE_YOUTUBE_DOWNLOAD="true"
-export AMBIVO_AGENTS_ENABLE_WEB_SEARCH="true"
-export AMBIVO_AGENTS_ENABLE_ANALYTICS="true"
-export AMBIVO_AGENTS_MODERATOR_ENABLED_AGENTS="youtube_download,web_search,analytics,assistant"
+export AMBIVO_AGENTS_AGENT_CAPABILITIES_ENABLE_YOUTUBE_DOWNLOAD="true"
+export AMBIVO_AGENTS_AGENT_CAPABILITIES_ENABLE_WEB_SEARCH="true"
+export AMBIVO_AGENTS_AGENT_CAPABILITIES_ENABLE_ANALYTICS="true"
 
 # Run your application
 python your_app.py
@@ -1185,9 +1189,9 @@ services:
     environment:
       - AMBIVO_AGENTS_REDIS_HOST=redis
       - AMBIVO_AGENTS_REDIS_PORT=6379
-      - AMBIVO_AGENTS_OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AMBIVO_AGENTS_ENABLE_YOUTUBE_DOWNLOAD=true
-      - AMBIVO_AGENTS_ENABLE_ANALYTICS=true
+      - AMBIVO_AGENTS_LLM_OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AMBIVO_AGENTS_AGENT_CAPABILITIES_ENABLE_YOUTUBE_DOWNLOAD=true
+      - AMBIVO_AGENTS_AGENT_CAPABILITIES_ENABLE_ANALYTICS=true
     volumes:
       - ./downloads:/app/downloads
       - /var/run/docker.sock:/var/run/docker.sock
@@ -1601,7 +1605,7 @@ async def read_file_and_insert_to_database():
     except ImportError:
         # DatabaseAgent not available - provide polite warning and alternatives
         print("\n Database insertion not available")
-        print(" To enable database features, install with: pip install ambivo-agents[database]")
+        print(" To enable database features, install the required driver: pip install pymongo")
         print("\n Available alternatives:")
         print(" • File successfully read and parsed")
         print(" • Data can be transformed to other formats")
@@ -1636,7 +1640,7 @@ async def natural_language_file_ingestion():
         print(" DatabaseAgent not installed. Reading file only...")
         response = await agent.chat("read and analyze the users.json file structure")
         print(f" File analysis: {response}")
-        print(" Install database support with: pip install ambivo-agents[database]")
+        print(" Install database support with: pip install pymongo mysql-connector-python psycopg2-binary")
         
         await agent.cleanup_session()
 ```
@@ -2230,13 +2234,12 @@ analytics_result = await analytics_agent.chat("analyze sales data",
 **Configuration in `agent_config.yaml`:**
 ```yaml
 docker:
-  container_mounts:
-    handoff: "/docker_shared/handoff"
-  
+  shared_base_dir: "./docker_shared"
+
   agent_subdirs:
     database: ["handoff/database"]
-    analytics: ["input/analytics", "output/analytics", "handoff/analytics"]
-    media: ["input/media", "output/media", "handoff/media"]
+    analytics: ["input/analytics", "output/analytics", "temp/analytics", "handoff/analytics"]
+    media: ["input/media", "output/media", "temp/media", "handoff/media"]
 ```
 
 **Enhanced Fallback (CSV→XLSX Conversion):**
@@ -2339,18 +2342,14 @@ The consolidated structure is configured in `agent_config.yaml`:
 
 ```yaml
 docker:
-  shared_base_dir: "./docker_shared" # Host base directory
-  container_mounts:
-    input: "/docker_shared/input" # Read-only input
-    output: "/docker_shared/output" # Read-write output
-    temp: "/docker_shared/temp" # Read-write temp
-    handoff: "/docker_shared/handoff" # Read-write handoffs
-    work: "/docker_shared/work" # Read-write workspace
+  shared_base_dir: "./docker_shared"  # Host base directory
+  work_dir: "/opt/ambivo/work_dir"    # Container working directory
   agent_subdirs:
     analytics: ["input/analytics", "output/analytics", "temp/analytics", "handoff/analytics"]
     media: ["input/media", "output/media", "temp/media", "handoff/media"]
     code: ["input/code", "output/code", "temp/code", "handoff/code"]
-    # ... other agents
+    database: ["handoff/database"]
+    scraper: ["output/scraper", "temp/scraper", "handoff/scraper"]
 ```
 
 #### Third-Party Developer Project Structure
