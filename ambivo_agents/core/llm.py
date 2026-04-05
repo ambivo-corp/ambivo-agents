@@ -18,7 +18,6 @@ from .base import ProviderConfig, ProviderTracker
 try:
     import boto3
     import openai
-    from langchain.chains.llm_math.base import LLMMathChain
     from langchain_anthropic import ChatAnthropic
     from langchain_aws import BedrockEmbeddings, BedrockLLM
     from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -30,6 +29,12 @@ try:
 except ImportError as e:
     LANGCHAIN_AVAILABLE = False
     logging.warning(f"LangChain dependencies not available: {e}")
+
+# Optional: LLMMathChain (moved/removed in newer langchain versions)
+try:
+    from langchain.chains.llm_math.base import LLMMathChain
+except ImportError:
+    LLMMathChain = None
 
 
 class LLMServiceInterface(ABC):
@@ -163,7 +168,7 @@ class MultiProviderLLMService(LLMServiceInterface):
                 self._setup_bedrock()
 
             # Setup common components using the correct imports
-            if self.current_llm:
+            if self.current_llm and LLMMathChain:
                 self.llm_math = LLMMathChain.from_llm(self.current_llm, verbose=False)
 
                 if self.current_embeddings:
