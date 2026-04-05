@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.4.8"
+version = "1.4.9"
 description = "Multi-Agent AI System for automation"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}
@@ -30,52 +30,52 @@ classifiers = [
 ]
 dependencies = [
     # Core dependencies
-    "redis>=6.2.0",
+    "redis~=6.2",
     "redis[asyncio]",
-    "docker>=6.0.0",
-    "asyncio-mqtt>=0.11.0",
-    "cachetools",
-    "lz4",
-    "requests>=2.32.4",
-    "click>=8.2.1",
+    "docker~=7.1",
+    "asyncio-mqtt~=0.16",
+    "cachetools~=6.1",
+    "lz4~=4.4",
+    "requests~=2.32",
+    "click~=8.2",
 
     # LangChain and LLM dependencies
-    "openai>=1.84.0",
-    "langchain>=0.3.25",
-    "langchain-community>=0.3.24",
-    "langchain-core>=0.3.63",
-    "langchain-openai>=0.3.19",
-    "langchainhub>=0.1.21",
-    "langchain-text-splitters>=0.3.8",
-    "langchain-anthropic>=0.3.15",
-    "langchain-aws",
-    "langchain-voyageai",
-    "huggingface-hub",
+    "openai~=1.84",
+    "langchain~=0.3.25",
+    "langchain-community~=0.3.24",
+    "langchain-core~=0.3.63",
+    "langchain-openai~=0.3.19",
+    "langchainhub~=0.1.21",
+    "langchain-text-splitters~=0.3.8",
+    "langchain-anthropic~=0.3.15",
+    "langchain-aws~=0.2.24",
+    "langchain-voyageai~=0.1.6",
+    "huggingface-hub~=0.33",
 
     # LlamaIndex dependencies
-    "llama-index-core",
-    "llama-index-embeddings-langchain",
-    "llama-index-llms-langchain",
-    "llama-index-llms-openai",
-    "llama-index-vector-stores-qdrant",
-    "llama-index-readers-smart-pdf-loader",
+    "llama-index-core~=0.12",
+    "llama-index-embeddings-langchain~=0.3",
+    "llama-index-llms-langchain~=0.6",
+    "llama-index-llms-openai~=0.4",
+    "llama-index-vector-stores-qdrant~=0.6",
+    "llama-index-readers-smart-pdf-loader~=0.3",
 
     # API and web framework dependencies
-    "pydantic>=2.11.7",
+    "pydantic~=2.11",
 
     # Cloud provider SDKs
-    "boto3>=1.38.42",
+    "boto3~=1.38",
 
     # Utility dependencies
-    "python-dotenv>=1.1.1",
-    "pyyaml>=6.0.2",
-    "psutil>=7.0.0",
-    "qdrant-client",
-    "numexpr",
+    "python-dotenv~=1.1",
+    "pyyaml~=6.0",
+    "psutil~=7.0",
+    "qdrant-client~=1.16",
+    "numexpr~=2.11",
 
     # Document processing
-    "unstructured",
-    "langchain-unstructured",
+    "unstructured~=0.17",
+    "langchain-unstructured~=0.1.6",
 ]
 
 [project.optional-dependencies]
