@@ -20,9 +20,21 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, Union
 
-import httpx
 import yaml
-from bs4 import BeautifulSoup
+
+try:
+    import httpx
+
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
+
+try:
+    from bs4 import BeautifulSoup
+
+    BS4_AVAILABLE = True
+except ImportError:
+    BS4_AVAILABLE = False
 
 from ..config.loader import get_config_section, load_config
 from ..core.base import (
@@ -235,6 +247,11 @@ class APIAgent(BaseAgent, WebAgentHistoryMixin):
         auto_configure: bool = True,
         **kwargs,
     ):
+        if not HTTPX_AVAILABLE:
+            raise ImportError(
+                "httpx is required for APIAgent. Install with: pip install ambivo-agents[web]"
+            )
+
         # Load configuration
         if auto_configure:
             config = load_config()
@@ -1470,6 +1487,11 @@ except Exception as e:
 
     async def _parse_html_documentation(self, content: str, base_url: str) -> APIDocumentation:
         """Parse HTML documentation page using BeautifulSoup and LLM"""
+        if not BS4_AVAILABLE:
+            raise ImportError(
+                "beautifulsoup4 is required for HTML documentation parsing. "
+                "Install with: pip install ambivo-agents[web]"
+            )
         soup = BeautifulSoup(content, "html.parser")
 
         # Extract basic information
@@ -1485,7 +1507,7 @@ except Exception as e:
         # Use LLM to parse the HTML content
         return await self._parse_with_llm(text_content, base_url, title_text, api_base_url)
 
-    def _extract_base_url_from_html(self, soup: BeautifulSoup, doc_url: str) -> str:
+    def _extract_base_url_from_html(self, soup, doc_url: str) -> str:
         """Extract API base URL from HTML documentation"""
         # Look for common patterns
         patterns = [

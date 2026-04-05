@@ -2239,7 +2239,13 @@ Only return JSON, no other text."""
 
             # Import agents dynamically to avoid circular imports
             if skill_type == "api":
-                from ..agents.api_agent import APIAgent
+                try:
+                    from ..agents.api_agent import APIAgent
+                except ImportError:
+                    self.logger.error(
+                        "APIAgent not available. Install with: pip install ambivo-agents[web]"
+                    )
+                    return None
 
                 skill_config = self._assigned_skills["api_skills"][skill_name]
 

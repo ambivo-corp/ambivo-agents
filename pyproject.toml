@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.4.7"
+version = "1.4.8"
 description = "Multi-Agent AI System for automation"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}
@@ -22,8 +22,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Distributed Computing",
     "Topic :: Communications",
+    "Framework :: AsyncIO",
 ]
 dependencies = [
     # Core dependencies
@@ -70,25 +73,20 @@ dependencies = [
     "qdrant-client",
     "numexpr",
 
-    # Development dependencies
-    "pytest>=8.4.1",
-    "pytest-asyncio>=1.0.0",
-    "black>=25.1.0",
-    "isort>=6.0.1",
-
     # Document processing
     "unstructured",
     "langchain-unstructured",
 ]
 
 [project.optional-dependencies]
-# Web capabilities
+# Web capabilities (APIAgent, WebScraperAgent, GatherAgent)
 web = [
     "beautifulsoup4>=4.13.4",
     "playwright>=1.40.0",
+    "httpx>=0.28.1",
 ]
 
-# Media processing
+# Media processing (YouTubeDownloadAgent)
 media = [
     "pytubefix>=6.0.0",
 ]
@@ -98,7 +96,7 @@ anthropic = [
     "anthropic>=0.55.0",
 ]
 
-# Database capabilities
+# Database capabilities (DatabaseAgent)
 database = [
     "pymongo>=4.0.0",
     "mysql-connector-python>=8.0.0",
@@ -106,13 +104,35 @@ database = [
     "tabulate>=0.9.0",
 ]
 
-# Development tools
+# Document processing (FileProcessor service)
+documents = [
+    "pypdf>=5.6.1",
+    "python-docx>=1.2.0",
+    "python-pptx>=1.0.2",
+    "pillow>=11.2.1",
+    "pytesseract>=0.3.13",
+]
+
+# Data analytics (AnalyticsAgent)
+analytics = [
+    "pandas>=2.3.1",
+]
+
+# Async utilities (core/base.py, GatherAgent, sqlite persistence)
+async = [
+    "aiohttp>=3.8.0",
+    "aiofiles>=22.1.0",
+    "aiosqlite>=0.19.0",
+]
+
+# Testing
 test = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
     "pytest-timeout>=2.1.0",
 ]
 
+# Development tools
 dev = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
@@ -122,26 +142,14 @@ dev = [
     "pre-commit>=3.0.0",
 ]
 
-# Convenience combinations
+# All runtime extras (no dev tools)
 full = [
-    "ambivo-agents[web,media,anthropic,database]"
+    "ambivo-agents[web,media,anthropic,database,documents,analytics,async]",
 ]
 
+# Everything including dev tools
 all = [
-    "pytest>=8.4.1",
-    "pytest-asyncio>=1.0.0",
-    "black>=25.1.0",
-    "isort>=6.0.1",
-    "pytest-timeout>=2.1.0",
-    "beautifulsoup4>=4.13.4",
-    "playwright>=1.40.0",
-    "pytubefix>=6.0.0",
-    "anthropic>=0.55.0",
-    "pymongo>=4.0.0",
-    "mysql-connector-python>=8.0.0",
-    "psycopg2-binary>=2.9.0",
-    "tabulate>=0.9.0",
-    "pre-commit>=3.0.0",
+    "ambivo-agents[full,dev]",
 ]
 
 [project.scripts]

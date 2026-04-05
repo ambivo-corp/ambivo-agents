@@ -4,15 +4,29 @@ Ambivo Agents Framework
 A minimalistic agent framework for building AI applications.
 """
 
-__version__ = "1.4.7"
+__version__ = "1.4.8"
 
 # Agent imports
-from .agents.analytics import AnalyticsAgent
-from .agents.api_agent import APIAgent
 from .agents.assistant import AssistantAgent
 from .agents.code_executor import CodeExecutorAgent
 
-# Database agent - optional import
+# Optional agent imports - these depend on extras that may not be installed
+try:
+    from .agents.analytics import AnalyticsAgent
+
+    _ANALYTICS_AGENT_AVAILABLE = True
+except ImportError:
+    _ANALYTICS_AGENT_AVAILABLE = False
+    AnalyticsAgent = None
+
+try:
+    from .agents.api_agent import APIAgent
+
+    _API_AGENT_AVAILABLE = True
+except ImportError:
+    _API_AGENT_AVAILABLE = False
+    APIAgent = None
+
 try:
     from .agents.database_agent import DatabaseAgent
 
@@ -21,10 +35,17 @@ except ImportError:
     _DATABASE_AGENT_AVAILABLE = False
     DatabaseAgent = None
 
+try:
+    from .agents.web_scraper import WebScraperAgent
+
+    _WEB_SCRAPER_AVAILABLE = True
+except ImportError:
+    _WEB_SCRAPER_AVAILABLE = False
+    WebScraperAgent = None
+
 from .agents.knowledge_base import KnowledgeBaseAgent
 from .agents.media_editor import MediaEditorAgent
 from .agents.moderator import ModeratorAgent
-from .agents.web_scraper import WebScraperAgent
 from .agents.web_search import WebSearchAgent
 from .agents.youtube_download import YouTubeDownloadAgent
 
@@ -78,13 +99,10 @@ __all__ = [
     "AgentService",
     "create_agent_service",
     # Agents
-    "AnalyticsAgent",
-    "APIAgent",
     "AssistantAgent",
     "CodeExecutorAgent",
     "KnowledgeBaseAgent",
     "WebSearchAgent",
-    "WebScraperAgent",
     "MediaEditorAgent",
     "YouTubeDownloadAgent",
     "ModeratorAgent",
@@ -93,6 +111,12 @@ __all__ = [
     "ConfigurationError",
 ]
 
-# Add DatabaseAgent to __all__ if available
+# Add optional agents to __all__ if available
+if _ANALYTICS_AGENT_AVAILABLE:
+    __all__.append("AnalyticsAgent")
+if _API_AGENT_AVAILABLE:
+    __all__.append("APIAgent")
 if _DATABASE_AGENT_AVAILABLE:
     __all__.append("DatabaseAgent")
+if _WEB_SCRAPER_AVAILABLE:
+    __all__.append("WebScraperAgent")

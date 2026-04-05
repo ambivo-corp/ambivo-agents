@@ -559,7 +559,7 @@ final_answer = await synthesize_responses(sources, query)
 - **Export Integration**: Seamless handoff to AnalyticsAgent for complex analysis
 - **Intentionally Limited**: Simple queries only (no JOINs, window functions, CTEs)
 - **Use Cases**: Data exploration, basic queries, file imports, database connections
-- **Note**: Requires manual installation of database drivers (pymongo, mysql-connector-python, or psycopg2-binary)
+- **Note**: Requires database extra: `pip install ambivo-agents[database]`
 
 ### Analytics Agent 
 **Best for: Complex data analysis, advanced SQL, and statistical operations**
@@ -1002,20 +1002,33 @@ pip install ambivo-agents
 
 **With Optional Features:**
 ```bash
-# Web scraping capabilities
+# Web capabilities (APIAgent, WebScraperAgent)
 pip install ambivo-agents[web]
 
-# Media processing (YouTube downloads)
+# Media processing (YouTubeDownloadAgent)
 pip install ambivo-agents[media]
 
-# All optional features
-pip install ambivo-agents[full]
-```
+# Database support (DatabaseAgent - MongoDB, MySQL, PostgreSQL)
+pip install ambivo-agents[database]
 
-**Database agent** requires manual installation of drivers:
-- **MongoDB**: `pip install pymongo>=4.0.0`
-- **MySQL**: `pip install mysql-connector-python>=8.0.0`
-- **PostgreSQL**: `pip install psycopg2-binary>=2.9.0`
+# Document processing (PDF, DOCX, PPTX, images)
+pip install ambivo-agents[documents]
+
+# Data analytics (AnalyticsAgent - pandas)
+pip install ambivo-agents[analytics]
+
+# Async utilities (aiohttp, aiofiles, aiosqlite)
+pip install ambivo-agents[async]
+
+# Direct Anthropic SDK
+pip install ambivo-agents[anthropic]
+
+# All runtime extras
+pip install ambivo-agents[full]
+
+# Everything including dev tools
+pip install ambivo-agents[all]
+```
 
 ### 2. Setup Docker Images
 ```bash
@@ -1605,7 +1618,7 @@ async def read_file_and_insert_to_database():
     except ImportError:
         # DatabaseAgent not available - provide polite warning and alternatives
         print("\n Database insertion not available")
-        print(" To enable database features, install the required driver: pip install pymongo")
+        print(" To enable database features: pip install ambivo-agents[database]")
         print("\n Available alternatives:")
         print(" • File successfully read and parsed")
         print(" • Data can be transformed to other formats")
@@ -1640,7 +1653,7 @@ async def natural_language_file_ingestion():
         print(" DatabaseAgent not installed. Reading file only...")
         response = await agent.chat("read and analyze the users.json file structure")
         print(f" File analysis: {response}")
-        print(" Install database support with: pip install pymongo mysql-connector-python psycopg2-binary")
+        print(" Install database support with: pip install ambivo-agents[database]")
         
         await agent.cleanup_session()
 ```
