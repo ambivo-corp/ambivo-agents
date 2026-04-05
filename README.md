@@ -2680,8 +2680,11 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 git clone https://github.com/ambivo-corp/ambivo-agents.git
 cd ambivo-agents
 
-# Install in development mode
+# Install in development mode (base only)
 pip install -e .
+
+# Install with all extras (recommended for local development)
+pip uninstall ambivo-agents -y && pip install -e ".[all]"
 
 # Test ModeratorAgent
 python -c "
