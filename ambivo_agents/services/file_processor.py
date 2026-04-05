@@ -65,6 +65,9 @@ try:
     LLAMA_INDEX_AVAILABLE = True
 except ImportError:
     LLAMA_INDEX_AVAILABLE = False
+    SimpleDirectoryReader = None
+    Document = None
+    LIDoc = None
 
 
 class FileProcessorService:
@@ -150,7 +153,7 @@ class FileProcessorService:
         extension = self.get_file_extension(file_path)
         return extension in self.supported_extensions
 
-    def process_file(self, file_path: str, custom_meta: Optional[Dict] = None) -> List[LIDoc]:
+    def process_file(self, file_path: str, custom_meta: Optional[Dict] = None) -> list:
         """
         Main method to process a file and return llama-index documents
 
@@ -161,6 +164,11 @@ class FileProcessorService:
         Returns:
             List of llama-index Document objects
         """
+        if not LLAMA_INDEX_AVAILABLE:
+            raise ImportError(
+                "llama-index is required for file processing. "
+                "Install with: pip install ambivo-agents[knowledge]"
+            )
         if not os.path.exists(file_path):
             self.logger.error(f"File does not exist: {file_path}")
             return []

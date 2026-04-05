@@ -995,10 +995,12 @@ moderator, context = ModeratorAgent.create(
 
 ### 1. Install Dependencies
 
-**Core Installation:**
+**Core Installation (Python 3.11-3.13):**
 ```bash
 pip install ambivo-agents
 ```
+
+The core package includes OpenAI, Anthropic, Redis, Docker, and essential utilities. All LLM calls use the provider SDKs directly (no LangChain required).
 
 **With Optional Features:**
 ```bash
@@ -1008,10 +1010,13 @@ pip install ambivo-agents[web]
 # Media processing (YouTubeDownloadAgent)
 pip install ambivo-agents[media]
 
+# AWS Bedrock LLM support
+pip install ambivo-agents[aws]
+
 # Database support (DatabaseAgent - MongoDB, MySQL, PostgreSQL)
 pip install ambivo-agents[database]
 
-# Document processing (PDF, DOCX, PPTX, images)
+# Document processing (PDF, DOCX, PPTX, images, unstructured)
 pip install ambivo-agents[documents]
 
 # Data analytics (AnalyticsAgent - pandas)
@@ -1020,14 +1025,40 @@ pip install ambivo-agents[analytics]
 # Async utilities (aiohttp, aiofiles, aiosqlite)
 pip install ambivo-agents[async]
 
-# Direct Anthropic SDK
-pip install ambivo-agents[anthropic]
+# Knowledge base (KnowledgeBaseAgent - LlamaIndex, Qdrant, LangChain)
+# NOTE: Python 3.11-3.12 only - LlamaIndex/LangChain do not support 3.13
+pip install ambivo-agents[knowledge]
 
-# All runtime extras
+# All runtime extras (Python 3.11-3.13)
 pip install ambivo-agents[full]
 
-# Everything including dev tools
+# Everything including dev tools (Python 3.11-3.13)
 pip install ambivo-agents[all]
+
+# Full extras + knowledge base (Python 3.11-3.12 only)
+pip install ambivo-agents[all-ml]
+```
+
+### Python Version Compatibility
+
+| Extra | Python 3.11 | Python 3.12 | Python 3.13 |
+|-------|:-----------:|:-----------:|:-----------:|
+| Core (`pip install ambivo-agents`) | Yes | Yes | Yes |
+| `[web]`, `[media]`, `[aws]`, `[database]` | Yes | Yes | Yes |
+| `[documents]`, `[analytics]`, `[async]` | Yes | Yes | Yes |
+| `[full]`, `[all]` | Yes | Yes | Yes |
+| `[knowledge]` | Yes | Yes | No |
+| `[all-ml]` | Yes | Yes | No |
+
+The `[knowledge]` extra depends on LangChain and LlamaIndex for vector database integration (Qdrant). These libraries do not yet support Python 3.13. All other features work across Python 3.11-3.13.
+
+**Local Development (recommended):**
+```bash
+# Python 3.13
+pip uninstall ambivo-agents -y && pip install -e ".[all]"
+
+# Python 3.11-3.12 (includes knowledge base)
+pip uninstall ambivo-agents -y && pip install -e ".[all-ml]"
 ```
 
 ### 2. Setup Docker Images

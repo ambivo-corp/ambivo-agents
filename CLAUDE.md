@@ -54,13 +54,15 @@ pip install -e .
 # Install with specific extras
 pip install -e ".[web]"        # Web capabilities (APIAgent, WebScraperAgent)
 pip install -e ".[media]"      # Media processing (YouTubeDownloadAgent)
+pip install -e ".[knowledge]"  # Knowledge base (LlamaIndex, Qdrant, LangChain)
+pip install -e ".[aws]"        # AWS Bedrock LLM support (boto3, langchain-aws)
 pip install -e ".[database]"   # Database support (DatabaseAgent)
-pip install -e ".[documents]"  # Document processing (PDF, DOCX, PPTX)
-pip install -e ".[analytics]"  # Data analytics (AnalyticsAgent)
+pip install -e ".[documents]"  # Document processing (PDF, DOCX, PPTX, unstructured)
+pip install -e ".[analytics]"  # Data analytics (AnalyticsAgent - pandas)
 pip install -e ".[async]"      # Async utilities (aiohttp, aiofiles, aiosqlite)
-pip install -e ".[anthropic]"  # Direct Anthropic SDK
-pip install -e ".[full]"       # All runtime extras
-pip install -e ".[all]"        # Everything including dev tools
+pip install -e ".[full]"       # All runtime extras (Python 3.11-3.13)
+pip install -e ".[all]"        # Everything including dev tools (Python 3.11-3.13)
+pip install -e ".[all-ml]"    # Full + knowledge base (Python 3.11-3.12 only)
 pip install -e ".[test]"       # Testing dependencies only
 ```
 

@@ -14,27 +14,221 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from ..config.loader import get_config_section, load_config
 from .base import ProviderConfig, ProviderTracker
 
-# LLM Provider imports
+# LLM Provider imports - direct SDK usage (no langchain)
+try:
+    import openai
+
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+try:
+    import anthropic as anthropic_sdk
+
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
 try:
     import boto3
-    import openai
-    from langchain_anthropic import ChatAnthropic
-    from langchain_aws import BedrockEmbeddings, BedrockLLM
-    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-    from langchain_voyageai import VoyageAIEmbeddings
+
+    BOTO3_AVAILABLE = True
+except ImportError:
+    BOTO3_AVAILABLE = False
+
+# Optional: LlamaIndex for knowledge base (installed via [knowledge] extra)
+try:
     from llama_index.core.node_parser import SentenceSplitter
     from llama_index.embeddings.langchain import LangchainEmbedding
 
-    LANGCHAIN_AVAILABLE = True
-except ImportError as e:
-    LANGCHAIN_AVAILABLE = False
-    logging.warning(f"LangChain dependencies not available: {e}")
-
-# Optional: LLMMathChain (moved/removed in newer langchain versions)
-try:
-    from langchain.chains.llm_math.base import LLMMathChain
+    LLAMA_INDEX_AVAILABLE = True
 except ImportError:
-    LLMMathChain = None
+    LLAMA_INDEX_AVAILABLE = False
+
+# Backward compat flag - True if at least one LLM provider is available
+LANGCHAIN_AVAILABLE = OPENAI_AVAILABLE or ANTHROPIC_AVAILABLE or BOTO3_AVAILABLE
+
+
+class LLMResponse:
+    """Simple response object matching the interface previously provided by langchain"""
+
+    def __init__(self, content: str):
+        self.content = content
+        self.text = content
+
+    def __str__(self):
+        return self.content
+
+
+def _retry_with_backoff(func, max_retries=3, base_delay=1.0):
+    """Retry a function with exponential backoff for rate limit (429) errors"""
+    import time as _time
+
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except Exception as e:
+            status = getattr(e, "status_code", None) or getattr(e, "status", None)
+            is_rate_limit = status == 429 or "rate" in str(e).lower()
+            if is_rate_limit and attempt < max_retries:
+                delay = base_delay * (2 ** attempt)
+                logging.warning(f"Rate limited (attempt {attempt + 1}/{max_retries + 1}), retrying in {delay}s")
+                _time.sleep(delay)
+            else:
+                raise
+
+
+async def _async_retry_with_backoff(coro_func, max_retries=3, base_delay=1.0):
+    """Async retry with exponential backoff for rate limit (429) errors"""
+    for attempt in range(max_retries + 1):
+        try:
+            return await coro_func()
+        except Exception as e:
+            status = getattr(e, "status_code", None) or getattr(e, "status", None)
+            is_rate_limit = status == 429 or "rate" in str(e).lower()
+            if is_rate_limit and attempt < max_retries:
+                delay = base_delay * (2 ** attempt)
+                logging.warning(f"Rate limited (attempt {attempt + 1}/{max_retries + 1}), retrying in {delay}s")
+                await asyncio.sleep(delay)
+            else:
+                raise
+
+
+class DirectOpenAILLM:
+    """Direct OpenAI SDK wrapper with invoke/ainvoke/astream interface"""
+
+    def __init__(self, model: str, temperature: float, api_key: str):
+        self.model = model
+        self.temperature = temperature
+        self.client = openai.OpenAI(api_key=api_key)
+        self.async_client = openai.AsyncOpenAI(api_key=api_key)
+
+    def invoke(self, prompt: str) -> LLMResponse:
+        def _call():
+            return self.client.chat.completions.create(
+                model=self.model,
+                temperature=self.temperature,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+        response = _retry_with_backoff(_call)
+        content = ""
+        if response.choices and response.choices[0].message:
+            content = response.choices[0].message.content or ""
+        return LLMResponse(content)
+
+    async def ainvoke(self, prompt: str) -> LLMResponse:
+        async def _call():
+            return await self.async_client.chat.completions.create(
+                model=self.model,
+                temperature=self.temperature,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+        response = await _async_retry_with_backoff(_call)
+        content = ""
+        if response.choices and response.choices[0].message:
+            content = response.choices[0].message.content or ""
+        return LLMResponse(content)
+
+    async def astream(self, prompt: str):
+        stream = await self.async_client.chat.completions.create(
+            model=self.model,
+            temperature=self.temperature,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True,
+        )
+        async for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                yield LLMResponse(delta.content)
+
+
+class DirectAnthropicLLM:
+    """Direct Anthropic SDK wrapper with invoke/ainvoke/astream interface"""
+
+    def __init__(self, model: str, temperature: float, api_key: str, timeout: int = 120):
+        self.model = model
+        self.temperature = temperature
+        self.client = anthropic_sdk.Anthropic(api_key=api_key)
+        self.async_client = anthropic_sdk.AsyncAnthropic(api_key=api_key)
+        self.timeout = timeout
+
+    def invoke(self, prompt: str) -> LLMResponse:
+        def _call():
+            return self.client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                temperature=self.temperature,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+        response = _retry_with_backoff(_call)
+        content = ""
+        if response.content:
+            first = response.content[0]
+            content = first.text if hasattr(first, "text") else str(first)
+        return LLMResponse(content)
+
+    async def ainvoke(self, prompt: str) -> LLMResponse:
+        async def _call():
+            return await self.async_client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                temperature=self.temperature,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+        response = await _async_retry_with_backoff(_call)
+        content = ""
+        if response.content:
+            first = response.content[0]
+            content = first.text if hasattr(first, "text") else str(first)
+        return LLMResponse(content)
+
+    async def astream(self, prompt: str):
+        async with self.async_client.messages.stream(
+            model=self.model,
+            max_tokens=4096,
+            temperature=self.temperature,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            async for text in stream.text_stream:
+                if text:
+                    yield LLMResponse(text)
+
+
+class DirectBedrockLLM:
+    """Direct AWS Bedrock wrapper with invoke/ainvoke/astream interface"""
+
+    def __init__(self, model: str, client):
+        self.model = model
+        self.bedrock_client = client
+
+    def invoke(self, prompt: str) -> LLMResponse:
+        import json as _json
+
+        body = _json.dumps({"prompt": prompt, "max_tokens": 4096, "temperature": 0.5})
+        response = self.bedrock_client.invoke_model(modelId=self.model, body=body)
+        result = _json.loads(response["body"].read())
+        # Handle different model response formats (Cohere, Anthropic, etc.)
+        generations = result.get("generations", [])
+        text = generations[0].get("text", "") if generations else ""
+        if not text:
+            text = result.get("completion", "") or result.get("output", "")
+        return LLMResponse(text)
+
+    async def ainvoke(self, prompt: str) -> LLMResponse:
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, self.invoke, prompt)
+        except Exception as e:
+            logging.error(f"Bedrock ainvoke failed: {e}", exc_info=True)
+            raise
+
+    async def astream(self, prompt: str):
+        response = await self.ainvoke(prompt)
+        yield response
 
 
 class LLMServiceInterface(ABC):
@@ -100,7 +294,9 @@ class MultiProviderLLMService(LLMServiceInterface):
         self.temperature = config_data.get("temperature", 0.5)
 
         if not LANGCHAIN_AVAILABLE:
-            raise ImportError("LangChain dependencies are required but not available")
+            raise ImportError(
+                "No LLM provider SDKs available. Install openai or anthropic."
+            )
 
         # Initialize providers
         self._initialize_providers()
@@ -167,26 +363,19 @@ class MultiProviderLLMService(LLMServiceInterface):
             elif self.current_provider == "bedrock":
                 self._setup_bedrock()
 
-            # Setup common components using the correct imports
-            if self.current_llm and LLMMathChain:
-                self.llm_math = LLMMathChain.from_llm(self.current_llm, verbose=False)
-
-                if self.current_embeddings:
+            # Setup LlamaIndex components if available (installed via [knowledge] extra)
+            if self.current_llm and LLAMA_INDEX_AVAILABLE and self.current_embeddings:
+                try:
                     self.embed_model = LangchainEmbedding(self.current_embeddings)
-
-                    # Setup LlamaIndex components
                     text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=20)
 
-                    # Configure LlamaIndex Settings
-                    try:
-                        from llama_index.core import Settings
-
-                        Settings.llm = self.current_llm
-                        Settings.embed_model = self.embed_model
-                        Settings.chunk_size = 512
-                        Settings.text_splitter = text_splitter
-                    except ImportError:
-                        logging.warning("LlamaIndex Settings not available")
+                    from llama_index.core import Settings
+                    Settings.llm = self.current_llm
+                    Settings.embed_model = self.embed_model
+                    Settings.chunk_size = 512
+                    Settings.text_splitter = text_splitter
+                except Exception as e:
+                    logging.debug(f"LlamaIndex setup skipped: {e}")
 
         except Exception as e:
             logging.error(f"Failed to initialize {self.current_provider}: {e}", exc_info=True)
@@ -194,36 +383,51 @@ class MultiProviderLLMService(LLMServiceInterface):
             self._try_fallback_provider()
 
     def _setup_anthropic(self):
-        """Setup Anthropic provider"""
+        """Setup Anthropic provider using direct SDK"""
+        if not ANTHROPIC_AVAILABLE:
+            raise ImportError("anthropic package required. Install with: pip install anthropic")
         api_key = self.config_data.get("anthropic_api_key")
         if not api_key:
             raise ValueError("anthropic_api_key not configured")
-        # Pass api_key directly to avoid leaking via os.environ
-        self.current_llm = ChatAnthropic(
-            model_name="claude-3-5-sonnet-20241022",
+
+        self.current_llm = DirectAnthropicLLM(
+            model="claude-3-5-sonnet-20241022",
             temperature=self.temperature,
-            timeout=120,
-            stop=None,
             api_key=api_key,
+            timeout=120,
         )
 
+        # VoyageAI embeddings are optional (installed via [voyageai] extra)
         voyage_key = self.config_data.get("voyage_api_key")
         if voyage_key:
-            # VoyageAI SDK requires env var
-            os.environ["VOYAGE_API_KEY"] = voyage_key
-            self.current_embeddings = VoyageAIEmbeddings(model="voyage-large-2", batch_size=128)
+            try:
+                from langchain_voyageai import VoyageAIEmbeddings
+
+                os.environ["VOYAGE_API_KEY"] = voyage_key
+                self.current_embeddings = VoyageAIEmbeddings(
+                    model="voyage-large-2", batch_size=128
+                )
+            except ImportError:
+                logging.warning("VoyageAI not available - install ambivo-agents[voyageai]")
 
     def _setup_openai(self):
-        """Setup OpenAI provider"""
+        """Setup OpenAI provider using direct SDK"""
+        if not OPENAI_AVAILABLE:
+            raise ImportError("openai package required. Install with: pip install openai")
         api_key = self.config_data.get("openai_api_key")
         if not api_key:
             raise ValueError("openai_api_key not configured")
 
-        self.current_llm = ChatOpenAI(model="gpt-4o", temperature=self.temperature, api_key=api_key)
-        self.current_embeddings = OpenAIEmbeddings(api_key=api_key)
+        self.current_llm = DirectOpenAILLM(
+            model="gpt-4o", temperature=self.temperature, api_key=api_key
+        )
+        # OpenAI embeddings via direct SDK
+        self.current_embeddings = None  # Embeddings handled by LlamaIndex if [knowledge] installed
 
     def _setup_bedrock(self):
-        """Setup Bedrock provider"""
+        """Setup Bedrock provider using direct boto3 SDK"""
+        if not BOTO3_AVAILABLE:
+            raise ImportError("boto3 package required. Install with: pip install boto3")
         aws_access_key = self.config_data.get("aws_access_key_id")
         if not aws_access_key:
             raise ValueError("aws_access_key_id not configured")
@@ -237,21 +441,13 @@ class MultiProviderLLMService(LLMServiceInterface):
             aws_secret_access_key=aws_secret_key,
         )
 
-        self.current_llm = BedrockLLM(model="cohere.command-text-v14", client=boto3_client)
-        self.current_embeddings = BedrockEmbeddings(
-            model_id="amazon.titan-embed-text-v1", client=boto3_client
+        self.current_llm = DirectBedrockLLM(
+            model="cohere.command-text-v14", client=boto3_client
         )
-
-    # ambivo_agents/core/llm.py - FIXED LLM rotation logic
-
-    # Fix for ambivo_agents/core/llm.py
-    # Replace the _try_fallback_provider method with this corrected version:
-
-    # Fix for ambivo_agents/core/llm.py
-    # Replace the _try_fallback_provider method with this corrected version:
+        self.current_embeddings = None  # Embeddings handled by LlamaIndex if [knowledge] installed
 
     def _try_fallback_provider(self):
-        """Try to switch to a fallback provider - FIXED VERSION"""
+        """Try to switch to a fallback provider"""
         # Find available providers (excluding current one)
         fallback_providers = []
         for name, config in self.provider_tracker.providers.items():
@@ -592,90 +788,50 @@ class MultiProviderLLMService(LLMServiceInterface):
     async def _stream_anthropic(self, prompt: str) -> AsyncIterator[str]:
         """Stream from Anthropic Claude"""
         try:
-            # Use Anthropic's streaming API
             async for chunk in self.current_llm.astream(prompt):
-                if hasattr(chunk, "content") and chunk.content:
-                    yield chunk.content
-                elif hasattr(chunk, "text") and chunk.text:
-                    yield chunk.text
-                else:
-                    # For AIMessageChunk objects, extract content properly
-                    content = str(chunk)
-                    if content and content != "None" and not content.startswith("<bound method"):
-                        yield content
+                content = chunk.content if hasattr(chunk, "content") else str(chunk)
+                if content and content != "None":
+                    yield content
         except Exception as e:
-            # Fallback for older Anthropic client versions
+            logging.warning(f"Anthropic streaming failed, falling back to non-streaming: {e}")
             try:
-                async for chunk in self.current_llm.astream(prompt):
-                    if hasattr(chunk, "content") and chunk.content:
-                        yield chunk.content
-            except Exception as e:
-                logging.debug(f"Anthropic streaming fallback triggered: {e}")
-                # Non-streaming fallback
                 response = await self.current_llm.ainvoke(prompt)
                 yield response.content if hasattr(response, "content") else str(response)
+            except Exception as fallback_err:
+                logging.error(f"Anthropic non-streaming fallback also failed: {fallback_err}", exc_info=True)
+                raise RuntimeError(f"Anthropic streaming exhausted: {fallback_err}") from fallback_err
 
     async def _stream_openai(self, prompt: str) -> AsyncIterator[str]:
         """Stream from OpenAI GPT"""
         try:
-            # Use OpenAI's streaming API
             async for chunk in self.current_llm.astream(prompt):
-                # Handle different chunk types properly
-                if hasattr(chunk, "content"):
-                    if isinstance(chunk.content, str) and chunk.content:
-                        yield chunk.content
-                    elif hasattr(chunk.content, "text") and chunk.content.text:
-                        yield chunk.content.text
-                elif hasattr(chunk, "text") and chunk.text:
-                    yield chunk.text
-                else:
-                    # Extract content from AIMessageChunk properly
-                    content_str = str(chunk)
-                    if (
-                        content_str
-                        and content_str != "None"
-                        and not content_str.startswith("<bound method")
-                        and not content_str.startswith("AIMessageChunk")
-                    ):
-                        yield content_str
+                content = chunk.content if hasattr(chunk, "content") else str(chunk)
+                if content and content != "None":
+                    yield content
         except Exception as e:
-            # Fallback for older OpenAI client versions
+            logging.warning(f"OpenAI streaming failed, falling back to non-streaming: {e}")
             try:
                 response = await self.current_llm.ainvoke(prompt)
                 yield response.content if hasattr(response, "content") else str(response)
-            except Exception as e2:
-                yield f"OpenAI streaming error: {str(e2)}"
+            except Exception as fallback_err:
+                logging.error(f"OpenAI non-streaming fallback also failed: {fallback_err}", exc_info=True)
+                raise RuntimeError(f"OpenAI streaming exhausted: {fallback_err}") from fallback_err
 
     async def _stream_bedrock(self, prompt: str) -> AsyncIterator[str]:
         """Stream from AWS Bedrock"""
         try:
-            # Bedrock streaming might not be available in all versions
-            if hasattr(self.current_llm, "astream"):
-                async for chunk in self.current_llm.astream(prompt):
-                    if hasattr(chunk, "content") and chunk.content:
-                        yield chunk.content
-                    elif hasattr(chunk, "text") and chunk.text:
-                        yield chunk.text
-                    else:
-                        content = str(chunk)
-                        if (
-                            content
-                            and content != "None"
-                            and not content.startswith("<bound method")
-                        ):
-                            yield content
-            else:
-                # Non-streaming fallback for Bedrock
+            async for chunk in self.current_llm.astream(prompt):
+                content = chunk.content if hasattr(chunk, "content") else str(chunk)
+                if content and content != "None":
+                    yield content
+        except Exception as e:
+            logging.warning(f"Bedrock streaming failed, falling back to non-streaming: {e}")
+            try:
                 response = await self.current_llm.ainvoke(prompt)
                 yield response.content if hasattr(response, "content") else str(response)
-        except Exception as e:
-            # Bedrock fallback
-            try:
-                response = await self.generate_response(prompt)
-                yield response
-            except Exception as e2:
-                logging.debug(f"Bedrock streaming fallback failed: {e2}")
-                yield f"Bedrock streaming error: {str(e)}"
+            except Exception as fallback_err:
+                logging.error(f"Bedrock non-streaming fallback also failed: {fallback_err}", exc_info=True)
+                raise RuntimeError(f"Bedrock streaming exhausted: {fallback_err}") from fallback_err
 
 
 def create_multi_provider_llm_service(
