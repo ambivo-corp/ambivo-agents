@@ -30,51 +30,52 @@ classifiers = [
 ]
 dependencies = [
     # Core dependencies
-    "redis~=6.2",
+    "redis>=6.2.0,<7",
     "redis[asyncio]",
-    "docker~=7.1",
-    "asyncio-mqtt~=0.16",
-    "cachetools~=6.1",
-    "lz4~=4.4",
-    "requests~=2.32",
-    "click~=8.2",
+    "docker>=7.1,<8",
+    "asyncio-mqtt>=0.16,<1",
+    "cachetools>=6.1,<7",
+    "lz4>=4.4,<5",
+    "requests>=2.32,<3",
+    "click>=8.2,<9",
 
-    # LangChain and LLM dependencies
-    "openai~=1.84",
-    "langchain~=0.3.25",
-    "langchain-community~=0.3.24",
-    "langchain-core~=0.3.63",
-    "langchain-openai~=0.3.19",
-    "langchainhub~=0.1.21",
-    "langchain-text-splitters~=0.3.8",
-    "langchain-anthropic~=0.3.15",
-    "langchain-aws~=0.2.24",
-    "huggingface-hub~=0.33",
+    # LangChain and LLM dependencies - pinned to tested minor versions
+    "openai>=1.84,<2",
+    "langchain>=0.3.25,<0.4",
+    "langchain-community>=0.3.24,<0.4",
+    "langchain-core>=0.3.63,<0.4",
+    "langchain-openai>=0.3.19,<0.4",
+    "langchainhub>=0.1.21,<0.2",
+    "langchain-text-splitters>=0.3.8,<0.4",
+    "langchain-anthropic>=0.3.15,<0.4",
+    "langchain-aws>=0.2.24,<0.3",
+    "huggingface-hub>=0.33,<1",
 
-    # LlamaIndex dependencies
-    "llama-index-core~=0.12",
-    "llama-index-embeddings-langchain~=0.3",
-    "llama-index-llms-langchain~=0.6",
-    "llama-index-llms-openai~=0.4",
-    "llama-index-vector-stores-qdrant~=0.6",
-    "llama-index-readers-smart-pdf-loader~=0.3",
+    # LlamaIndex dependencies - pinned to tested minor versions
+    "llama-index-core>=0.12.43,<0.13",
+    "llama-index-embeddings-langchain>=0.3,<0.4",
+    "llama-index-llms-langchain>=0.6,<0.7",
+    "llama-index-llms-openai>=0.4,<0.5",
+    "llama-index-vector-stores-qdrant>=0.6,<0.7",
+    "llama-index-readers-smart-pdf-loader>=0.3,<0.4",
 
     # API and web framework dependencies
-    "pydantic~=2.11",
+    "pydantic>=2.11,<3",
 
     # Cloud provider SDKs
-    "boto3~=1.38",
+    "boto3>=1.38,<2",
 
     # Utility dependencies
-    "python-dotenv~=1.1",
-    "pyyaml~=6.0",
-    "psutil~=7.0",
-    "qdrant-client~=1.16",
-    "numexpr~=2.11",
+    "python-dotenv>=1.1,<2",
+    "pyyaml>=6.0,<7",
+    "psutil>=7.0,<8",
+    "qdrant-client>=1.16,<2",
+    "numexpr>=2.11,<3",
 
-    # Pin key transitive deps to help pip resolver
-    "SQLAlchemy~=2.0",
-    "langsmith~=0.3",
+    # Key transitive deps pinned to reduce pip resolver backtracking
+    "SQLAlchemy>=2.0.41,<2.1",
+    "langsmith>=0.3,<0.4",
+    "greenlet>=3.0,<4",
 ]
 
 [project.optional-dependencies]
