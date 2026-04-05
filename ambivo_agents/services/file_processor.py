@@ -59,8 +59,12 @@ try:
 except ImportError:
     BS4_AVAILABLE = False
 
-from llama_index.core import SimpleDirectoryReader, Document
-from llama_index.core.readers import Document as LIDoc
+try:
+    from llama_index.core import SimpleDirectoryReader, Document
+    from llama_index.core.readers import Document as LIDoc
+    LLAMA_INDEX_AVAILABLE = True
+except ImportError:
+    LLAMA_INDEX_AVAILABLE = False
 
 
 class FileProcessorService:

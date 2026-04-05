@@ -48,16 +48,7 @@ dependencies = [
     "langchainhub>=0.1.21,<0.2",
     "langchain-text-splitters>=0.3.8,<0.4",
     "langchain-anthropic>=0.3.15,<0.4",
-    "langchain-aws>=0.2.24,<0.3",
     "huggingface-hub>=0.33,<1",
-
-    # LlamaIndex dependencies - pinned to tested minor versions
-    "llama-index-core>=0.12.43,<0.13",
-    "llama-index-embeddings-langchain>=0.3,<0.4",
-    "llama-index-llms-langchain>=0.6,<0.7",
-    "llama-index-llms-openai>=0.4,<0.5",
-    "llama-index-vector-stores-qdrant>=0.6,<0.7",
-    "llama-index-readers-smart-pdf-loader>=0.3,<0.4",
 
     # API and web framework dependencies
     "pydantic>=2.11,<3",
@@ -69,13 +60,10 @@ dependencies = [
     "python-dotenv>=1.1,<2",
     "pyyaml>=6.0,<7",
     "psutil>=7.0,<8",
-    "qdrant-client>=1.16,<2",
     "numexpr>=2.11,<3",
 
-    # Key transitive deps pinned to reduce pip resolver backtracking
+    # Transitive dep of langchain - pinned to reduce pip resolver backtracking
     "SQLAlchemy>=2.0.41,<2.1",
-    "langsmith>=0.3,<0.4",
-    "greenlet>=3.0,<4",
 ]
 
 [project.optional-dependencies]
@@ -96,9 +84,25 @@ anthropic = [
     "anthropic>=0.55.0",
 ]
 
+# AWS Bedrock support
+aws = [
+    "langchain-aws>=0.2.24,<0.3",
+]
+
 # VoyageAI embeddings (not available on Python 3.13+)
 voyageai = [
-    "langchain-voyageai~=0.1.6",
+    "langchain-voyageai>=0.1.6,<0.2",
+]
+
+# Knowledge base (KnowledgeBaseAgent, FileProcessor - LlamaIndex + Qdrant)
+knowledge = [
+    "qdrant-client>=1.16,<2",
+    "llama-index-core>=0.12.43,<0.13",
+    "llama-index-embeddings-langchain>=0.3,<0.4",
+    "llama-index-llms-langchain>=0.6,<0.7",
+    "llama-index-llms-openai>=0.4,<0.5",
+    "llama-index-vector-stores-qdrant>=0.6,<0.7",
+    "llama-index-readers-smart-pdf-loader>=0.3,<0.4",
 ]
 
 # Database capabilities (DatabaseAgent)
@@ -151,7 +155,7 @@ dev = [
 
 # All runtime extras (no dev tools)
 full = [
-    "ambivo-agents[web,media,anthropic,voyageai,database,documents,analytics,async]",
+    "ambivo-agents[web,media,anthropic,aws,voyageai,knowledge,database,documents,analytics,async]",
 ]
 
 # Everything including dev tools
