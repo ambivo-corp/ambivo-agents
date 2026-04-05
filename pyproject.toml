@@ -57,8 +57,6 @@ dependencies = [
     "python-dotenv>=1.1,<2",
     "pyyaml>=6.0,<7",
     "psutil>=7.0,<8",
-    "numexpr>=2.11,<3",
-
     # Transitive deps pinned to prevent pip resolver backtracking on Python 3.13
     # These packages have hundreds of versions and cause resolution-too-deep without bounds
     "SQLAlchemy>=2.0.41,<2.1",
