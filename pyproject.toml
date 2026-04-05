@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.4.12"
+version = "1.4.13"
 description = "Multi-Agent AI System for automation"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}
@@ -74,8 +74,6 @@ dependencies = [
 
     # Pin key transitive deps to help pip resolver
     "SQLAlchemy~=2.0",
-    "numpy~=2.3",
-    "tiktoken~=0.9",
     "langsmith~=0.3",
 ]
 
