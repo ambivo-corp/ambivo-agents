@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.4.10"
+version = "1.4.11"
 description = "Multi-Agent AI System for automation"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}
@@ -72,9 +72,6 @@ dependencies = [
     "qdrant-client~=1.16",
     "numexpr~=2.11",
 
-    # Document processing
-    "unstructured~=0.17",
-    "langchain-unstructured~=0.1.6",
 ]
 
 [project.optional-dependencies]
@@ -108,8 +105,10 @@ database = [
     "tabulate>=0.9.0",
 ]
 
-# Document processing (FileProcessor service)
+# Document processing (FileProcessor service, KnowledgeBaseAgent)
 documents = [
+    "unstructured~=0.17",
+    "langchain-unstructured~=0.1.6",
     "pypdf>=5.6.1",
     "python-docx>=1.2.0",
     "python-pptx>=1.0.2",
