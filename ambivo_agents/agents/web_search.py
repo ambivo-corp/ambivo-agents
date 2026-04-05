@@ -869,7 +869,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
 
             provider = result.get("provider", "search engine")
             search_time = result.get("search_time", 0)
-            response += f"⏱ **Search completed in {search_time:.2f}s using {provider}**"
+            response += f"**Search completed in {search_time:.2f}s using {provider}**"
         else:
             response += "No results found. Try a different search term."
 
@@ -917,7 +917,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             if not isinstance(search_time, (int, float)):
                 search_time = 0
 
-            response += f"⏱ **Search completed in {search_time:.2f}s using {provider}**"
+            response += f"**Search completed in {search_time:.2f}s using {provider}**"
         else:
             response += "No results found. Try a different search term."
 
@@ -1468,7 +1468,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 metadata={"query": query, "search_type": "news"},
             )
             yield StreamChunk(
-                text="⏳ Finding latest news articles...\n", sub_type=StreamSubType.STATUS
+                text="Finding latest news articles...\n", sub_type=StreamSubType.STATUS
             )
 
             max_results = requirements.get("max_results", 5)
@@ -1541,7 +1541,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 metadata={"query": query, "search_type": "academic"},
             )
             yield StreamChunk(
-                text="⏳ Finding research papers and studies...\n", sub_type=StreamSubType.STATUS
+                text="Finding research papers and studies...\n", sub_type=StreamSubType.STATUS
             )
 
             max_results = requirements.get("max_results", 5)

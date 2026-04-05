@@ -198,18 +198,19 @@ class MultiProviderLLMService(LLMServiceInterface):
         api_key = self.config_data.get("anthropic_api_key")
         if not api_key:
             raise ValueError("anthropic_api_key not configured")
-        os.environ["ANTHROPIC_API_KEY"] = api_key
-        if self.config_data.get("voyage_api_key"):
-            os.environ["VOYAGE_API_KEY"] = self.config_data["voyage_api_key"]
-
+        # Pass api_key directly to avoid leaking via os.environ
         self.current_llm = ChatAnthropic(
             model_name="claude-3-5-sonnet-20241022",
             temperature=self.temperature,
-            timeout=None,
+            timeout=120,
             stop=None,
+            api_key=api_key,
         )
 
-        if self.config_data.get("voyage_api_key"):
+        voyage_key = self.config_data.get("voyage_api_key")
+        if voyage_key:
+            # VoyageAI SDK requires env var
+            os.environ["VOYAGE_API_KEY"] = voyage_key
             self.current_embeddings = VoyageAIEmbeddings(model="voyage-large-2", batch_size=128)
 
     def _setup_openai(self):
@@ -217,11 +218,9 @@ class MultiProviderLLMService(LLMServiceInterface):
         api_key = self.config_data.get("openai_api_key")
         if not api_key:
             raise ValueError("openai_api_key not configured")
-        os.environ["OPENAI_API_KEY"] = api_key
-        openai.api_key = api_key
 
-        self.current_llm = ChatOpenAI(model="gpt-4o", temperature=self.temperature)
-        self.current_embeddings = OpenAIEmbeddings()
+        self.current_llm = ChatOpenAI(model="gpt-4o", temperature=self.temperature, api_key=api_key)
+        self.current_embeddings = OpenAIEmbeddings(api_key=api_key)
 
     def _setup_bedrock(self):
         """Setup Bedrock provider"""
@@ -307,34 +306,35 @@ class MultiProviderLLMService(LLMServiceInterface):
 
             except Exception as e:
                 error_str = str(e).lower()
-                logging.warning(f"Streaming error with {self.current_provider}: {e}")
+                logging.warning(f"Streaming error with {self.current_provider}: {e}", exc_info=True)
 
                 # Record error
                 self.provider_tracker.record_error(self.current_provider, str(e))
 
-                # Check if we should retry with different provider
-                should_retry = (
-                    any(
-                        keyword in error_str
-                        for keyword in ["429", "rate limit", "quota", "insufficient_quota"]
-                    )
-                    or any(keyword in error_str for keyword in ["timeout", "connection", "network"])
-                    or retry_count < max_retries - 1
+                # Only retry on transient/rate-limit errors
+                is_retryable = any(
+                    keyword in error_str
+                    for keyword in [
+                        "429", "rate limit", "quota", "insufficient_quota",
+                        "timeout", "connection", "network", "502", "503", "504",
+                    ]
                 )
 
-                if should_retry:
+                if is_retryable and retry_count < max_retries - 1:
+                    # Exponential backoff before retry
+                    backoff = min(2 ** retry_count, 30)
                     logging.info(
-                        f"Attempting fallback from {self.current_provider} (attempt {retry_count + 1}/{max_retries})"
+                        f"Retrying after {backoff}s backoff from {self.current_provider} "
+                        f"(attempt {retry_count + 1}/{max_retries})"
                     )
+                    await asyncio.sleep(backoff)
 
                     if self._try_fallback_provider():
                         retry_count += 1
                         continue
                     else:
-                        # No fallback available, raise the error
                         raise e
                 else:
-                    # Max retries reached
                     raise e
 
         raise RuntimeError(f"All {max_retries} providers exhausted for streaming")
@@ -352,34 +352,35 @@ class MultiProviderLLMService(LLMServiceInterface):
 
             except Exception as e:
                 error_str = str(e).lower()
-                logging.error(f"Error with {self.current_provider}: {e}")
+                logging.error(f"Error with {self.current_provider}: {e}", exc_info=True)
 
                 # Record error
                 self.provider_tracker.record_error(self.current_provider, str(e))
 
-                # Check if we should retry
-                should_retry = (
-                    any(
-                        keyword in error_str
-                        for keyword in ["429", "rate limit", "quota", "insufficient_quota"]
-                    )
-                    or any(keyword in error_str for keyword in ["timeout", "connection", "network"])
-                    or retry_count < max_retries - 1
+                # Only retry on transient/rate-limit errors
+                is_retryable = any(
+                    keyword in error_str
+                    for keyword in [
+                        "429", "rate limit", "quota", "insufficient_quota",
+                        "timeout", "connection", "network", "502", "503", "504",
+                    ]
                 )
 
-                if should_retry:
+                if is_retryable and retry_count < max_retries - 1:
+                    backoff = min(2 ** retry_count, 30)
                     logging.info(
-                        f"Attempting fallback from {self.current_provider} (attempt {retry_count + 1}/{max_retries})"
+                        f"Retrying after {backoff}s backoff from {self.current_provider} "
+                        f"(attempt {retry_count + 1}/{max_retries})"
                     )
+                    import time
+                    time.sleep(backoff)
 
                     if self._try_fallback_provider():
                         retry_count += 1
                         continue
                     else:
-                        # No fallback available
                         raise e
                 else:
-                    # Max retries reached or non-retryable error
                     raise e
 
         raise RuntimeError(f"All {max_retries} providers exhausted")

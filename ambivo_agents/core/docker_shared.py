@@ -80,12 +80,24 @@ class DockerSharedManager:
             logger.error(f"Failed to create Docker shared directories: {e}")
             return False
 
+    @staticmethod
+    def _validate_name(name: str, label: str) -> str:
+        """Validate agent/area names to prevent path traversal."""
+        import re
+        if not re.match(r'^[a-zA-Z0-9_\-]+$', name):
+            raise ValueError(f"Invalid {label} name: {name!r}. Only alphanumeric, underscore, and hyphen allowed.")
+        return name
+
     def get_host_path(self, agent: str, area: str) -> Path:
         """Get host filesystem path for agent and area"""
+        self._validate_name(agent, "agent")
+        self._validate_name(area, "area")
         return self.base_dir / area / agent
 
     def get_container_path(self, agent: str, area: str) -> str:
         """Get container path for agent and area"""
+        self._validate_name(agent, "agent")
+        self._validate_name(area, "area")
         return f"{self.container_base}/{area}/{agent}"
 
     def get_docker_volumes(self) -> Dict[str, Dict[str, str]]:
@@ -99,8 +111,22 @@ class DockerSharedManager:
             str(self.subdirs["shared"]): {"bind": f"{self.container_base}/shared", "mode": "rw"},
         }
 
+    def _validate_source_file(self, source_file: str) -> Path:
+        """Validate source file exists and is within allowed directories."""
+        source_path = Path(source_file).resolve()
+        if not source_path.exists():
+            raise FileNotFoundError(f"Source file not found: {source_file}")
+        if not source_path.is_file():
+            raise ValueError(f"Source path is not a file: {source_file}")
+        # Allow files within base_dir, cwd, or /tmp
+        allowed = [self.base_dir.resolve(), Path.cwd().resolve(), Path("/tmp").resolve()]
+        if not any(source_path.is_relative_to(base) for base in allowed if base.exists()):
+            raise ValueError(f"Source file {source_file} is outside allowed directories")
+        return source_path
+
     def copy_to_input(self, source_file: str, agent: str, filename: Optional[str] = None) -> Path:
         """Copy file to agent's input directory"""
+        self._validate_source_file(source_file)
         if filename is None:
             filename = os.path.basename(source_file)
 
@@ -109,13 +135,14 @@ class DockerSharedManager:
 
         dest_path = input_dir / filename
         shutil.copy2(source_file, dest_path)
-        logger.info(f"Copied {source_file} → {dest_path}")
+        logger.info(f"Copied {os.path.basename(source_file)} to {dest_path}")
         return dest_path
 
     def copy_to_handoff(
         self, source_file: str, from_agent: str, to_agent: str, filename: Optional[str] = None
     ) -> Path:
         """Copy file from one agent to another via handoff directory"""
+        self._validate_source_file(source_file)
         if filename is None:
             filename = os.path.basename(source_file)
 
@@ -125,7 +152,7 @@ class DockerSharedManager:
 
         dest_path = handoff_dir / filename
         shutil.copy2(source_file, dest_path)
-        logger.info(f"Handoff: {source_file} → {dest_path} (from {from_agent} to {to_agent})")
+        logger.info(f"Handoff: {os.path.basename(source_file)} to {dest_path} ({from_agent} -> {to_agent})")
         return dest_path
 
     def get_shared_dir(self) -> Path:
@@ -136,12 +163,13 @@ class DockerSharedManager:
 
     def copy_to_shared(self, source_file: str, filename: Optional[str] = None) -> Path:
         """Copy file to the shared directory accessible by all agents."""
+        self._validate_source_file(source_file)
         if filename is None:
             filename = os.path.basename(source_file)
         shared_dir = self.get_shared_dir()
         dest_path = shared_dir / filename
         shutil.copy2(source_file, dest_path)
-        logger.info(f"Shared: {source_file} -> {dest_path}")
+        logger.info(f"Shared: {os.path.basename(source_file)} -> {dest_path}")
         return dest_path
 
     def list_outputs(self, agent: str) -> List[str]:

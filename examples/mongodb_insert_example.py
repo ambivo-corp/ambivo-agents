@@ -3,7 +3,7 @@ from ambivo_agents import DatabaseAgent
 
 async def test_direct_database_agent():
     """Test file ingestion using DatabaseAgent directly"""
-    print("\n🔍 Testing Direct DatabaseAgent File Ingestion")
+    print("\nTesting Direct DatabaseAgent File Ingestion")
     print("=" * 60)
 
     # Create agent

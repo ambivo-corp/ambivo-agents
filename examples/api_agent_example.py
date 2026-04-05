@@ -21,7 +21,7 @@ from ambivo_agents.agents.api_agent import (
 
 async def example_basic_api_calls():
     """Example 1: Basic API calls without authentication"""
-    print("🔧 Example 1: Basic API Calls")
+    print("Example 1: Basic API Calls")
     print("=" * 50)
     
     # Create API agent
@@ -37,9 +37,9 @@ async def example_basic_api_calls():
         response = await agent.make_api_request(request)
         
         if response.error:
-            print(f"❌ Request failed: {response.error}")
+            print(f"[ERROR] Request failed: {response.error}")
         else:
-            print(f"✅ GET Request successful!")
+            print(f"[OK] GET Request successful!")
             print(f"Status: {response.status_code}")
             print(f"Duration: {response.duration_ms:.0f}ms")
             if response.json_data:
@@ -62,9 +62,9 @@ async def example_basic_api_calls():
         post_response = await agent.make_api_request(post_request)
         
         if post_response.error:
-            print(f"❌ POST failed: {post_response.error}")
+            print(f"[ERROR] POST failed: {post_response.error}")
         else:
-            print(f"✅ POST Request successful!")
+            print(f"[OK] POST Request successful!")
             print(f"Status: {post_response.status_code}")
             if post_response.json_data:
                 print(f"Created: {json.dumps(post_response.json_data, indent=2)}")
@@ -75,7 +75,7 @@ async def example_basic_api_calls():
 
 async def example_api_key_authentication():
     """Example 2: API Key authentication"""
-    print("\n🔐 Example 2: API Key Authentication")
+    print("\nExample 2: API Key Authentication")
     print("=" * 50)
     
     agent = APIAgent.create_simple(user_id="example_user")
@@ -106,7 +106,7 @@ async def example_api_key_authentication():
 
 async def example_bearer_token_authentication():
     """Example 3: Bearer token authentication"""
-    print("\n🎫 Example 3: Bearer Token Authentication")
+    print("\nExample 3: Bearer Token Authentication")
     print("=" * 50)
     
     agent = APIAgent.create_simple(user_id="example_user")
@@ -136,7 +136,7 @@ async def example_bearer_token_authentication():
 
 async def example_google_oauth_prefetch():
     """Example 4: Google OAuth2 with pre-fetch authentication"""
-    print("\n🔄 Example 4: Google OAuth2 Pre-fetch Authentication")
+    print("\nExample 4: Google OAuth2 Pre-fetch Authentication")
     print("=" * 50)
     
     agent = APIAgent.create_simple(user_id="example_user")
@@ -170,7 +170,7 @@ async def example_google_oauth_prefetch():
             auth_config=google_auth
         )
         
-        print("📡 Making request to Google Sheets API...")
+        print("Making request to Google Sheets API...")
         print("   - First, APIAgent will automatically call OAuth2 token endpoint")
         print("   - Then, it will use the fetched access_token for the actual request")
         print("   - Token will be cached for subsequent requests")
@@ -181,7 +181,7 @@ async def example_google_oauth_prefetch():
         if response.error:
             print(f"Expected error (dummy credentials): {response.error}")
         else:
-            print("✅ Successfully authenticated and accessed Google API!")
+            print("[OK] Successfully authenticated and accessed Google API!")
             if response.json_data:
                 print(f"Response: {json.dumps(response.json_data, indent=2)}")
     
@@ -191,7 +191,7 @@ async def example_google_oauth_prefetch():
 
 async def example_complex_workflow():
     """Example 5: Complex multi-step API workflow"""
-    print("\n🔀 Example 5: Complex Multi-Step API Workflow")
+    print("\nExample 5: Complex Multi-Step API Workflow")
     print("=" * 50)
     
     agent = APIAgent.create_simple(user_id="example_user")
@@ -208,11 +208,11 @@ async def example_complex_workflow():
         posts_response = await agent.make_api_request(posts_request)
         
         if posts_response.error:
-            print(f"❌ Failed to fetch posts: {posts_response.error}")
+            print(f"[ERROR] Failed to fetch posts: {posts_response.error}")
             return
         
         posts = posts_response.json_data
-        print(f"✅ Fetched {len(posts)} posts")
+        print(f"[OK] Fetched {len(posts)} posts")
         
         # Step 2: Get details for each post's user
         print("\nStep 2: Fetching user details for each post...")
@@ -226,7 +226,7 @@ async def example_complex_workflow():
             user_response = await agent.make_api_request(user_request)
             
             if user_response.error:
-                print(f"❌ Failed to fetch user {post['userId']}: {user_response.error}")
+                print(f"[ERROR] Failed to fetch user {post['userId']}: {user_response.error}")
             else:
                 user = user_response.json_data
                 print(f"   Post {i+1}: '{post['title'][:30]}...' by {user['name']}")
@@ -248,10 +248,10 @@ async def example_complex_workflow():
         create_response = await agent.make_api_request(new_post_request)
         
         if create_response.error:
-            print(f"❌ Failed to create post: {create_response.error}")
+            print(f"[ERROR] Failed to create post: {create_response.error}")
         else:
             new_post = create_response.json_data
-            print(f"✅ Created new post with ID: {new_post['id']}")
+            print(f"[OK] Created new post with ID: {new_post['id']}")
     
     finally:
         await agent.cleanup_session()
@@ -259,7 +259,7 @@ async def example_complex_workflow():
 
 async def example_conversational_api_usage():
     """Example 6: Using APIAgent through conversational interface"""
-    print("\n💬 Example 6: Conversational API Usage")
+    print("\nExample 6: Conversational API Usage")
     print("=" * 50)
     
     agent = APIAgent.create_simple(user_id="example_user")
@@ -273,10 +273,10 @@ async def example_conversational_api_usage():
         ]
         
         for message in test_messages:
-            print(f"\n📩 User: {message}")
+            print(f"\nUser: {message}")
             
             response = await agent.chat(message)
-            print(f"🤖 APIAgent: {response[:200]}{'...' if len(response) > 200 else ''}")
+            print(f"APIAgent: {response[:200]}{'...' if len(response) > 200 else ''}")
     
     finally:
         await agent.cleanup_session()
@@ -284,7 +284,7 @@ async def example_conversational_api_usage():
 
 async def example_error_handling_and_retries():
     """Example 7: Error handling and retry mechanisms"""
-    print("\n🔁 Example 7: Error Handling and Retries")
+    print("\nExample 7: Error Handling and Retries")
     print("=" * 50)
     
     agent = APIAgent.create_simple(user_id="example_user")
@@ -322,7 +322,7 @@ async def example_error_handling_and_retries():
 
 async def main():
     """Run all API agent examples"""
-    print("🚀 APIAgent Comprehensive Examples")
+    print("APIAgent Comprehensive Examples")
     print("=" * 60)
     print("This demonstrates the APIAgent's full capabilities including:")
     print("- Basic HTTP operations (GET, POST, PUT, DELETE)")
@@ -343,8 +343,8 @@ async def main():
         await example_error_handling_and_retries()
         
         print("\n" + "=" * 60)
-        print("✅ All examples completed successfully!")
-        print("\n💡 Key Takeaways:")
+        print("[OK] All examples completed successfully!")
+        print("\nKey Takeaways:")
         print("- APIAgent supports all major HTTP methods and auth types")
         print("- Pre-fetch authentication automatically handles token refresh")
         print("- Built-in retry logic with exponential backoff")
@@ -353,7 +353,7 @@ async def main():
         print("- Comprehensive error handling and logging")
         
     except Exception as e:
-        print(f"\n❌ Example execution failed: {str(e)}")
+        print(f"\n[ERROR] Example execution failed: {str(e)}")
 
 
 if __name__ == "__main__":

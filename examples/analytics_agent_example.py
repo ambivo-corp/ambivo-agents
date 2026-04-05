@@ -28,7 +28,7 @@ from ambivo_agents import AnalyticsAgent
 
 async def basic_analytics_example():
     """Basic Analytics Agent usage example with real functionality"""
-    print("🔬 Analytics Agent - Basic Example")
+    print("Analytics Agent - Basic Example")
     print("=" * 50)
     
     # Create Analytics Agent
@@ -36,23 +36,23 @@ async def basic_analytics_example():
     
     try:
         # Example 1: Load and analyze CSV data
-        print("\n1️⃣  Loading and analyzing CSV data...")
+        print("\n1⃣  Loading and analyzing CSV data...")
         response = await agent.chat("load data from sample.xlsx and analyze it")
         print(response)
         
         # Example 2: Schema exploration with semantic analysis
-        print("\n2️⃣  Detailed schema exploration...")
+        print("\n2⃣  Detailed schema exploration...")
         response = await agent.chat("show schema")
         print(response)
         
         # Example 3: Natural language analytical queries
-        print("\n3️⃣  Chart...")
+        print("\n3⃣  Chart...")
         response = await agent.chat("show me bar chart?")
         print(response)
         
 
         # Example 6: Summary statistics
-        print("\n6️⃣  Summary statistics...")
+        print("\n6⃣  Summary statistics...")
         response = await agent.chat("summary statistics")
         print(response)
         
@@ -62,8 +62,8 @@ async def basic_analytics_example():
 
 async def excel_file_support_example():
     """Excel file support example with transaction data using .chat() and .chat_stream()"""
-    print("\n📊 Analytics Agent - Excel File Support with Transaction Data")
-    print("💳 Analyzing Financial Transaction Data")
+    print("\nAnalytics Agent - Excel File Support with Transaction Data")
+    print("Analyzing Financial Transaction Data")
     print("=" * 60)
     
     # Create Analytics Agent
@@ -71,42 +71,42 @@ async def excel_file_support_example():
     
     try:
         # 1. Load and analyze transaction data using .chat()
-        print("\n1️⃣  Loading Transaction Data (XLSX) with .chat()...")
+        print("\n1⃣  Loading Transaction Data (XLSX) with .chat()...")
         response = await agent.chat("load data from sample.xlsx and analyze it")
         print(response)
         
         # 2. Schema exploration for transaction data using .chat()
-        print("\n2️⃣  Transaction Schema Analysis with .chat()...")
+        print("\n2⃣  Transaction Schema Analysis with .chat()...")
         response = await agent.chat("show schema")
         print(response)
         
         # 3. Financial analytics using .chat()
-        print("\n3️⃣  Spending Analysis with .chat()...")
+        print("\n3⃣  Spending Analysis with .chat()...")
         response = await agent.chat("what are the top 3 amounts?")
         print(response)
         
         # 4. Category analysis using .chat()
-        print("\n4️⃣  Category Breakdown with .chat()...")
+        print("\n4⃣  Category Breakdown with .chat()...")
         response = await agent.chat("count by category")
         print(response)
         
         # 5. Average transaction amount using .chat()
-        print("\n5️⃣  Average Analysis with .chat()...")
+        print("\n5⃣  Average Analysis with .chat()...")
         response = await agent.chat("average amount")
         print(response)
         
         # 6. Summary statistics using .chat()
-        print("\n6️⃣  Summary Statistics with .chat()...")
+        print("\n6⃣  Summary Statistics with .chat()...")
         response = await agent.chat("summary statistics")
         print(response)
         
         # 7. Chart/Visualization example using .chat()
-        print("\n7️⃣  Chart Generation with .chat()...")
+        print("\n7⃣  Chart Generation with .chat()...")
         response = await agent.chat("create a simple text chart of the spending amounts")
         print(response)
         
         # 8. Create dynamic text-based chart from actual data
-        print("\n8️⃣  Dynamic Text-Based Transaction Chart...")
+        print("\n8⃣  Dynamic Text-Based Transaction Chart...")
         
         # Create chart using the actual transaction data
         def create_transaction_chart():
@@ -122,7 +122,7 @@ async def excel_file_support_example():
             total = sum(amount for _, amount, _ in transactions)
             max_amount = max(amount for _, amount, _ in transactions)
             
-            print("💳 **Transaction Spending Analysis**")
+            print("**Transaction Spending Analysis**")
             print("=" * 70)
             
             # Try to use tabulate if available, otherwise use simple formatting
@@ -157,20 +157,20 @@ async def excel_file_support_example():
                     print(f"{category:<15} | ${amount:<7.2f} | {percentage:>8.1f}% | {bar:<30}")
             
             print("-" * 70)
-            print(f"📊 **Summary**: Total: ${total:.2f} | Average: ${total/len(transactions):.2f}")
-            print(f"🏆 **Highest**: {max(transactions, key=lambda x: x[1])[0]} (${max_amount:.2f})")
-            print(f"💡 **Insight**: Automotive spending is {(max_amount/total)*100:.1f}% of total expenses")
+            print(f"**Summary**: Total: ${total:.2f} | Average: ${total/len(transactions):.2f}")
+            print(f"**Highest**: {max(transactions, key=lambda x: x[1])[0]} (${max_amount:.2f})")
+            print(f"**Insight**: Automotive spending is {(max_amount/total)*100:.1f}% of total expenses")
             
         create_transaction_chart()
         
         # 9. Streaming analysis using .chat_stream()
-        print("\n9️⃣  Streaming Analysis with .chat_stream()...")
+        print("\n9⃣  Streaming Analysis with .chat_stream()...")
         async for chunk in agent.chat_stream("show schema"):
             if chunk.text:
                 print(f"[STREAM] {chunk.text}")
         
         # 10. Test XLS error handling (still useful to show)
-        print("\n🔟  XLS Error Handling Demo...")
+        print("\n XLS Error Handling Demo...")
         response = await agent.chat("load data from nonexistent.xls and analyze it")
         print(f"XLS Error Result: {response}")
                 
@@ -180,14 +180,14 @@ async def excel_file_support_example():
 
 async def streaming_analytics_example():
     """Streaming Analytics Agent example"""
-    print("\n🌊 Analytics Agent - Streaming Example")
+    print("\nAnalytics Agent - Streaming Example")
     print("=" * 50)
     
     # Create Analytics Agent
     agent = AnalyticsAgent.create_simple(user_id="streaming_user")
     
     try:
-        print("\n📊 Streaming comprehensive analysis...")
+        print("\nStreaming comprehensive analysis...")
         
         # Stream response for data loading and analysis
         async for chunk in agent.chat_stream("load data from sample_sales.csv and provide comprehensive analysis with widget recommendations"):
@@ -200,7 +200,7 @@ async def streaming_analytics_example():
 
 async def advanced_analytics_example():
     """Advanced Analytics Agent usage with comprehensive Docker-based analysis"""
-    print("\n🎯 Analytics Agent - Advanced Example")
+    print("\nAnalytics Agent - Advanced Example")
     print("=" * 50)
     
     # Create Analytics Agent
@@ -218,7 +218,7 @@ async def advanced_analytics_example():
         ]
         
         for i, query in enumerate(queries, 1):
-            print(f"\n{i}️⃣  Query: {query}")
+            print(f"\n{i}⃣  Query: {query}")
             response = await agent.chat(query)
             print(f"Response: {response[:300]}..." if len(response) > 300 else f"Response: {response}")
             print("-" * 40)
@@ -250,7 +250,7 @@ def create_sample_data():
     # Write sample data to file
     with open("sample_sales.csv", "w") as f:
         f.write(sample_data)
-    print("📁 Created enhanced sample_sales.csv for testing")
+    print("Created enhanced sample_sales.csv for testing")
 
 
 def create_transaction_xlsx():
@@ -281,12 +281,12 @@ print('Created sample.xlsx with transaction data')
         ], capture_output=True, text=True)
         
         if result.returncode == 0:
-            print("📁 Created sample.xlsx with transaction data using Docker")
+            print("Created sample.xlsx with transaction data using Docker")
         else:
-            print("⚠️  Could not create transaction XLSX file via Docker")
+            print("[WARN] Could not create transaction XLSX file via Docker")
             
     except Exception as e:
-        print(f"⚠️  Transaction XLSX creation failed: {e}")
+        print(f"[WARN] Transaction XLSX creation failed: {e}")
 
 
 def create_sample_xlsx():
@@ -298,25 +298,25 @@ def create_sample_xlsx():
         if os.path.exists("sample_sales.csv"):
             df = pd.read_csv("sample_sales.csv")
             df.to_excel("sample_sales.xlsx", index=False, engine='openpyxl')
-            print("📁 Created sample_sales.xlsx for Excel testing")
+            print("Created sample_sales.xlsx for Excel testing")
         else:
-            print("❌ sample_sales.csv not found, creating it first...")
+            print("[ERROR] sample_sales.csv not found, creating it first...")
             create_sample_data()
             df = pd.read_csv("sample_sales.csv")
             df.to_excel("sample_sales.xlsx", index=False, engine='openpyxl')
-            print("📁 Created sample_sales.xlsx for Excel testing")
+            print("Created sample_sales.xlsx for Excel testing")
             
     except ImportError:
-        print("⚠️  pandas not available locally - XLSX file creation skipped")
+        print("[WARN] pandas not available locally - XLSX file creation skipped")
 
 
 async def main():
     """Run all Analytics Agent examples"""
-    print("🚀 Enhanced Analytics Agent Examples")
-    print("🔬 Demonstrating comprehensive data analysis with Docker-based execution")
-    print("📊 Real analytics functionality with intelligent recommendations")
-    print("💳 Featuring transaction data analysis with Excel support")
-    print("🐳 All operations run in Docker containers for security and dependency isolation")
+    print("Enhanced Analytics Agent Examples")
+    print("Demonstrating comprehensive data analysis with Docker-based execution")
+    print("Real analytics functionality with intelligent recommendations")
+    print("Featuring transaction data analysis with Excel support")
+    print("All operations run in Docker containers for security and dependency isolation")
     print("=" * 80)
     
     # Create sample data files
@@ -329,18 +329,18 @@ async def main():
     await streaming_analytics_example()
     await advanced_analytics_example()
     
-    print("\n✅ All Analytics Agent examples completed!")
-    print("\n💡 Enhanced Features:")
-    print("  • ✅ CSV file support (text-based processing)")
-    print("  • ✅ XLSX file support (binary file processing with Docker volumes)")
-    print("  • ⚠️  XLS file support (helpful error messages for conversion)")
-    print("  • 🔍 Semantic field type detection (price, datetime, identifiers)")
-    print("  • 📊 Real Docker-based analytical queries (top, count, average, summary)")
-    print("  • 🎯 Intelligent widget/visualization recommendations")
-    print("  • 📋 Comprehensive schema analysis with data quality metrics")
-    print("  • 🐳 Secure Docker execution for all data processing")
-    print("  • 🔧 Error handling and user-friendly messages")
-    print("  • 🚀 Streaming responses for real-time analysis feedback")
+    print("\n[OK] All Analytics Agent examples completed!")
+    print("\nEnhanced Features:")
+    print("  • [OK] CSV file support (text-based processing)")
+    print("  • [OK] XLSX file support (binary file processing with Docker volumes)")
+    print("  • [WARN] XLS file support (helpful error messages for conversion)")
+    print("  • Semantic field type detection (price, datetime, identifiers)")
+    print("  • Real Docker-based analytical queries (top, count, average, summary)")
+    print("  • Intelligent widget/visualization recommendations")
+    print("  • Comprehensive schema analysis with data quality metrics")
+    print("  • Secure Docker execution for all data processing")
+    print("  • Error handling and user-friendly messages")
+    print("  • Streaming responses for real-time analysis feedback")
 
 
 if __name__ == "__main__":

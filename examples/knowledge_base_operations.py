@@ -32,7 +32,7 @@ class KnowledgeBaseDemo:
     """Demonstrate real knowledge base operations with text ingestion and querying - CONFIG-DRIVEN"""
 
     def __init__(self):
-        print("🧠 Initializing Knowledge Base Operations Demo...")
+        print("Initializing Knowledge Base Operations Demo...")
 
         # Load and validate configuration FIRST
         self.load_and_validate_config()
@@ -59,7 +59,7 @@ class KnowledgeBaseDemo:
         try:
             from ambivo_agents.config.loader import load_config, get_config_section
 
-            print("📋 Loading configuration from agent_config.yaml...")
+            print("Loading configuration from agent_config.yaml...")
             self.config = load_config()
 
 
@@ -92,10 +92,10 @@ class KnowledgeBaseDemo:
                 raise ValueError(
                     "No LLM API keys found in agent_config.yaml. Please set either openai_api_key or anthropic_api_key")
 
-            print("✅ Configuration validated successfully")
-            print(f"🔧 Qdrant URL: {self.kb_config['qdrant_url']}")
-            print(f"🔧 Redis: {self.redis_config['host']}:{self.redis_config['port']}")
-            print(f"🔧 LLM Provider: {self.llm_config.get('preferred_provider', 'openai')}")
+            print("[OK] Configuration validated successfully")
+            print(f"Qdrant URL: {self.kb_config['qdrant_url']}")
+            print(f"Redis: {self.redis_config['host']}:{self.redis_config['port']}")
+            print(f"LLM Provider: {self.llm_config.get('preferred_provider', 'openai')}")
 
         except FileNotFoundError:
             raise FileNotFoundError(
@@ -111,14 +111,14 @@ class KnowledgeBaseDemo:
         self.docs_dir = Path(docs_dir_config)
         self.docs_dir.mkdir(exist_ok=True)
 
-        print(f"📁 Documents directory (from config): {self.docs_dir.absolute()}")
+        print(f"Documents directory (from config): {self.docs_dir.absolute()}")
 
     async def initialize_direct_kb_agent(self):
         """Initialize Knowledge Base Agent directly using configuration"""
         try:
             from ambivo_agents.agents.knowledge_base import KnowledgeBaseAgent
 
-            print("🔧 Initializing direct Knowledge Base Agent with configuration...")
+            print("Initializing direct Knowledge Base Agent with configuration...")
 
             # Create memory manager for KB agent using config
             kb_memory = create_redis_memory_manager(f"kb_agent_{int(time.time())}", self.redis_config)
@@ -136,20 +136,20 @@ class KnowledgeBaseDemo:
                 llm_service=self.llm_service
             )
 
-            print("✅ Direct Knowledge Base Agent initialized successfully!")
+            print("[OK] Direct Knowledge Base Agent initialized successfully!")
             return True
 
         except Exception as e:
-            print(f"❌ Failed to initialize direct KB agent: {e}")
+            print(f"[ERROR] Failed to initialize direct KB agent: {e}")
             raise RuntimeError(f"KB Agent initialization failed: {e}")
 
     async def check_knowledge_base_availability(self):
         """Check if knowledge base agent is available"""
-        print("\n🔍 Checking Knowledge Base Agent Availability...")
+        print("\nChecking Knowledge Base Agent Availability...")
 
         # Try to initialize direct KB agent
         if await self.initialize_direct_kb_agent():
-            print("✅ Knowledge Base Agent is available (direct mode)")
+            print("[OK] Knowledge Base Agent is available (direct mode)")
             return True
         else:
             raise RuntimeError("Knowledge Base Agent initialization failed")
@@ -157,14 +157,14 @@ class KnowledgeBaseDemo:
     async def test_qdrant_connection(self):
         """Test direct connection to Qdrant Cloud using get_collections()"""
         try:
-            print(f"\n🔗 Testing Qdrant connection to: {self.kb_config['qdrant_url']}")
+            print(f"\nTesting Qdrant connection to: {self.kb_config['qdrant_url']}")
 
             import qdrant_client
 
             qdrant_url = self.kb_config['qdrant_url']
             qdrant_api_key = self.kb_config['qdrant_api_key']
 
-            print(f"📡 Connecting to: {qdrant_url}")
+            print(f"Connecting to: {qdrant_url}")
             client = qdrant_client.QdrantClient(
                 url=qdrant_url,
                 api_key=qdrant_api_key,
@@ -174,8 +174,8 @@ class KnowledgeBaseDemo:
 
             # Test connection by getting collections
             collections = client.get_collections()
-            print("✅ Qdrant is accessible")
-            print(f"📊 Found {len(collections.collections)} existing collections")
+            print("[OK] Qdrant is accessible")
+            print(f"Found {len(collections.collections)} existing collections")
 
             if collections.collections:
                 for collection in collections.collections[:5]:  # Show max 5
@@ -184,13 +184,13 @@ class KnowledgeBaseDemo:
             return True
 
         except ImportError:
-            print("❌ qdrant-client not installed: pip install qdrant-client")
+            print("[ERROR] qdrant-client not installed: pip install qdrant-client")
             raise RuntimeError("qdrant-client package required for Knowledge Base functionality")
         except Exception as e:
-            print(f"❌ Qdrant connection failed: {e}")
-            print(f"💡 URL: {qdrant_url}")
-            print(f"💡 API Key: {'✅ Present' if qdrant_api_key else '❌ Missing'}")
-            print("💡 Troubleshooting:")
+            print(f"[ERROR] Qdrant connection failed: {e}")
+            print(f"URL: {qdrant_url}")
+            print(f"API Key: {'[OK] Present' if qdrant_api_key else '[ERROR] Missing'}")
+            print("Troubleshooting:")
             print("   1. Verify Qdrant Cloud instance is active")
             print("   2. Check API key is correct and has proper permissions")
             print("   3. Ensure URL is correct (should include :6333 port)")
@@ -203,7 +203,7 @@ class KnowledgeBaseDemo:
             raise RuntimeError("No direct KB agent available - initialization failed")
 
         try:
-            print(f"📄 [DIRECT] Ingesting document: {file_path}")
+            print(f"[DIRECT] Ingesting document: {file_path}")
 
             if not Path(file_path).exists():
                 raise FileNotFoundError(f"Document file not found: {file_path}")
@@ -220,14 +220,14 @@ class KnowledgeBaseDemo:
             )
 
             if result.get('success'):
-                print(f"✅ [DIRECT] Document ingested: {result.get('message', 'Success')}")
+                print(f"[OK] [DIRECT] Document ingested: {result.get('message', 'Success')}")
                 return True
             else:
-                print(f"❌ [DIRECT] Ingestion failed: {result.get('error', 'Unknown error')}")
+                print(f"[ERROR] [DIRECT] Ingestion failed: {result.get('error', 'Unknown error')}")
                 return False
 
         except Exception as e:
-            print(f"❌ [DIRECT] Exception during ingestion: {e}")
+            print(f"[ERROR] [DIRECT] Exception during ingestion: {e}")
             raise
 
     async def direct_ingest_text(self, text_content: str, metadata: dict = None):
@@ -236,7 +236,7 @@ class KnowledgeBaseDemo:
             raise RuntimeError("No direct KB agent available - initialization failed")
 
         try:
-            print(f"📝 [DIRECT] Ingesting text content ({len(text_content)} chars)")
+            print(f"[DIRECT] Ingesting text content ({len(text_content)} chars)")
 
             # Use the agent's tool directly with configured kb_name
             result = await self.kb_agent._ingest_text(
@@ -249,14 +249,14 @@ class KnowledgeBaseDemo:
             )
 
             if result.get('success'):
-                print(f"✅ [DIRECT] Text ingested: {result.get('message', 'Success')}")
+                print(f"[OK] [DIRECT] Text ingested: {result.get('message', 'Success')}")
                 return True
             else:
-                print(f"❌ [DIRECT] Text ingestion failed: {result.get('error', 'Unknown error')}")
+                print(f"[ERROR] [DIRECT] Text ingestion failed: {result.get('error', 'Unknown error')}")
                 return False
 
         except Exception as e:
-            print(f"❌ [DIRECT] Exception during text ingestion: {e}")
+            print(f"[ERROR] [DIRECT] Exception during text ingestion: {e}")
             raise
 
     async def direct_query_knowledge_base(self, query: str):
@@ -265,7 +265,7 @@ class KnowledgeBaseDemo:
             raise RuntimeError("No direct KB agent available - initialization failed")
 
         try:
-            print(f"🔍 [DIRECT] Querying: {query}")
+            print(f"[DIRECT] Querying: {query}")
 
             # Use the agent's tool directly with configured kb_name
             result = await self.kb_agent._query_knowledge_base(
@@ -278,27 +278,27 @@ class KnowledgeBaseDemo:
                 answer = result.get('answer', 'No answer provided')
                 sources = result.get('source_details', [])
 
-                print(f"✅ [DIRECT] Query successful!")
-                print(f"📝 Answer: {answer}")
+                print(f"[OK] [DIRECT] Query successful!")
+                print(f"Answer: {answer}")
 
                 if sources:
-                    print(f"📚 Found {len(sources)} source(s)")
+                    print(f"Found {len(sources)} source(s)")
                     for i, source in enumerate(sources[:2], 1):  # Show first 2 sources
                         if isinstance(source, dict):
                             print(f"  Source {i}: {source.get('source', 'Unknown')}")
 
                 return answer
             else:
-                print(f"❌ [DIRECT] Query failed: {result.get('error', 'Unknown error')}")
+                print(f"[ERROR] [DIRECT] Query failed: {result.get('error', 'Unknown error')}")
                 return None
 
         except Exception as e:
-            print(f"❌ [DIRECT] Exception during query: {e}")
+            print(f"[ERROR] [DIRECT] Exception during query: {e}")
             raise
 
     def create_sample_documents(self):
         """Create sample text documents for ingestion in configured directory"""
-        print(f"\n📝 Creating sample documents in: {self.docs_dir}")
+        print(f"\nCreating sample documents in: {self.docs_dir}")
 
         documents = {
             "company_overview.txt": """
@@ -392,14 +392,14 @@ Deployment Recommendations:
             file_path = self.docs_dir / filename
             file_path.write_text(content.strip())
             created_files.append(str(file_path))
-            print(f"📄 Created: {filename}")
+            print(f"Created: {filename}")
 
         return created_files
 
     async def run_comprehensive_demo(self):
         """Run the complete knowledge base demonstration - CONFIG-DRIVEN VERSION"""
         print("\n" + "=" * 80)
-        print("🧠 COMPREHENSIVE KNOWLEDGE BASE OPERATIONS DEMO (CONFIG-DRIVEN)")
+        print("COMPREHENSIVE KNOWLEDGE BASE OPERATIONS DEMO (CONFIG-DRIVEN)")
         print("=" * 80)
 
         try:
@@ -413,7 +413,7 @@ Deployment Recommendations:
                 raise RuntimeError("KB agent initialization failed")
 
             # 3. Show configuration being used
-            print(f"\n📋 Configuration Summary:")
+            print(f"\nConfiguration Summary:")
             print(f"  Qdrant URL: {self.kb_config['qdrant_url']}")
             print(f"  Knowledge Base Name: {self.kb_name}")
             print(f"  Documents Directory: {self.docs_dir}")
@@ -435,7 +435,7 @@ Deployment Recommendations:
                     ingested_count += 1
                 await asyncio.sleep(1)  # Rate limiting
 
-            print(f"📊 Successfully ingested {ingested_count}/{len(document_files)} documents")
+            print(f"Successfully ingested {ingested_count}/{len(document_files)} documents")
 
             # 6. Direct text ingestion
             print("\n--- Direct Text Ingestion ---")
@@ -494,11 +494,11 @@ Deployment Recommendations:
                     answer = await self.direct_query_knowledge_base(query)
                     if answer and len(answer) > 50:  # Valid answer with substance
                         successful_queries += 1
-                        print(f"✅ Query successful")
+                        print(f"[OK] Query successful")
                     else:
-                        print(f"⚠️  Query returned minimal response")
+                        print(f"[WARN] Query returned minimal response")
                 except Exception as e:
-                    print(f"❌ Query failed: {e}")
+                    print(f"[ERROR] Query failed: {e}")
 
                 await asyncio.sleep(1)
 
@@ -506,34 +506,34 @@ Deployment Recommendations:
             print("\n--- Final Verification ---")
             await self.test_qdrant_connection()
 
-            print(f"\n✅ Knowledge Base operations demo completed!")
-            print(f"📊 Documents ingested: {ingested_count}")
-            print(f"📝 Text content ingested: {'✅' if text_success else '❌'}")
-            print(f"🔍 Successful queries: {successful_queries}/{len(queries)}")
+            print(f"\n[OK] Knowledge Base operations demo completed!")
+            print(f"Documents ingested: {ingested_count}")
+            print(f"Text content ingested: {'[OK]' if text_success else '[ERROR]'}")
+            print(f"Successful queries: {successful_queries}/{len(queries)}")
 
             if successful_queries > 0:
-                print("🎉 Knowledge Base is working correctly with your configuration!")
+                print("Knowledge Base is working correctly with your configuration!")
             else:
                 raise RuntimeError("All queries failed - check Qdrant connection and agent configuration")
 
         except Exception as e:
-            print(f"\n❌ Demo failed with error: {e}")
-            print("💡 Check your agent_config.yaml file for proper configuration")
+            print(f"\n[ERROR] Demo failed with error: {e}")
+            print("Check your agent_config.yaml file for proper configuration")
             raise
 
     async def cleanup(self):
         """Clean up demo resources"""
-        print("\n🧹 Cleaning up demo resources...")
+        print("\nCleaning up demo resources...")
 
         # Delete the demo session
         if self.session_id:
             success = self.agent_service.delete_session(self.session_id)
             if success:
-                print(f"✅ Deleted demo session: {self.session_id}")
+                print(f"[OK] Deleted demo session: {self.session_id}")
 
-        print("✅ Cleanup completed")
-        print(f"💡 Note: Knowledge base data remains in Qdrant at {self.kb_config['qdrant_url']}")
-        print("🗑️  To clear Qdrant data, please navigate to your Qdrant account")
+        print("[OK] Cleanup completed")
+        print(f"Note: Knowledge base data remains in Qdrant at {self.kb_config['qdrant_url']}")
+        print(" To clear Qdrant data, please navigate to your Qdrant account")
 
 
 async def main():
@@ -554,7 +554,7 @@ async def main():
         # Override kb_name if provided
         if args.kb_name:
             demo.kb_name = args.kb_name
-            print(f"🔧 Using knowledge base name: {demo.kb_name}")
+            print(f"Using knowledge base name: {demo.kb_name}")
 
         if args.test_connection:
             # Test connection only
@@ -562,16 +562,16 @@ async def main():
 
         elif args.query_only:
             # Perform specific query only
-            print(f"🔍 Performing specific query: {args.query_only}")
+            print(f"Performing specific query: {args.query_only}")
 
             await demo.check_knowledge_base_availability()
             answer = await demo.direct_query_knowledge_base(args.query_only)
             if answer:
-                print(f"\n📝 Full Answer:\n{answer}")
+                print(f"\nFull Answer:\n{answer}")
 
         elif args.ingest_file:
             # Ingest specific file only
-            print(f"📄 Ingesting specific file: {args.ingest_file}")
+            print(f"Ingesting specific file: {args.ingest_file}")
 
             if not Path(args.ingest_file).exists():
                 raise FileNotFoundError(f"File not found: {args.ingest_file}")
@@ -579,7 +579,7 @@ async def main():
             await demo.check_knowledge_base_availability()
             success = await demo.direct_ingest_document(args.ingest_file)
             if success:
-                print(f"✅ File ingested successfully: {args.ingest_file}")
+                print(f"[OK] File ingested successfully: {args.ingest_file}")
 
                 # Test query
                 test_query = f"What information is contained in the document {Path(args.ingest_file).name}?"
@@ -591,13 +591,13 @@ async def main():
         await demo.cleanup()
 
     except KeyboardInterrupt:
-        print("\n\n⚠️  Demo interrupted by user")
+        print("\n\n[WARN] Demo interrupted by user")
     except (FileNotFoundError, ValueError, RuntimeError) as e:
-        print(f"\n\n❌ Configuration/Runtime Error: {e}")
-        print("💡 Please check your agent_config.yaml file")
+        print(f"\n\n[ERROR] Configuration/Runtime Error: {e}")
+        print("Please check your agent_config.yaml file")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Demo failed with error: {e}")
+        print(f"\n\n[ERROR] Demo failed with error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
@@ -613,7 +613,7 @@ if __name__ == "__main__":
             from ambivo_agents.config.loader import load_config, get_config_section
             from ambivo_agents.agents.knowledge_base import KnowledgeBaseAgent
 
-            print("🔧 Initializing direct Knowledge Base Agent...")
+            print("Initializing direct Knowledge Base Agent...")
 
             # Load configuration
             config = load_config()
@@ -633,21 +633,21 @@ if __name__ == "__main__":
                 llm_service=self.llm_service
             )
 
-            print("✅ Direct Knowledge Base Agent initialized successfully!")
+            print("[OK] Direct Knowledge Base Agent initialized successfully!")
             return True
 
         except Exception as e:
-            print(f"❌ Failed to initialize direct KB agent: {e}")
+            print(f"[ERROR] Failed to initialize direct KB agent: {e}")
             return False
 
 
     async def check_knowledge_base_availability(self):
         """Check if knowledge base agent is available"""
-        print("\n🔍 Checking Knowledge Base Agent Availability...")
+        print("\nChecking Knowledge Base Agent Availability...")
 
         # Try to initialize direct KB agent
         if await self.initialize_direct_kb_agent():
-            print("✅ Knowledge Base Agent is available (direct mode)")
+            print("[OK] Knowledge Base Agent is available (direct mode)")
             return True
 
         # Fallback to service health check
@@ -655,10 +655,10 @@ if __name__ == "__main__":
         available_agents = health.get('available_agent_types', {})
 
         if available_agents.get('knowledge_base', False):
-            print("✅ Knowledge Base Agent is available (via service)")
+            print("[OK] Knowledge Base Agent is available (via service)")
             return True
         else:
-            print("❌ Knowledge Base Agent is not available")
+            print("[ERROR] Knowledge Base Agent is not available")
             print("Please ensure knowledge_base is enabled in agent_config.yaml")
             print("Also ensure Qdrant is running and accessible")
             return False
@@ -667,11 +667,11 @@ if __name__ == "__main__":
     async def direct_ingest_document(self, file_path: str):
         """Directly ingest a document using KB agent"""
         if not self.kb_agent:
-            print("❌ No direct KB agent available")
+            print("[ERROR] No direct KB agent available")
             return False
 
         try:
-            print(f"📄 [DIRECT] Ingesting document: {file_path}")
+            print(f"[DIRECT] Ingesting document: {file_path}")
 
             # Use the agent's tool directly
             result = await self.kb_agent._ingest_document(
@@ -684,25 +684,25 @@ if __name__ == "__main__":
             )
 
             if result.get('success'):
-                print(f"✅ [DIRECT] Document ingested: {result.get('message', 'Success')}")
+                print(f"[OK] [DIRECT] Document ingested: {result.get('message', 'Success')}")
                 return True
             else:
-                print(f"❌ [DIRECT] Ingestion failed: {result.get('error', 'Unknown error')}")
+                print(f"[ERROR] [DIRECT] Ingestion failed: {result.get('error', 'Unknown error')}")
                 return False
 
         except Exception as e:
-            print(f"❌ [DIRECT] Exception during ingestion: {e}")
+            print(f"[ERROR] [DIRECT] Exception during ingestion: {e}")
             return False
 
 
     async def direct_ingest_text(self, text_content: str, metadata: dict = None):
         """Directly ingest text using KB agent"""
         if not self.kb_agent:
-            print("❌ No direct KB agent available")
+            print("[ERROR] No direct KB agent available")
             return False
 
         try:
-            print(f"📝 [DIRECT] Ingesting text content ({len(text_content)} chars)")
+            print(f"[DIRECT] Ingesting text content ({len(text_content)} chars)")
 
             # Use the agent's tool directly
             result = await self.kb_agent._ingest_text(
@@ -712,25 +712,25 @@ if __name__ == "__main__":
             )
 
             if result.get('success'):
-                print(f"✅ [DIRECT] Text ingested: {result.get('message', 'Success')}")
+                print(f"[OK] [DIRECT] Text ingested: {result.get('message', 'Success')}")
                 return True
             else:
-                print(f"❌ [DIRECT] Text ingestion failed: {result.get('error', 'Unknown error')}")
+                print(f"[ERROR] [DIRECT] Text ingestion failed: {result.get('error', 'Unknown error')}")
                 return False
 
         except Exception as e:
-            print(f"❌ [DIRECT] Exception during text ingestion: {e}")
+            print(f"[ERROR] [DIRECT] Exception during text ingestion: {e}")
             return False
 
 
     async def direct_query_knowledge_base(self, query: str):
         """Directly query KB using KB agent"""
         if not self.kb_agent:
-            print("❌ No direct KB agent available")
+            print("[ERROR] No direct KB agent available")
             return None
 
         try:
-            print(f"🔍 [DIRECT] Querying: {query}")
+            print(f"[DIRECT] Querying: {query}")
 
             # Use the agent's tool directly
             result = await self.kb_agent._query_knowledge_base(
@@ -743,28 +743,28 @@ if __name__ == "__main__":
                 answer = result.get('answer', 'No answer provided')
                 sources = result.get('source_details', [])
 
-                print(f"✅ [DIRECT] Query successful!")
-                print(f"📝 Answer: {answer}")
+                print(f"[OK] [DIRECT] Query successful!")
+                print(f"Answer: {answer}")
 
                 if sources:
-                    print(f"📚 Found {len(sources)} source(s)")
+                    print(f"Found {len(sources)} source(s)")
                     for i, source in enumerate(sources[:2], 1):  # Show first 2 sources
                         if isinstance(source, dict):
                             print(f"  Source {i}: {source.get('source', 'Unknown')}")
 
                 return answer
             else:
-                print(f"❌ [DIRECT] Query failed: {result.get('error', 'Unknown error')}")
+                print(f"[ERROR] [DIRECT] Query failed: {result.get('error', 'Unknown error')}")
                 return None
 
         except Exception as e:
-            print(f"❌ [DIRECT] Exception during query: {e}")
+            print(f"[ERROR] [DIRECT] Exception during query: {e}")
             return None
 
 
     def create_sample_documents(self):
         """Create sample text documents for ingestion"""
-        print("\n📝 Creating sample documents for knowledge base...")
+        print("\nCreating sample documents for knowledge base...")
 
         documents = {
             "company_overview.txt": """
@@ -858,7 +858,7 @@ Deployment Recommendations:
             file_path = self.docs_dir / filename
             file_path.write_text(content.strip())
             created_files.append(str(file_path))
-            print(f"📄 Created: {filename}")
+            print(f"Created: {filename}")
 
         return created_files
 
@@ -866,7 +866,7 @@ Deployment Recommendations:
     async def test_qdrant_connection(self):
         """Test direct connection to Qdrant using config URL"""
         try:
-            print("\n🔗 Testing Qdrant connection...")
+            print("\nTesting Qdrant connection...")
 
             # Load Qdrant URL from configuration
             from ambivo_agents.config.loader import load_config, get_config_section
@@ -877,7 +877,7 @@ Deployment Recommendations:
             if not qdrant_url:
                 raise ValueError("Qdrant URL not found in knowledge_base section of agent_config.yaml")
 
-            print(f"🔧 Using Qdrant URL from config: {qdrant_url}")
+            print(f"Using Qdrant URL from config: {qdrant_url}")
 
             # Test basic connection
             import requests
@@ -885,7 +885,7 @@ Deployment Recommendations:
             response = requests.get(health_url, timeout=5)
 
             if response.status_code == 200:
-                print("✅ Qdrant is accessible")
+                print("[OK] Qdrant is accessible")
 
                 # Check collections
                 collections_url = f"{qdrant_url}/collections"
@@ -893,42 +893,42 @@ Deployment Recommendations:
 
                 if collections_response.status_code == 200:
                     collections = collections_response.json()
-                    print(f"📊 Current collections: {len(collections.get('result', {}).get('collections', []))}")
+                    print(f"Current collections: {len(collections.get('result', {}).get('collections', []))}")
 
                     for collection in collections.get('result', {}).get('collections', []):
                         print(f"  - {collection.get('name', 'Unknown')}")
 
                 return True
             else:
-                print(f"❌ Qdrant returned status: {response.status_code}")
+                print(f"[ERROR] Qdrant returned status: {response.status_code}")
                 return False
 
         except Exception as e:
-            print(f"❌ Qdrant connection failed: {e}")
-            print(f"💡 Check qdrant_url in agent_config.yaml: {qdrant_url}")
-            print("💡 Make sure Qdrant is running and accessible")
+            print(f"[ERROR] Qdrant connection failed: {e}")
+            print(f"Check qdrant_url in agent_config.yaml: {qdrant_url}")
+            print("Make sure Qdrant is running and accessible")
             return False
 
 
     async def run_comprehensive_demo(self):
         """Run the complete knowledge base demonstration """
         print("\n" + "=" * 80)
-        print("🧠 COMPREHENSIVE KNOWLEDGE BASE OPERATIONS DEMO ")
+        print("COMPREHENSIVE KNOWLEDGE BASE OPERATIONS DEMO ")
         print("=" * 80)
 
         try:
             # 1. Test Qdrant connection first
             if not await self.test_qdrant_connection():
-                print("❌ Cannot proceed without Qdrant connection")
+                print("[ERROR] Cannot proceed without Qdrant connection")
                 return
 
             # 2. Check agent availability
             if not await self.check_knowledge_base_availability():
-                print("❌ Knowledge Base agent not available. Exiting demo.")
+                print("[ERROR] Knowledge Base agent not available. Exiting demo.")
                 return
 
             if not self.kb_agent:
-                print("❌ No direct KB agent available. Cannot proceed with demo.")
+                print("[ERROR] No direct KB agent available. Cannot proceed with demo.")
                 return
 
             # 3. Create sample documents
@@ -945,7 +945,7 @@ Deployment Recommendations:
                     ingested_count += 1
                 await asyncio.sleep(1)  # Rate limiting
 
-            print(f"📊 Successfully ingested {ingested_count}/{len(document_files)} documents")
+            print(f"Successfully ingested {ingested_count}/{len(document_files)} documents")
 
             # 5. Direct text ingestion
             print("\n--- Direct Text Ingestion ---")
@@ -1003,9 +1003,9 @@ Deployment Recommendations:
                 answer = await self.direct_query_knowledge_base(query)
                 if answer and "No proxy scraping methods" not in answer:
                     successful_queries += 1
-                    print(f"✅ Query successful")
+                    print(f"[OK] Query successful")
                 else:
-                    print(f"❌ Query failed or returned invalid response")
+                    print(f"[ERROR] Query failed or returned invalid response")
 
                 await asyncio.sleep(1)
 
@@ -1013,35 +1013,35 @@ Deployment Recommendations:
             print("\n--- Final Verification ---")
             await self.test_qdrant_connection()
 
-            print(f"\n✅ Knowledge Base operations demo completed!")
-            print(f"📊 Documents ingested: {ingested_count}")
-            print(f"📝 Text content ingested: {'✅' if text_success else '❌'}")
-            print(f"🔍 Successful queries: {successful_queries}/{len(queries)}")
+            print(f"\n[OK] Knowledge Base operations demo completed!")
+            print(f"Documents ingested: {ingested_count}")
+            print(f"Text content ingested: {'[OK]' if text_success else '[ERROR]'}")
+            print(f"Successful queries: {successful_queries}/{len(queries)}")
 
             if successful_queries > 0:
-                print("🎉 Knowledge Base is working correctly!")
+                print("Knowledge Base is working correctly!")
             else:
-                print("⚠️  Knowledge Base queries failed - check Qdrant and agent configuration")
+                print("[WARN] Knowledge Base queries failed - check Qdrant and agent configuration")
 
         except Exception as e:
-            print(f"\n❌ Demo failed with error: {e}")
+            print(f"\n[ERROR] Demo failed with error: {e}")
             import traceback
             traceback.print_exc()
 
 
     async def cleanup(self):
         """Clean up demo resources"""
-        print("\n🧹 Cleaning up demo resources...")
+        print("\nCleaning up demo resources...")
 
         # Delete the demo session
         if self.session_id:
             success = self.agent_service.delete_session(self.session_id)
             if success:
-                print(f"✅ Deleted demo session: {self.session_id}")
+                print(f"[OK] Deleted demo session: {self.session_id}")
 
-        print("✅ Cleanup completed")
-        print("💡 Note: Knowledge base data remains in Qdrant for future use")
-        print("🗑️  To clear Qdrant data: docker restart qdrant-container")
+        print("[OK] Cleanup completed")
+        print("Note: Knowledge base data remains in Qdrant for future use")
+        print(" To clear Qdrant data: docker restart qdrant-container")
 
 
 async def main():
@@ -1067,21 +1067,21 @@ async def main():
 
         elif args.query_only:
             # Perform specific query only
-            print(f"🔍 Performing specific query: {args.query_only}")
+            print(f"Performing specific query: {args.query_only}")
 
             if await demo.check_knowledge_base_availability():
                 answer = await demo.direct_query_knowledge_base(args.query_only)
                 if answer:
-                    print(f"\n📝 Full Answer:\n{answer}")
+                    print(f"\nFull Answer:\n{answer}")
 
         elif args.ingest_file:
             # Ingest specific file only
-            print(f"📄 Ingesting specific file: {args.ingest_file}")
+            print(f"Ingesting specific file: {args.ingest_file}")
 
             if await demo.check_knowledge_base_availability():
                 success = await demo.direct_ingest_document(args.ingest_file)
                 if success:
-                    print(f"✅ File ingested successfully: {args.ingest_file}")
+                    print(f"[OK] File ingested successfully: {args.ingest_file}")
 
                     # Test query
                     test_query = f"What information is contained in the document {Path(args.ingest_file).name}?"
@@ -1093,9 +1093,9 @@ async def main():
         await demo.cleanup()
 
     except KeyboardInterrupt:
-        print("\n\n⚠️  Demo interrupted by user")
+        print("\n\n[WARN] Demo interrupted by user")
     except Exception as e:
-        print(f"\n\n❌ Demo failed with error: {e}")
+        print(f"\n\n[ERROR] Demo failed with error: {e}")
         import traceback
         traceback.print_exc()
 

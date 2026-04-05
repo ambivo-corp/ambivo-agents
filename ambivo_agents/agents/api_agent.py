@@ -479,7 +479,7 @@ Always prioritize security and follow the configured restrictions. Use your inte
  URL: {url}
  Method: {method}
  Type: {content_type.upper()}
-⏰ Timestamp: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}"""
+Timestamp: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}"""
 
             if self.output_config.create_summary:
                 # Save summary file too
@@ -529,8 +529,12 @@ Always prioritize security and follow the configured restrictions. Use your inte
         if ":" in domain:
             domain = domain.split(":")[0]
         if pattern.startswith("*."):
+            base_domain = pattern[2:]  # e.g., "example.com"
             suffix = pattern[1:]  # e.g., ".example.com"
-            return domain == pattern[2:] or domain.endswith(suffix)
+            # Match exact base or proper subdomain (must have dot boundary)
+            return domain == base_domain or (
+                domain.endswith(suffix) and len(domain) > len(suffix)
+            )
         return domain == pattern
 
     def _validate_security(self, request: APIRequest) -> Tuple[bool, Optional[str]]:
@@ -566,8 +570,8 @@ Always prioritize security and follow the configured restrictions. Use your inte
             ip = ipaddress.ip_address(resolved_ip)
             if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
                 return False, f"Domain {domain} resolves to private/reserved IP {resolved_ip}"
-        except (socket.gaierror, ValueError, OSError):
-            pass  # DNS resolution failed -- allow the request to fail naturally later
+        except (socket.gaierror, ValueError, OSError) as dns_err:
+            self.logger.warning(f"DNS resolution failed for {domain}: {dns_err}")
 
         # Check blocked methods
         if (
@@ -2084,7 +2088,7 @@ except Exception as e:
                 content += f" **Endpoint**: {endpoint.method.value} {endpoint.path}\n"
                 content += f" **Description**: {endpoint.description}\n"
                 content += f" **URL**: {response.url}\n"
-                content += f"⏱ **Duration**: {response.duration_ms:.0f}ms\n"
+                content += f"**Duration**: {response.duration_ms:.0f}ms\n"
                 content += f" **Status**: HTTP {response.status_code}\n\n"
 
                 if response.json_data:
@@ -2347,7 +2351,7 @@ except Exception as e:
                 )
 
                 yield StreamChunk(
-                    text=f"⏱ **Duration**: {response.duration_ms:.0f}ms",
+                    text=f"**Duration**: {response.duration_ms:.0f}ms",
                     sub_type=StreamSubType.CONTENT,
                 )
 

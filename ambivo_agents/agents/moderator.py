@@ -422,7 +422,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 )
 
             except Exception as e:
-                self.logger.error(f"Failed to initialize {agent_type} agent: {e}")
+                self.logger.error(f"Failed to initialize {agent_type} agent: {e}", exc_info=True)
 
                 # Special handling for assistant agent failure
                 if agent_type == "assistant":
@@ -434,7 +434,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                         self.specialized_agents[agent_type] = fallback_assistant
                         self.logger.warning("Emergency fallback assistant created")
                     except Exception as fallback_error:
-                        self.logger.error(f"Even fallback assistant failed: {fallback_error}")
+                        self.logger.error(f"Even fallback assistant failed: {fallback_error}", exc_info=True)
 
     def _create_fallback_assistant_agent(self):
         """Create a fallback AssistantAgent class when import fails"""
@@ -3199,7 +3199,7 @@ class EnhancedModeratorAgent(ModeratorAgent):
         """Format workflow result into response message"""
         if result.success:
             content = f"**{workflow_name} Workflow Completed**\n\n"
-            content += f"⏱**Execution Time:** {result.execution_time:.2f} seconds\n"
+            content += f"**Execution Time:** {result.execution_time:.2f} seconds\n"
             content += f"**Steps Executed:** {' → '.join(result.nodes_executed)}\n"
             content += f"**Messages Generated:** {len(result.messages)}\n\n"
 

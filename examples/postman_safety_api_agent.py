@@ -20,7 +20,7 @@ from ambivo_agents.agents.api_agent import (
 
 async def example_postman_collection_parsing():
     """Example 1: Parse Postman collection and make intelligent API calls"""
-    print("📦 Example 1: Postman Collection Parsing")
+    print("Example 1: Postman Collection Parsing")
     print("=" * 60)
     
     agent = APIAgent.create_simple(user_id="postman_user")
@@ -29,13 +29,13 @@ async def example_postman_collection_parsing():
         # Example Postman collection URL (replace with actual collection)
         postman_url = "https://api.postman.com/collections/12345-abcde"  # Example
         
-        print(f"📚 Parsing Postman collection from: {postman_url}")
+        print(f"Parsing Postman collection from: {postman_url}")
         
         # The agent will automatically detect and parse Postman collections
         user_request = f"Read Postman collection at {postman_url} and use token abc123 to get user data"
         
-        print(f"📝 User Request: '{user_request}'")
-        print("🔍 Processing...")
+        print(f"User Request: '{user_request}'")
+        print("Processing...")
         
         # The agent will:
         # 1. Detect this is a Postman collection
@@ -44,10 +44,10 @@ async def example_postman_collection_parsing():
         # 4. Make authenticated API call
         response = await agent.chat(user_request)
         
-        print(f"✅ Response: {response[:300]}{'...' if len(response) > 300 else ''}")
+        print(f"[OK] Response: {response[:300]}{'...' if len(response) > 300 else ''}")
         
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"[ERROR] Error: {str(e)}")
     
     finally:
         await agent.cleanup_session()
@@ -55,7 +55,7 @@ async def example_postman_collection_parsing():
 
 async def example_manual_postman_parsing():
     """Example 2: Manual Postman collection parsing"""
-    print("\n🔧 Example 2: Manual Postman Collection Parsing")
+    print("\nExample 2: Manual Postman Collection Parsing")
     print("=" * 60)
     
     agent = APIAgent.create_simple(user_id="manual_postman")
@@ -138,43 +138,43 @@ async def example_manual_postman_parsing():
         
         try:
             # Parse the collection
-            print("📋 Parsing sample Postman collection...")
+            print("Parsing sample Postman collection...")
             api_doc = await agent.parse_api_documentation(f"file://{temp_file}")
             
-            print(f"✅ Collection parsed successfully!")
-            print(f"   📋 Name: {api_doc.title}")
-            print(f"   🔗 Base URL: {api_doc.base_url}")
-            print(f"   📄 Description: {api_doc.description}")
-            print(f"   🔐 Auth Type: {api_doc.auth_info.get('type', 'None')}")
-            print(f"   📡 Endpoints found: {len(api_doc.endpoints)}")
+            print(f"[OK] Collection parsed successfully!")
+            print(f"   Name: {api_doc.title}")
+            print(f"   Base URL: {api_doc.base_url}")
+            print(f"   Description: {api_doc.description}")
+            print(f"   Auth Type: {api_doc.auth_info.get('type', 'None')}")
+            print(f"   Endpoints found: {len(api_doc.endpoints)}")
             
             # Show endpoints
-            print(f"\n📋 Parsed Endpoints:")
+            print(f"\nParsed Endpoints:")
             for i, endpoint in enumerate(api_doc.endpoints, 1):
                 print(f"   {i}. {endpoint.method.value} {endpoint.path}")
-                print(f"      📄 {endpoint.description}")
+                print(f"      {endpoint.description}")
                 if endpoint.parameters:
                     params = ", ".join(endpoint.parameters.keys())
-                    print(f"      🔧 Parameters: {params}")
+                    print(f"      Parameters: {params}")
                 if endpoint.example_request:
-                    print(f"      📝 Has example request data")
+                    print(f"      Has example request data")
             
             # Test endpoint matching
-            print(f"\n🎯 Testing Endpoint Matching:")
+            print(f"\nTesting Endpoint Matching:")
             test_requests = ["get all posts", "get user info", "create new post"]
             
             for request in test_requests:
                 endpoint = await agent.find_endpoint_for_request(api_doc, request)
                 if endpoint:
-                    print(f"   ✅ '{request}' → {endpoint.method.value} {endpoint.path}")
+                    print(f"   [OK] '{request}' → {endpoint.method.value} {endpoint.path}")
                 else:
-                    print(f"   ❌ '{request}' → No match found")
+                    print(f"   [ERROR] '{request}' → No match found")
         
         finally:
             os.unlink(temp_file)
         
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"[ERROR] Error: {str(e)}")
     
     finally:
         await agent.cleanup_session()
@@ -182,7 +182,7 @@ async def example_manual_postman_parsing():
 
 async def example_timeout_safety_features():
     """Example 3: Timeout safety and Docker execution"""
-    print("\n⏱️ Example 3: Timeout Safety and Docker Execution")
+    print("\nExample 3: Timeout Safety and Docker Execution")
     print("=" * 60)
     
     # Create agent with custom security config for testing
@@ -199,7 +199,7 @@ async def example_timeout_safety_features():
     )
     
     try:
-        print("🔒 Testing timeout safety features...")
+        print("Testing timeout safety features...")
         
         # Test 1: Normal request (should use 8-second timeout)
         print("\n1. Testing normal request (8s timeout):")
@@ -210,9 +210,9 @@ async def example_timeout_safety_features():
         
         response = await agent.make_api_request(normal_request)
         if not response.error:
-            print(f"   ✅ Success: {response.status_code} in {response.duration_ms:.0f}ms")
+            print(f"   [OK] Success: {response.status_code} in {response.duration_ms:.0f}ms")
         else:
-            print(f"   ❌ Error: {response.error}")
+            print(f"   [ERROR] Error: {response.error}")
         
         # Test 2: Request with longer timeout (should trigger Docker)
         print("\n2. Testing long timeout request (15s - should use Docker):")
@@ -222,22 +222,22 @@ async def example_timeout_safety_features():
             timeout=15  # Exceeds 8-second limit
         )
         
-        print("   ⚠️  This will execute in Docker for safety...")
+        print("   [WARN] This will execute in Docker for safety...")
         long_response = await agent.make_api_request(long_timeout_request)
         
         if not long_response.error:
-            print(f"   ✅ Docker execution success: {long_response.status_code}")
-            print(f"   🐳 Duration: {long_response.duration_ms:.0f}ms")
+            print(f"   [OK] Docker execution success: {long_response.status_code}")
+            print(f"   Duration: {long_response.duration_ms:.0f}ms")
         else:
-            print(f"   ❌ Docker execution error: {long_response.error}")
+            print(f"   [ERROR] Docker execution error: {long_response.error}")
         
         # Test 3: Configuration-based timeout enforcement
         print("\n3. Testing configuration-based timeout enforcement:")
         
         # Show current config
-        print(f"   📋 Default timeout: {agent.security_config.default_timeout_seconds}s")
-        print(f"   📋 Max safe timeout: {agent.security_config.max_safe_timeout}s")
-        print(f"   📋 Force Docker above: {agent.security_config.force_docker_above_timeout}")
+        print(f"   Default timeout: {agent.security_config.default_timeout_seconds}s")
+        print(f"   Max safe timeout: {agent.security_config.max_safe_timeout}s")
+        print(f"   Force Docker above: {agent.security_config.force_docker_above_timeout}")
         
         # Test with different timeout scenarios
         test_scenarios = [
@@ -251,7 +251,7 @@ async def example_timeout_safety_features():
             timeout = scenario["timeout"]
             desc = scenario["description"]
             
-            print(f"\n   🧪 {desc} - {timeout}s:")
+            print(f"\n   {desc} - {timeout}s:")
             
             test_request = APIRequest(
                 url="https://jsonplaceholder.typicode.com/posts/1",
@@ -265,11 +265,11 @@ async def example_timeout_safety_features():
                 agent.security_config.force_docker_above_timeout
             )
             
-            print(f"      🐳 Would use Docker: {would_use_docker}")
-            print(f"      ⏱️ Effective timeout: {min(timeout, agent.security_config.default_timeout_seconds)}s")
+            print(f"      Would use Docker: {would_use_docker}")
+            print(f"      Effective timeout: {min(timeout, agent.security_config.default_timeout_seconds)}s")
         
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"[ERROR] Error: {str(e)}")
     
     finally:
         await agent.cleanup_session()
@@ -277,13 +277,13 @@ async def example_timeout_safety_features():
 
 async def example_comprehensive_safety_demo():
     """Example 4: Comprehensive safety and security demo"""
-    print("\n🛡️ Example 4: Comprehensive Safety and Security Demo")
+    print("\nExample 4: Comprehensive Safety and Security Demo")
     print("=" * 60)
     
     agent = APIAgent.create_simple(user_id="security_demo")
     
     try:
-        print("🔒 Demonstrating security and safety features...")
+        print("Demonstrating security and safety features...")
         
         # Test various safety scenarios
         safety_tests = [
@@ -311,26 +311,26 @@ async def example_comprehensive_safety_demo():
         
         for i, test in enumerate(safety_tests, 1):
             print(f"\n{i}. {test['name']}:")
-            print(f"   📝 Request: {test['request']}")
-            print(f"   🎯 Expected: {test['expected']}")
+            print(f"   Request: {test['request']}")
+            print(f"   Expected: {test['expected']}")
             
             try:
                 response = await agent.chat(test['request'])
                 
                 # Analyze response to determine outcome
                 if "blocked" in response.lower() or "security validation failed" in response.lower():
-                    print(f"   🛡️ BLOCKED: Security measures working")
+                    print(f"   BLOCKED: Security measures working")
                 elif "docker" in response.lower():
-                    print(f"   🐳 DOCKER: Long timeout safely executed in container")
+                    print(f"   DOCKER: Long timeout safely executed in container")
                 elif "endpoints found" in response.lower() or "postman" in response.lower():
-                    print(f"   🧠 INTELLIGENT: Successfully parsed documentation")
-                elif "✅" in response:
-                    print(f"   ✅ SUCCESS: API call completed safely")
+                    print(f"   INTELLIGENT: Successfully parsed documentation")
+                elif "[OK]" in response:
+                    print(f"   [OK] SUCCESS: API call completed safely")
                 else:
-                    print(f"   ❓ RESULT: {response[:100]}...")
+                    print(f"   RESULT: {response[:100]}...")
                     
             except Exception as e:
-                print(f"   ❌ ERROR: {str(e)}")
+                print(f"   [ERROR] ERROR: {str(e)}")
         
     finally:
         await agent.cleanup_session()
@@ -338,14 +338,14 @@ async def example_comprehensive_safety_demo():
 
 async def main():
     """Run all enhanced API agent examples"""
-    print("🚀 Enhanced API Agent - Postman Collections & Safety Features")
+    print("Enhanced API Agent - Postman Collections & Safety Features")
     print("=" * 80)
     print("New capabilities demonstrated:")
-    print("- 📦 Postman collection parsing and endpoint extraction")
-    print("- ⏱️ 8-second default timeout safety enforcement")
-    print("- 🐳 Docker execution for longer timeout requests")
-    print("- 🛡️ Enhanced security and safety features")
-    print("- 🧠 Intelligent documentation parsing (OpenAPI, HTML, Postman)")
+    print("- Postman collection parsing and endpoint extraction")
+    print("- 8-second default timeout safety enforcement")
+    print("- Docker execution for longer timeout requests")
+    print("- Enhanced security and safety features")
+    print("- Intelligent documentation parsing (OpenAPI, HTML, Postman)")
     print("=" * 80)
     
     try:
@@ -355,17 +355,17 @@ async def main():
         await example_comprehensive_safety_demo()
         
         print("\n" + "=" * 80)
-        print("✅ All enhanced examples completed!")
-        print("\n🎯 Key Safety Features:")
-        print("   ⏱️ 8-second default timeout for all API calls")
-        print("   🐳 Docker isolation for longer timeout requests")
-        print("   🛡️ Domain filtering and security validation")
-        print("   📦 Postman collection parsing and understanding")
-        print("   🧠 Multi-format documentation intelligence")
-        print("   🔒 Comprehensive safety and security enforcement")
+        print("[OK] All enhanced examples completed!")
+        print("\nKey Safety Features:")
+        print("   8-second default timeout for all API calls")
+        print("   Docker isolation for longer timeout requests")
+        print("   Domain filtering and security validation")
+        print("   Postman collection parsing and understanding")
+        print("   Multi-format documentation intelligence")
+        print("   Comprehensive safety and security enforcement")
         
     except Exception as e:
-        print(f"\n❌ Example execution failed: {str(e)}")
+        print(f"\n[ERROR] Example execution failed: {str(e)}")
 
 
 if __name__ == "__main__":

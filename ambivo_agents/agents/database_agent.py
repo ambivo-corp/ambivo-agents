@@ -232,6 +232,7 @@ Always prioritize data security and provide clear, formatted results."""
         self._unsafe_patterns = [
             r"\bdrop\s+table\b",
             r"\bdrop\s+database\b",
+            r"\bdrop\s+index\b",
             r"\btruncate\b",
             r"\bdelete\s+from\b",
             r"\binsert\s+into\b",
@@ -239,11 +240,23 @@ Always prioritize data security and provide clear, formatted results."""
             r"\balter\s+table\b",
             r"\bcreate\s+table\b",
             r"\bcreate\s+database\b",
+            r"\bgrant\b",
+            r"\brevoke\b",
+            r"\bunion\s+(all\s+)?select\b",
+            r"\binto\s+outfile\b",
+            r"\binto\s+dumpfile\b",
+            r"\bload_file\s*\(",
+            r"\bload\s+data\b",
+            r"\bbenchmark\s*\(",
+            r"\bsleep\s*\(",
+            r"\bwaitfor\b",
+            r"\bshutdown\b",
             r"--",
             r"/\*",
             r"\*/",
             r"\bexec\b",
             r"\bexecute\b",
+            r";\s*\w",
         ]
 
     async def process_message(
@@ -928,7 +941,8 @@ Always prioritize data security and provide clear, formatted results."""
             self._connections["mysql"] = connection
             return {"success": True}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            self.logger.error(f"MySQL connection failed: {e}", exc_info=True)
+            return {"success": False, "error": "MySQL connection failed. Check connection parameters."}
 
     async def _test_postgresql_connection(self, db_config: DatabaseConfig) -> Dict[str, Any]:
         """Test PostgreSQL connection"""
@@ -943,7 +957,8 @@ Always prioritize data security and provide clear, formatted results."""
             self._connections["postgresql"] = connection
             return {"success": True}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            self.logger.error(f"PostgreSQL connection failed: {e}", exc_info=True)
+            return {"success": False, "error": "PostgreSQL connection failed. Check connection parameters."}
 
     async def _is_query_safe(self, query: str) -> bool:
         """Check if query is safe based on strict mode and patterns"""
@@ -983,7 +998,11 @@ Always prioritize data security and provide clear, formatted results."""
             if re.match(r"^select\s+\*\s+from\s+\w+\s+limit\s+\d+;?$", query_lower):
                 return True
 
-        return True  # Default to allowing if no unsafe patterns found
+        # In strict mode, reject queries that don't match known safe patterns
+        if self.strict_mode:
+            return False
+
+        return True
 
     def _is_mongodb_query_safe(self, query_lower: str) -> bool:
         """Check if MongoDB query is safe - only block truly dangerous operations"""
@@ -1066,6 +1085,11 @@ Always prioritize data security and provide clear, formatted results."""
                 return QueryResult(success=False, error="No database connection")
 
             cursor = connection.cursor()
+            # Set statement timeout to prevent long-running queries
+            if db_type == "postgresql":
+                cursor.execute(f"SET statement_timeout = '{self.query_timeout * 1000}'")
+            elif db_type == "mysql":
+                cursor.execute(f"SET max_execution_time = {self.query_timeout * 1000}")
             cursor.execute(query)
 
             if cursor.description:
@@ -2133,7 +2157,7 @@ Use: `load data from {rel_path}`
 **Database**: {result['database']}
 **Collection**: {result['collection']}
 **Documents Inserted**: {result['documents_inserted']:,}
-⏱**Execution Time**: {result['execution_time_ms']:.1f}ms
+**Execution Time**: {result['execution_time_ms']:.1f}ms
 **Total Documents in Collection**: {result['collection_count']:,}
 
 Sample inserted IDs: {', '.join(result['sample_ids'])}
@@ -2150,7 +2174,7 @@ You can now query this data using:
 **Database**: {result['database']}
 **Table**: {result['table']}
 **Rows Inserted**: {result['rows_inserted']:,}
-⏱**Execution Time**: {result['execution_time_ms']:.1f}ms
+**Execution Time**: {result['execution_time_ms']:.1f}ms
 **Total Rows in Table**: {result['total_rows']:,}
 **Columns**: {', '.join(result['columns'])}
 

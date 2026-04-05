@@ -2205,7 +2205,7 @@ async def main():
         # For example, waiting for user input and continuing the conversation
         
     except KeyboardInterrupt:
-        print("\\n\\n⏸ System interrupted by user")
+        print("\\n\\nSystem interrupted by user")
     except Exception as e:
         print(f"\\nSystem error: {{e}}")
     finally:

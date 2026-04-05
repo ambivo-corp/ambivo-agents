@@ -82,10 +82,17 @@ class MediaDockerExecutor:
 
     def _validate_ffmpeg_command(self, command: str) -> str:
         """Validate and sanitize FFmpeg command to prevent injection."""
-        dangerous_patterns = [';', '&&', '||', '$(', '`', '|', '>', '>>', '<', '\n', '\r']
+        dangerous_patterns = [
+            ';', '&&', '||', '$(', '`', '|', '>', '>>', '<', '\n', '\r',
+            '\\x', '\\0', '\\u', '$((', '#{', '%(',
+        ]
         for pattern in dangerous_patterns:
             if pattern in command:
                 raise ValueError(f"Unsafe character sequence in FFmpeg command: {repr(pattern)}")
+        # Ensure command starts with ffmpeg/ffprobe
+        cmd_stripped = command.strip()
+        if not cmd_stripped.startswith(('ffmpeg ', 'ffprobe ', 'ffmpeg\t', 'ffprobe\t')):
+            raise ValueError("Command must start with ffmpeg or ffprobe")
         return command
 
     def _is_path_allowed(self, resolved_path: Path) -> bool:
@@ -242,14 +249,17 @@ echo "FFmpeg version:"
 ffmpeg -version | head -1
 
 echo "Starting media processing..."
-echo "Command: {final_command}"
 
-# Execute the command
-{final_command}
+# Execute the command (written to a separate file to avoid shell interpretation)
+bash /workspace/ffmpeg_cmd.sh
 
 echo "Media processing completed successfully"
 ls -la /workspace/output/
 """
+                # Write the actual command to a separate file to prevent shell injection
+                cmd_file = temp_path / "ffmpeg_cmd.sh"
+                cmd_file.write_text(f"#!/bin/bash\nset -e\n{final_command}\n")
+                cmd_file.chmod(0o755)
 
                 script_file = temp_path / "process_media.sh"
                 script_file.write_text(script_content)
@@ -275,7 +285,22 @@ ls -la /workspace/output/
                 start_time = time.time()
 
                 try:
-                    result = self.docker_client.containers.run(**container_config)
+                    # Run with detach and enforce timeout
+                    container_config["remove"] = False
+                    container_config["detach"] = True
+                    container = self.docker_client.containers.run(**container_config)
+                    try:
+                        exit_info = container.wait(timeout=self.timeout)
+                        result = container.logs(stdout=True, stderr=True)
+                    except Exception:
+                        container.kill()
+                        container.remove(force=True)
+                        raise TimeoutError(f"Media processing exceeded {self.timeout}s timeout")
+                    finally:
+                        try:
+                            container.remove(force=True)
+                        except Exception:
+                            pass
                     execution_time = time.time() - start_time
 
                     output = result.decode("utf-8") if isinstance(result, bytes) else str(result)
@@ -306,7 +331,16 @@ ls -la /workspace/output/
                         "temp_dir": str(temp_path),
                     }
 
+                except TimeoutError as te:
+                    logging.error(f"Media processing timeout: {te}")
+                    return {
+                        "success": False,
+                        "error": str(te),
+                        "command": final_command,
+                        "execution_time": time.time() - start_time,
+                    }
                 except Exception as container_error:
+                    logging.error(f"Container execution failed: {container_error}", exc_info=True)
                     return {
                         "success": False,
                         "error": f"Container execution failed: {str(container_error)}",

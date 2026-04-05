@@ -143,7 +143,7 @@ async def main():
     
     # Create agent with optional LLM service for natural language parsing
     if args.natural_language:
-        print("\n✨ Natural Language Mode ENABLED - I'll understand conversational responses!")
+        print("\nNatural Language Mode ENABLED - I'll understand conversational responses!")
         print("   Examples: 'Yeah absolutely!', 'I'd prefer email', 'Both AWS and Azure please'")
         # Use create_simple which auto-configures LLM from config
         agent = GatherAgent.create_simple(
@@ -151,7 +151,7 @@ async def main():
             config=config
         )
     else:
-        print("\n📋 Strict Mode - Please provide exact answers as shown in options")
+        print("\nStrict Mode - Please provide exact answers as shown in options")
         # Create without LLM for deterministic prompts
         agent = GatherAgent.create_advanced(
             agent_id="gather_cli",
@@ -182,7 +182,7 @@ async def main():
     print("Commands: 'finish' to submit, 'cancel' to abort.")
     
     if args.natural_language:
-        print("\n🎯 Natural Language Examples You Can Try:")
+        print("\nNatural Language Examples You Can Try:")
         print("  Yes/No: 'Absolutely!', 'Not really', 'Yeah we do'")
         print("  Single-select: 'I'd go with the first one', 'The small company option'")
         print("  Multi-select: 'Both AWS and GCP', 'All except Azure', 'The first two'\n")

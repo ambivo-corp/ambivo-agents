@@ -18,13 +18,13 @@ async def main():
         skill_name="workflow_api"
     )
     
-    print(f"API Skill Assignment: {'✅ Success' if result['success'] else '❌ Failed'}")
+    print(f"API Skill Assignment: {'[OK] Success' if result['success'] else '[ERROR] Failed'}")
     if result['success']:
         print(f"Skill Name: {result['skill_name']}")
         print(f"Endpoints Available: {result['endpoints_count']}")
     
     # Now the assistant can understand and execute API requests naturally!
-    print("\n🧪 Testing natural language API requests:")
+    print("\nTesting natural language API requests:")
     
     # These requests will automatically:
     # 1. Detect the intent to use the API skill
@@ -39,13 +39,13 @@ async def main():
     ]
     
     for request in requests:
-        print(f"\n👤 User: {request}")
+        print(f"\nUser: {request}")
         response = await assistant.chat(request)
-        print(f"🤖 Assistant: {response}")
+        print(f"Assistant: {response}")
     
     # Check what skills are assigned
     skills = assistant.list_assigned_skills()
-    print(f"\n📋 Current Skills: {skills}")
+    print(f"\nCurrent Skills: {skills}")
     
     await assistant.cleanup_session()
 

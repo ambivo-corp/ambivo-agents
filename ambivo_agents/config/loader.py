@@ -114,8 +114,6 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_DOCKER_IMAGE": ("youtube_download", "docker_image"),
     f"{ENV_PREFIX}YOUTUBE_DOWNLOAD_MEMORY_LIMIT": ("youtube_download", "memory_limit"),
     # Media Editor Configuration (Basic settings only)
-    f"{ENV_PREFIX}MEDIA_EDITOR_INPUT_DIR": ("media_editor", "input_dir"),
-    f"{ENV_PREFIX}MEDIA_EDITOR_OUTPUT_DIR": ("media_editor", "output_dir"),
     f"{ENV_PREFIX}MEDIA_EDITOR_TIMEOUT": ("media_editor", "timeout"),
     f"{ENV_PREFIX}MEDIA_EDITOR_DOCKER_IMAGE": ("media_editor", "docker_image"),
     f"{ENV_PREFIX}MEDIA_EDITOR_MEMORY_LIMIT": ("media_editor", "memory_limit"),
@@ -419,7 +417,7 @@ def _load_config_from_env() -> Dict[str, Any]:
         )
 
     if not config.get("llm"):
-        config["llm"] = {"preferred_provider": "openai", "temperature": 0.7, "max_tokens": 4000}
+        config["llm"] = {"preferred_provider": "openai", "temperature": 0.7}
         logger.warning(
             "LLM configuration not found in environment variables. Using defaults (API keys still required)"
         )
@@ -446,6 +444,17 @@ def _load_config_from_yaml(config_path: str = None) -> Dict[str, Any]:
             "Either create this file or use environment variables."
         )
 
+    # Warn if config file is world-readable (contains credentials)
+    try:
+        file_mode = config_file.stat().st_mode
+        if file_mode & 0o004:  # world-readable
+            logger.warning(
+                f"Config file {config_file} is world-readable (mode {oct(file_mode)}). "
+                "This file contains credentials and should be restricted (e.g., chmod 600)."
+            )
+    except OSError:
+        pass
+
     try:
         with open(config_file, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
@@ -468,7 +477,7 @@ def _get_minimal_defaults() -> Dict[str, Any]:
     """Get minimal default configuration when nothing else is available."""
     return {
         "redis": {"host": "localhost", "port": 6379, "db": 0, "password": None},
-        "llm": {"preferred_provider": "openai", "temperature": 0.7, "max_tokens": 4000},
+        "llm": {"preferred_provider": "openai", "temperature": 0.7},
         "agent_capabilities": {
             "enable_knowledge_base": False,
             "enable_web_search": False,
@@ -482,7 +491,6 @@ def _get_minimal_defaults() -> Dict[str, Any]:
             "enable_youtube_download": False,
         },
         "service": {
-            "enable_metrics": True,
             "log_level": "INFO",
             "max_sessions": 100,
             "session_timeout": 3600,
@@ -622,7 +630,6 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     # Set LLM defaults
     if "llm" in config:
         config["llm"].setdefault("temperature", 0.5)
-        config["llm"].setdefault("max_tokens", 4000)
         config["llm"].setdefault("preferred_provider", "openai")
 
     # Set agent capabilities defaults
@@ -631,12 +638,6 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         caps.setdefault("enable_file_processing", True)
         caps.setdefault("enable_web_ingestion", True)
         caps.setdefault("enable_api_calls", True)
-        caps.setdefault("enable_agent_collaboration", True)
-        caps.setdefault("enable_result_synthesis", True)
-        caps.setdefault("enable_multi_source_validation", True)
-        caps.setdefault("max_concurrent_operations", 5)
-        caps.setdefault("operation_timeout_seconds", 30)
-        caps.setdefault("max_memory_usage_mb", 500)
 
     # Set web search defaults
     if "web_search" in config:
@@ -679,8 +680,6 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
     # Set media editor defaults with Docker-accessible directories
     if "media_editor" in config:
         me = config["media_editor"]
-        me.setdefault("input_dir", "./media_input") # Docker-accessible with shared volume
-        me.setdefault("output_dir", "./media_output") # Docker-accessible with shared volume
         me.setdefault("timeout", 300)
         me.setdefault("docker_image", "sgosain/amb-ubuntu-python-public-pod")
         me.setdefault("work_dir", "/opt/ambivo/work_dir")
@@ -750,19 +749,6 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         docker.setdefault(
             "legacy_fallback_dirs", ["docker_shared/input", "docker_shared"]
         ) # Use docker_shared structure consistently
-        docker.setdefault("network_disabled", True)
-        docker.setdefault("auto_remove", True)
-
-        # Container mounts defaults
-        if "container_mounts" not in docker:
-            docker["container_mounts"] = {}
-        container_mounts = docker["container_mounts"]
-        container_mounts.setdefault("input", "/docker_shared/input")
-        container_mounts.setdefault("output", "/docker_shared/output")
-        container_mounts.setdefault("temp", "/docker_shared/temp")
-        container_mounts.setdefault("handoff", "/docker_shared/handoff")
-        container_mounts.setdefault("work", "/docker_shared/work")
-
         # Agent subdirs defaults
         if "agent_subdirs" not in docker:
             docker["agent_subdirs"] = {}
@@ -785,7 +771,6 @@ def _set_env_config_defaults(config: Dict[str, Any]) -> None:
         service.setdefault("session_timeout", 3600)
         service.setdefault("log_level", "INFO")
         service.setdefault("log_to_file", False)
-        service.setdefault("enable_metrics", True)
 
     # Add this to the _set_env_config_defaults function
 

@@ -695,7 +695,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Output:** {result.get('output_file', 'Unknown')}\n"
                     f" **Format:** {output_format.upper()}\n"
                     f" **Quality:** {quality}\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n\n"
                     f"Your audio file is ready! "
                 )
             else:
@@ -735,7 +735,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Output:** {result.get('output_file', 'Unknown')}\n"
                     f" **Format:** {output_format.upper()}\n"
                     f" **Codec:** {video_codec}\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n\n"
                     f"Your converted video is ready! "
                 )
             else:
@@ -1095,7 +1095,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
                     f" **Dimensions:** {result.get('final_dimensions', f'{width}x{height}')}\n"
                     f" **Method:** {result.get('method_used', 'Unknown')}/{result.get('attempted_methods', 'N/A')}\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n"
                     f" **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
                     f"Your resized video is ready! "
                 )
@@ -1174,8 +1174,8 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Media Trim Completed**\n\n"
                     f" **Input:** {input_file}\n"
                     f" **Output:** {result.get('output_file', 'Unknown')}\n"
-                    f"⏱ **Start:** {start_time}\n"
-                    f"⏰ **Duration:** {duration}\n"
+                    f"**Start:** {start_time}\n"
+                    f"**Duration:** {duration}\n"
                     f" **Time:** {result.get('execution_time', 0):.2f}s\n\n"
                     f"Your trimmed media is ready! "
                 )
@@ -1215,7 +1215,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Thumbnail Created**\n\n"
                     f" **Video:** {input_file}\n"
                     f" **Thumbnail:** {result.get('output_file', 'Unknown')}\n"
-                    f"⏱ **Timestamp:** {timestamp}\n"
+                    f"**Timestamp:** {timestamp}\n"
                     f" **Format:** {output_format.upper()}\n"
                     f" **Time:** {result.get('execution_time', 0):.2f}s\n\n"
                     f"Your thumbnail is ready! "
@@ -1250,7 +1250,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Media Information for {input_file}**\n\n"
                     f"** File:** {info.get('filename', 'Unknown')}\n"
                     f"** Format:** {info.get('format', 'Unknown')}\n"
-                    f"**⏱ Duration:** {info.get('duration', 'Unknown')}\n"
+                    f"**Duration:** {info.get('duration', 'Unknown')}\n"
                     f"** Resolution:** {info.get('resolution', 'Unknown')}\n"
                     f"** Video Codec:** {info.get('video_codec', 'Unknown')}\n"
                     f"** Audio Codec:** {info.get('audio_codec', 'Unknown')}\n"
@@ -3664,7 +3664,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Input:** {input_file}\n"
                     f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
                     f" **Dimensions:** {width}x{height}\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n"
                     f" **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
                     f"Your resized image is ready! "
                 )
@@ -3718,7 +3718,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
                     f" **Crop Area:** {crop_params.get('width')}x{crop_params.get('height')}\n"
                     f" **Position:** {crop_params.get('position', 'center')}\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n\n"
                     f"Your cropped image is ready! "
                 )
             else:
@@ -3770,7 +3770,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Input:** {input_file}\n"
                     f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
                     f" **Rotation:** {angle}°\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n\n"
                     f"Your rotated image is ready! "
                 )
             else:
@@ -3825,7 +3825,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Input:** {input_file}\n"
                     f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
                     f" **Format:** {target_format.upper()}\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n"
                     f" **Size:** {result.get('output_file', {}).get('size_bytes', 0) // 1024}KB\n\n"
                     f"Your converted image is ready! "
                 )
@@ -3863,7 +3863,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Input:** {input_file}\n"
                     f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
                     f" **Effect:** Black & White\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n\n"
                     f"Your grayscale image is ready! "
                 )
             else:
@@ -3917,7 +3917,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Input:** {input_file}\n"
                     f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
                     f" **Adjustments:** {adj_desc}\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n\n"
                     f"Your adjusted image is ready! "
                 )
             else:
@@ -3971,7 +3971,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
                     f" **Input:** {input_file}\n"
                     f" **Output:** {result.get('output_file', {}).get('filename', 'Unknown')}\n"
                     f" **Effect:** {effect_desc}\n"
-                    f"⏱ **Time:** {result.get('execution_time', 0):.2f}s\n\n"
+                    f"**Time:** {result.get('execution_time', 0):.2f}s\n\n"
                     f"Your processed image is ready! "
                 )
             else:
@@ -4195,7 +4195,7 @@ async def _handle_watermark_application(
                 f" **Opacity:** {watermark_params.get('opacity', 1.0)*100:.0f}%\n"
                 f" **Scale:** {watermark_params.get('scale', 1.0)*100:.0f}%\n"
                 f" **Output:** {result['output_file']}\n"
-                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"**Time:** {result.get('execution_time', 'N/A')}\n\n"
                 f"Your watermarked image is ready! "
             )
         else:
@@ -4258,7 +4258,7 @@ async def _handle_text_watermark_application(
                 f" **Color:** {watermark_params.get('font_color', 'white')}\n"
                 f" **Size:** {watermark_params.get('font_size', 24)}px\n"
                 f" **Output:** {result['output_file']}\n"
-                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"**Time:** {result.get('execution_time', 'N/A')}\n\n"
                 f"Your text watermarked image is ready! "
             )
         else:
@@ -4305,7 +4305,7 @@ async def _handle_background_removal(
                 f" **Similarity:** {transparency_params.get('similarity', 0.3)*100:.0f}%\n"
                 f" **Blend:** {transparency_params.get('blend', 0.1)*100:.0f}%\n"
                 f" **Output:** {result['output_file']}\n"
-                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"**Time:** {result.get('execution_time', 'N/A')}\n\n"
                 f"Your transparent image is ready! "
             )
         else:
@@ -4346,7 +4346,7 @@ async def _handle_transparent_canvas_creation(
                 f" **Dimensions:** {width}x{height}\n"
                 f" **Type:** Transparent RGBA\n"
                 f" **Output:** {result['output_file']}\n"
-                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"**Time:** {result.get('execution_time', 'N/A')}\n\n"
                 f"Your transparent canvas is ready! "
             )
         else:
@@ -4400,7 +4400,7 @@ async def _handle_alpha_mask_application(
                 f" **Source:** {input_image}\n"
                 f" **Mask:** {mask_image}\n"
                 f" **Output:** {result['output_file']}\n"
-                f"⏱ **Time:** {result.get('execution_time', 'N/A')}\n\n"
+                f"**Time:** {result.get('execution_time', 'N/A')}\n\n"
                 f"Your masked image is ready! "
             )
         else:

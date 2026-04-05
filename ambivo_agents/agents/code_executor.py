@@ -112,6 +112,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
             else:
                 return self._extract_intent_from_llm_response(response, user_message)
         except Exception as e:
+            self.logger.warning(f"LLM intent analysis failed, falling back to keyword analysis: {e}", exc_info=True)
             return self._keyword_based_analysis(user_message)
 
     def _keyword_based_analysis(self, user_message: str) -> Dict[str, Any]:

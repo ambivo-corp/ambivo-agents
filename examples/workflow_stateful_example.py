@@ -233,7 +233,7 @@ class ProductionRealtorSystem:
             connection_result = await self.database_agent.chat(
                 "connect to mongodb://localhost:27017/production_rentals"
             )
-            print(f"✅ Database connected: {connection_result[:100]}...")
+            print(f"[OK] Database connected: {connection_result[:100]}...")
             
             # Load sample properties
             properties_file = os.path.join(os.path.dirname(__file__), "sample_properties.json")
@@ -241,14 +241,14 @@ class ProductionRealtorSystem:
                 ingest_result = await self.database_agent.chat(
                     f"load {properties_file} into properties collection"
                 )
-                print(f"✅ Properties loaded: {ingest_result[:100]}...")
+                print(f"[OK] Properties loaded: {ingest_result[:100]}...")
             else:
-                print("⚠️ Sample properties file not found, creating demo data...")
+                print("[WARN]Sample properties file not found, creating demo data...")
                 await self._create_demo_properties()
                 
         except Exception as e:
-            print(f"⚠️ Database setup failed: {e}")
-            print("📝 Continuing with in-memory fallback...")
+            print(f"[WARN]Database setup failed: {e}")
+            print("Continuing with in-memory fallback...")
     
     async def _create_demo_properties(self):
         """Create demo properties if file not found"""
@@ -269,16 +269,16 @@ class ProductionRealtorSystem:
             # Insert demo data using database agent
             for prop in demo_properties:
                 await self.database_agent.chat(f"insert property: {json.dumps(prop)}")
-            print("✅ Demo properties created")
+            print("[OK] Demo properties created")
         except Exception as e:
-            print(f"⚠️ Could not create demo properties: {e}")
+            print(f"[WARN]Could not create demo properties: {e}")
     
     async def start_interactive_session(self, session_id: str = None) -> str:
         """Start a simplified demo of the production realtor system"""
         if not session_id:
             session_id = f"session_{int(asyncio.get_event_loop().time())}"
         
-        print(f"\n🏠 Starting Production Realtor Demo: {session_id}")
+        print(f"\nStarting Production Realtor Demo: {session_id}")
         print("=" * 70)
         
         # Initialize database
@@ -286,69 +286,69 @@ class ProductionRealtorSystem:
         
         # Simple workflow demonstration
         try:
-            print("\n📋 Simulating Enhanced Workflow Steps:")
+            print("\nSimulating Enhanced Workflow Steps:")
             
             # Step 1: Welcome
             welcome_response = await self.realtor_agent.chat(
                 "Welcome a new client looking for rental properties. Ask about their basic needs."
             )
-            print(f"\n🏠 REALTOR: {welcome_response}")
+            print(f"\nREALTOR: {welcome_response}")
             
             # Step 2: Simulate preference gathering
-            print("\n👤 USER: I'm looking for a 2-bedroom apartment downtown, budget around $1200/month, and I need parking.")
+            print("\nUSER: I'm looking for a 2-bedroom apartment downtown, budget around $1200/month, and I need parking.")
             
             # Step 3: Acknowledge and search
             search_response = await self.realtor_agent.chat(
                 "The client wants: 2-bedroom apartment, downtown location, $1200 budget, needs parking. "
                 "Acknowledge their preferences and explain you'll search the database."
             )
-            print(f"\n🏠 REALTOR: {search_response}")
+            print(f"\nREALTOR: {search_response}")
             
             # Step 4: Database search
-            print("\n🔍 Searching property database...")
+            print("\nSearching property database...")
             search_query = "Find properties WHERE bedrooms = 2 AND location = 'downtown' AND rent <= 1200 AND amenities INCLUDES 'parking'"
             search_results = await self.database_agent.chat(search_query)
-            print(f"📊 Database results: {search_results[:200]}...")
+            print(f"Database results: {search_results[:200]}...")
             
             # Step 5: Present results
             presentation_response = await self.realtor_agent.chat(
                 f"Present these database search results to the client: {search_results}. "
                 "Highlight how the properties match their criteria."
             )
-            print(f"\n🏠 REALTOR: {presentation_response}")
+            print(f"\nREALTOR: {presentation_response}")
             
             # Step 6: Follow-up
-            print("\n👤 USER: The first property looks interesting. Can you tell me more about the neighborhood?")
+            print("\nUSER: The first property looks interesting. Can you tell me more about the neighborhood?")
             
             followup_response = await self.realtor_agent.chat(
                 "The client is interested in the first property and wants to know about the neighborhood. "
                 "Provide helpful information and next steps."
             )
-            print(f"\n🏠 REALTOR: {followup_response}")
+            print(f"\nREALTOR: {followup_response}")
             
-            print(f"\n🎉 Production Demo completed!")
-            print(f"✅ Demonstrated: Database integration, preference handling, and conversation flow")
+            print(f"\nProduction Demo completed!")
+            print(f"[OK] Demonstrated: Database integration, preference handling, and conversation flow")
             
             return session_id
             
         except Exception as e:
-            print(f"\n❌ Demo failed: {e}")
+            print(f"\n[ERROR] Demo failed: {e}")
             return ""
     
     async def resume_session(self, session_id: str) -> bool:
         """Resume a paused session"""
         if session_id in self.active_sessions:
             execution_id = self.active_sessions[session_id]
-            print(f"\n🔄 Resuming session {session_id} (execution: {execution_id})")
+            print(f"\nResuming session {session_id} (execution: {execution_id})")
             
             success = await self.orchestrator.resume_conversation(session_id)
             if success:
-                print("✅ Session resumed successfully")
+                print("[OK] Session resumed successfully")
             else:
-                print("❌ Failed to resume session")
+                print("[ERROR] Failed to resume session")
             return success
         else:
-            print(f"❌ Session {session_id} not found")
+            print(f"[ERROR] Session {session_id} not found")
             return False
     
     async def get_session_status(self, session_id: str) -> Optional[Dict[str, Any]]:
@@ -363,17 +363,17 @@ class ProductionRealtorSystem:
     
     async def demonstrate_workflow_features(self):
         """Demonstrate advanced workflow features"""
-        print("\n🔧 Advanced Workflow Features Demo")
+        print("\nAdvanced Workflow Features Demo")
         print("=" * 50)
         
         # Show available workflows
         flows = await self.list_available_workflows()
-        print(f"\n📋 Available workflows: {len(flows)}")
+        print(f"\nAvailable workflows: {len(flows)}")
         for flow_id, flow_info in flows.items():
             print(f"   • {flow_id}: {flow_info['description']}")
         
         # Show workflow orchestrator capabilities
-        print(f"\n🎛️  Orchestrator Features:")
+        print(f"\n Orchestrator Features:")
         print(f"   • State persistence and recovery")
         print(f"   • Real-time user interaction handling")
         print(f"   • Automatic checkpointing every step")
@@ -387,16 +387,16 @@ class ProductionRealtorSystem:
         """Cleanup system resources"""
         await self.database_agent.cleanup_session()
         await self.realtor_agent.cleanup_session()
-        print("🧹 System cleanup completed")
+        print("System cleanup completed")
 
 
 async def demonstrate_features():
     """Demonstrate  workflow features"""
     system = ProductionRealtorSystem()
     
-    print("🚀 Production-Ready Realtor Workflow System")
-    print("💎 Enhanced with Interactive Workflow Orchestration")
-    print("🔥 Features: State persistence, rollback, real-time interaction")
+    print("Production-Ready Realtor Workflow System")
+    print("Enhanced with Interactive Workflow Orchestration")
+    print("Features: State persistence, rollback, real-time interaction")
     print()
     
     try:
@@ -411,16 +411,16 @@ async def demonstrate_features():
             # Show session status
             status = await system.get_session_status(session_id)
             if status:
-                print(f"\n📊 Final Session Status:")
+                print(f"\nFinal Session Status:")
                 print(f"   Status: {status['status']}")
                 print(f"   Progress: {status['progress']:.1%}")
                 print(f"   Last updated: {status['last_updated']}")
         
     except KeyboardInterrupt:
-        print("\n\n⏸️  Demo interrupted. Session state is automatically saved.")
-        print("🔄 Use --resume to continue the conversation later.")
+        print("\n\nDemo interrupted. Session state is automatically saved.")
+        print("Use --resume to continue the conversation later.")
     except Exception as e:
-        print(f"\n❌ Demo error: {e}")
+        print(f"\n[ERROR] Demo error: {e}")
     finally:
         await system.cleanup()
 
@@ -439,7 +439,7 @@ async def main():
         
         try:
             if resume:
-                print("🔄 Resume mode - checking for previous sessions...")
+                print("Resume mode - checking for previous sessions...")
                 # In production, you'd implement session discovery
                 session_id = input("Enter session ID to resume (or press Enter for new session): ").strip()
                 
@@ -454,7 +454,7 @@ async def main():
                 await system.start_interactive_session()
                 
         except Exception as e:
-            print(f"\n❌ System error: {e}")
+            print(f"\n[ERROR] System error: {e}")
         finally:
             await system.cleanup()
 
@@ -464,15 +464,15 @@ if __name__ == "__main__":
     try:
         import aioconsole
     except ImportError:
-        print("📦 Installing aioconsole for real-time input...")
+        print("Installing aioconsole for real-time input...")
         import subprocess
         subprocess.check_call([sys.executable, "-m", "pip", "install", "aioconsole"])
         import aioconsole
     
-    print("🏠 Interactive Realtor Database Workflow")
-    print("💾 Uses enhanced workflow system with comprehensive state management") 
-    print("🔄 Run with --resume to continue previous conversations")
-    print("🎭 Run with --demo to see advanced features demonstration")
+    print("Interactive Realtor Database Workflow")
+    print("Uses enhanced workflow system with comprehensive state management") 
+    print("Run with --resume to continue previous conversations")
+    print("Run with --demo to see advanced features demonstration")
     print()
     
     asyncio.run(main())

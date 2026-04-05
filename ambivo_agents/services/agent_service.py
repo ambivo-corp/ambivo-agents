@@ -5,6 +5,7 @@ Agent Service for managing agent sessions and message processing - UPDATED WITH 
 
 import asyncio
 import logging
+import threading
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -388,6 +389,7 @@ class AgentService:
             "preferred_provider", "openai"
         )
         self.sessions: Dict[str, AgentSession] = {}
+        self._sessions_lock = threading.Lock()
         self.session_timeout = self.service_config.get("session_timeout", 3600)
         self.max_sessions = self.service_config.get("max_sessions", 100)
 
@@ -426,12 +428,13 @@ class AgentService:
             self.logger.warning(f"Session {session_id} already exists")
             return session_id
 
-        # Check session limit
-        if len(self.sessions) >= self.max_sessions:
-            self.cleanup_expired_sessions()
+        # Check session limit (thread-safe)
+        with self._sessions_lock:
             if len(self.sessions) >= self.max_sessions:
-                oldest_session = min(self.sessions.values(), key=lambda s: s.last_activity)
-                self.delete_session(oldest_session.session_id)
+                self.cleanup_expired_sessions()
+                if len(self.sessions) >= self.max_sessions:
+                    oldest_session = min(self.sessions.values(), key=lambda s: s.last_activity)
+                    self.delete_session(oldest_session.session_id)
 
         try:
             session = AgentSession(

@@ -29,7 +29,8 @@ class DockerCodeExecutor:
             try:
                 full_config = load_config()
                 config = get_config_section("docker", full_config)
-            except Exception:
+            except Exception as e:
+                logging.warning(f"Failed to load docker config, using defaults: {e}")
                 config = {}
 
         self.config = config
@@ -162,10 +163,25 @@ class DockerCodeExecutor:
         }
 
         start_time = time.time()
+        # Run with detach and enforce timeout
+        container_config["remove"] = False
+        container_config["detach"] = True
         container = self.docker_client.containers.run(**container_config)
+        try:
+            container.wait(timeout=self.timeout)
+            raw_output = container.logs(stdout=True, stderr=True)
+        except Exception:
+            container.kill()
+            container.remove(force=True)
+            raise TimeoutError(f"Code execution exceeded {self.timeout}s timeout")
+        finally:
+            try:
+                container.remove(force=True)
+            except Exception:
+                pass
         execution_time = time.time() - start_time
 
-        output = container.decode("utf-8") if isinstance(container, bytes) else str(container)
+        output = raw_output.decode("utf-8") if isinstance(raw_output, bytes) else str(raw_output)
 
         # List output files
         output_files = self.shared_manager.list_outputs(self.output_subdir)
@@ -222,11 +238,25 @@ class DockerCodeExecutor:
                 }
 
                 start_time = time.time()
+                container_config["remove"] = False
+                container_config["detach"] = True
                 container = self.docker_client.containers.run(**container_config)
+                try:
+                    container.wait(timeout=self.timeout)
+                    raw = container.logs(stdout=True, stderr=True)
+                except Exception:
+                    container.kill()
+                    container.remove(force=True)
+                    raise TimeoutError(f"Code execution exceeded {self.timeout}s timeout")
+                finally:
+                    try:
+                        container.remove(force=True)
+                    except Exception:
+                        pass
                 execution_time = time.time() - start_time
 
                 output = (
-                    container.decode("utf-8") if isinstance(container, bytes) else str(container)
+                    raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
                 )
 
                 return {
@@ -284,14 +314,21 @@ class DockerCodeExecutor:
                 volumes = {str(temp_path): {"bind": "/workspace", "mode": "rw"}}
 
                 # Mount host input directory if provided (read-only for security)
+                # Validate paths are within shared_base_dir to prevent traversal
+                allowed_base = Path(self.config.get("shared_base_dir", "./docker_shared")).resolve()
                 if host_input_dir and os.path.exists(host_input_dir):
-                    volumes[os.path.abspath(host_input_dir)] = {"bind": "/host_input", "mode": "ro"}
+                    resolved_input = Path(host_input_dir).resolve()
+                    if not resolved_input.is_relative_to(allowed_base):
+                        raise ValueError(f"Input directory {host_input_dir} is outside allowed base")
+                    volumes[str(resolved_input)] = {"bind": "/host_input", "mode": "ro"}
 
                 # Mount host output directory if provided (read-write for file creation)
                 if host_output_dir:
-                    # Create output directory if it doesn't exist
+                    resolved_output = Path(host_output_dir).resolve()
+                    if not resolved_output.is_relative_to(allowed_base):
+                        raise ValueError(f"Output directory {host_output_dir} is outside allowed base")
                     os.makedirs(host_output_dir, exist_ok=True)
-                    volumes[os.path.abspath(host_output_dir)] = {
+                    volumes[str(resolved_output)] = {
                         "bind": "/host_output",
                         "mode": "rw",
                     }
@@ -309,11 +346,25 @@ class DockerCodeExecutor:
                 }
 
                 start_time = time.time()
+                container_config["remove"] = False
+                container_config["detach"] = True
                 container = self.docker_client.containers.run(**container_config)
+                try:
+                    container.wait(timeout=self.timeout)
+                    raw = container.logs(stdout=True, stderr=True)
+                except Exception:
+                    container.kill()
+                    container.remove(force=True)
+                    raise TimeoutError(f"Code execution exceeded {self.timeout}s timeout")
+                finally:
+                    try:
+                        container.remove(force=True)
+                    except Exception:
+                        pass
                 execution_time = time.time() - start_time
 
                 output = (
-                    container.decode("utf-8") if isinstance(container, bytes) else str(container)
+                    raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
                 )
 
                 return {

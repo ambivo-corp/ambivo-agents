@@ -146,7 +146,22 @@ ls -la /workspace/output/
                 start_time = time.time()
 
                 try:
-                    result = self.docker_client.containers.run(**container_config)
+                    # Run with detach and enforce timeout
+                    container_config["remove"] = False
+                    container_config["detach"] = True
+                    container = self.docker_client.containers.run(**container_config)
+                    try:
+                        container.wait(timeout=self.timeout)
+                        result = container.logs(stdout=True, stderr=True)
+                    except Exception:
+                        container.kill()
+                        container.remove(force=True)
+                        raise TimeoutError(f"YouTube download exceeded {self.timeout}s timeout")
+                    finally:
+                        try:
+                            container.remove(force=True)
+                        except Exception:
+                            pass
                     execution_time = time.time() - start_time
 
                     output = result.decode("utf-8") if isinstance(result, bytes) else str(result)
@@ -184,9 +199,8 @@ ls -la /workspace/output/
                                     download_result = json.loads(line.strip())
                                     output_info.update(download_result)
                                     break
-                        except Exception as e:
-                            logging.debug(f"JSON parsing failed for download result: {e}")
-                            pass  # JSON parsing failed, use basic info
+                        except (json.JSONDecodeError, ValueError) as e:
+                            logging.warning(f"Failed to parse download metadata: {e}")
 
                     return {
                         "success": True,
@@ -324,10 +338,11 @@ def download_yt(url: str, audio_only: bool = True, output_dir: str = ".", custom
 
 if __name__ == '__main__':
     try:
-        url = "{url}"
-        audio_only = {audio_only}  # This will be True or False, not string
+        import json as _json
+        url = _json.loads({json.dumps(json.dumps(url))})
+        audio_only = {json.dumps(audio_only)}
         output_dir = "/workspace/output"
-        custom_filename = {f'"{output_filename}"' if output_filename else 'None'}
+        custom_filename = _json.loads({json.dumps(json.dumps(output_filename)) if output_filename else '"null"'})
 
         print(f"Downloading from: {{url}}")
         print(f"Audio only: {{audio_only}}")

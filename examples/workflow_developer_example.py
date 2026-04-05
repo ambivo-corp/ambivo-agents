@@ -32,7 +32,7 @@ async def interactive_workflow_generation():
     Interactive workflow generation session.
     The agent will guide you through creating a custom workflow.
     """
-    print("🏗️ Workflow Developer Agent - Interactive Session")
+    print("Workflow Developer Agent - Interactive Session")
     print("=" * 60)
     print("I'll help you create a complete workflow system!")
     print("Just answer my questions and I'll generate all the code.\n")
@@ -45,15 +45,15 @@ async def interactive_workflow_generation():
     try:
         # Start the conversation
         response = await developer_agent.chat("Hello, I want to create a new workflow system")
-        print(f"🤖 Agent: {response}")
+        print(f"Agent: {response}")
         
         # Interactive loop
         while True:
             try:
-                user_input = input("\n👤 You: ").strip()
+                user_input = input("\nYou: ").strip()
                 
                 if user_input.lower() in ['exit', 'quit', 'bye']:
-                    print("\n👋 Thanks for using the Workflow Developer Agent!")
+                    print("\nThanks for using the Workflow Developer Agent!")
                     break
                 
                 if not user_input:
@@ -61,23 +61,23 @@ async def interactive_workflow_generation():
                 
                 # Get response from agent
                 response = await developer_agent.chat(user_input)
-                print(f"\n🤖 Agent: {response}")
+                print(f"\nAgent: {response}")
                 
                 # Check if code generation is complete
                 if "Generated workflow files" in response or "Workflow Code Generated Successfully" in response:
-                    print("\n🎉 Your workflow code has been generated!")
+                    print("\nYour workflow code has been generated!")
                     print("Check the docker_shared/output/generated_workflows/ directory for your files.")
                     break
                     
             except KeyboardInterrupt:
-                print("\n\n⏸️ Session interrupted. Your progress is saved!")
+                print("\n\nSession interrupted. Your progress is saved!")
                 break
             except EOFError:
-                print("\n\n👋 Session ended.")
+                print("\n\nSession ended.")
                 break
                 
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n[ERROR] Error: {e}")
         
     finally:
         await developer_agent.cleanup_session()
@@ -88,7 +88,7 @@ async def automated_workflow_generation_demo():
     Automated demo showing the complete workflow generation process.
     This simulates a developer answering all the questions automatically.
     """
-    print("🚀 Automated Workflow Generation Demo")
+    print("Automated Workflow Generation Demo")
     print("=" * 50)
     print("Simulating a developer creating an e-commerce workflow...\n")
     
@@ -109,22 +109,22 @@ async def automated_workflow_generation_demo():
         ]
         
         for user_input, stage in demo_conversation:
-            print(f"📝 {stage}...")
-            print(f"👤 User: {user_input}")
+            print(f"{stage}...")
+            print(f"User: {user_input}")
             
             response = await developer_agent.chat(user_input)
-            print(f"🤖 Agent: {response[:200]}...")
+            print(f"Agent: {response[:200]}...")
             print()
             
             # Small delay for demo effect
             await asyncio.sleep(1)
             
             if "Generated workflow files" in response or "Workflow Code Generated Successfully" in response:
-                print("🎉 Demo completed! E-commerce workflow generated successfully!")
+                print("Demo completed! E-commerce workflow generated successfully!")
                 break
                 
     except Exception as e:
-        print(f"❌ Demo error: {e}")
+        print(f"[ERROR] Demo error: {e}")
         
     finally:
         await developer_agent.cleanup_session()
@@ -134,7 +134,7 @@ async def quick_workflow_test():
     """
     Quick test to verify the WorkflowDeveloperAgent is working correctly.
     """
-    print("🧪 Quick Workflow Developer Agent Test")
+    print("Quick Workflow Developer Agent Test")
     print("=" * 40)
     
     try:
@@ -144,26 +144,26 @@ async def quick_workflow_test():
         # Test basic functionality
         response = await agent.chat("Hello")
         assert "Welcome to the Workflow Developer Agent" in response
-        print("✅ Agent initialization: PASSED")
+        print("[OK] Agent initialization: PASSED")
         
         # Test domain collection
         response = await agent.chat("Healthcare patient intake")
         assert "HealthcarePatientIntakeWorkflowSystem" in response or "class name" in response.lower()
-        print("✅ Domain processing: PASSED")
+        print("[OK] Domain processing: PASSED")
         
         # Cleanup
         await agent.cleanup_session()
-        print("✅ Cleanup: PASSED")
+        print("[OK] Cleanup: PASSED")
         
-        print("\n🎉 All tests passed! WorkflowDeveloperAgent is working correctly.")
+        print("\nAll tests passed! WorkflowDeveloperAgent is working correctly.")
         
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+        print(f"[ERROR] Test failed: {e}")
 
 
 async def main():
     """Main function with different usage options"""
-    print("🏗️ Workflow Developer Agent Examples")
+    print("Workflow Developer Agent Examples")
     print("=" * 50)
     print("Choose an option:")
     print("1. Interactive workflow generation (recommended)")

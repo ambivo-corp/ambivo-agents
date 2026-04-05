@@ -35,14 +35,14 @@ async def create_sample_data():
     with open(file_path, 'w') as f:
         f.write(csv_content)
     
-    print(f"✅ Created sample file: {file_path}")
+    print(f"[OK] Created sample file: {file_path}")
     return str(file_path)
 
 
 async def demo_analytics_agent():
     """Demonstrate direct Analytics Agent usage"""
     print("\n" + "="*60)
-    print("📊 ANALYTICS AGENT - Data Analysis & Visualization")
+    print("ANALYTICS AGENT - Data Analysis & Visualization")
     print("="*60)
     
     await create_sample_data()
@@ -72,7 +72,7 @@ async def demo_analytics_agent():
 async def demo_knowledge_base_agent():
     """Demonstrate direct Knowledge Base Agent usage"""
     print("\n" + "="*60)
-    print("🧠 KNOWLEDGE BASE AGENT - Document Ingestion & Semantic Search")
+    print("KNOWLEDGE BASE AGENT - Document Ingestion & Semantic Search")
     print("="*60)
     
     kb = KnowledgeBaseAgent.create_simple(user_id="demo_user")
@@ -102,7 +102,7 @@ async def demo_knowledge_base_agent():
 async def demo_database_agent():
     """Demonstrate direct Database Agent usage"""
     print("\n" + "="*60)
-    print("💾 DATABASE AGENT - Database Operations & SQL Queries")
+    print("DATABASE AGENT - Database Operations & SQL Queries")
     print("="*60)
     
     db = DatabaseAgent.create_simple(user_id="demo_user")
@@ -130,26 +130,26 @@ async def demo_database_agent():
 async def demo_targeted_commands():
     """Show how to target specific functionality with precise commands"""
     print("\n" + "="*60)
-    print("🎯 TARGETED COMMANDS - Avoiding Routing Ambiguity")
+    print("TARGETED COMMANDS - Avoiding Routing Ambiguity")
     print("="*60)
     
     await create_sample_data()
     
-    print("\n📊 Analytics Agent - Data Analysis:")
+    print("\nAnalytics Agent - Data Analysis:")
     print("   Command: 'load data from sample_sales.csv and analyze it'")
     analytics = AnalyticsAgent.create_simple(user_id="analytics_demo")
     response = await analytics.process_message("load data from sample_sales.csv and analyze it")
     print(f"   Response: {(response.content if hasattr(response, 'content') else response)[:100]}...")
     await analytics.cleanup_session()
     
-    print("\n🧠 Knowledge Base Agent - Document Ingestion:")
+    print("\nKnowledge Base Agent - Document Ingestion:")
     print("   Command: 'create knowledge base called sales_analysis'")
     kb = KnowledgeBaseAgent.create_simple(user_id="kb_demo")
     response = await kb.process_message("create knowledge base called sales_analysis")
     print(f"   Response: {(response.content if hasattr(response, 'content') else response)[:100]}...")
     await kb.cleanup_session()
     
-    print("\n💾 Database Agent - Connection Check:")
+    print("\nDatabase Agent - Connection Check:")
     print("   Command: 'check database connection status'")
     db = DatabaseAgent.create_simple(user_id="db_demo")
     response = await db.process_message("check database connection status")
@@ -160,7 +160,7 @@ async def demo_targeted_commands():
 async def interactive_direct_mode():
     """Interactive mode using direct agent selection"""
     print("\n" + "="*60)
-    print("🎮 INTERACTIVE DIRECT MODE")
+    print("INTERACTIVE DIRECT MODE")
     print("="*60)
     print("Choose your agent directly - no routing ambiguity!")
     print("\nAvailable agents:")
@@ -187,9 +187,9 @@ async def interactive_direct_mode():
                 break
             elif choice in ["1", "2", "3"]:
                 agent_map = {
-                    "1": ("analytics", "📊 Analytics Agent"),
-                    "2": ("knowledge_base", "🧠 Knowledge Base Agent"),
-                    "3": ("database", "💾 Database Agent")
+                    "1": ("analytics", "Analytics Agent"),
+                    "2": ("knowledge_base", "Knowledge Base Agent"),
+                    "3": ("database", "Database Agent")
                 }
                 
                 agent_key, agent_name = agent_map[choice]
@@ -208,7 +208,7 @@ async def interactive_direct_mode():
                         else:
                             print(response)
                     except Exception as e:
-                        print(f"\n❌ Error: {e}")
+                        print(f"\n[ERROR] Error: {e}")
             else:
                 print("Invalid choice. Please select 1-4.")
                 
@@ -216,18 +216,18 @@ async def interactive_direct_mode():
         # Cleanup all agents
         for agent in agents.values():
             await agent.cleanup_session()
-        print("\n✅ All sessions cleaned up")
+        print("\n[OK] All sessions cleaned up")
 
 
 def show_usage_guide():
     """Show usage guide for direct agent approach"""
     print("""
-🎯 DIRECT AGENT USAGE GUIDE
+DIRECT AGENT USAGE GUIDE
 ==========================
 
 Instead of relying on moderator routing, use agents directly for their specialized roles:
 
-📊 ANALYTICS AGENT - Best for:
+ANALYTICS AGENT - Best for:
    • CSV/Excel data analysis
    • Statistical queries  
    • Data visualization recommendations
@@ -238,7 +238,7 @@ Instead of relying on moderator routing, use agents directly for their specializ
    • "what are the top 10 products by revenue?"
    • "show me summary statistics"
 
-🧠 KNOWLEDGE BASE AGENT - Best for:
+KNOWLEDGE BASE AGENT - Best for:
    • Document ingestion for semantic search
    • Text-based queries
    • Information retrieval
@@ -249,7 +249,7 @@ Instead of relying on moderator routing, use agents directly for their specializ
    • "ingest document.pdf into my_docs"
    • "search for information about X in my_docs"
 
-💾 DATABASE AGENT - Best for:
+DATABASE AGENT - Best for:
    • Database connections (MongoDB, MySQL, PostgreSQL)
    • SQL queries
    • Database schema operations
@@ -260,13 +260,13 @@ Instead of relying on moderator routing, use agents directly for their specializ
    • "show tables in database"
    • "ingest data.json into mongodb collection"
 
-🎮 INTERACTIVE MODE:
+INTERACTIVE MODE:
    python direct_agent_example.py interactive
 
-📋 DEMO ALL AGENTS:
+DEMO ALL AGENTS:
    python direct_agent_example.py demo
    
-🎯 TARGETED COMMANDS:
+TARGETED COMMANDS:
    python direct_agent_example.py targeted
 """)
 

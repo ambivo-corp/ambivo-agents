@@ -319,7 +319,8 @@ class AgentFactory:
                         **kwargs,
                     )
                 except Exception as e:
-                    logging.error(f"Failed to create KnowledgeBaseAgent: {e}")
+                    logging.error(f"Failed to create KnowledgeBaseAgent: {e}", exc_info=True)
+                    raise ValueError(f"Failed to create KnowledgeBaseAgent: {e}") from e
 
             elif capabilities.get("web_search", False):
                 try:
@@ -333,7 +334,8 @@ class AgentFactory:
                         **kwargs,
                     )
                 except Exception as e:
-                    logging.error(f"Failed to create WebSearchAgent: {e}")
+                    logging.error(f"Failed to create WebSearchAgent: {e}", exc_info=True)
+                    raise ValueError(f"Failed to create WebSearchAgent: {e}") from e
 
             elif capabilities.get("youtube_download", False):
                 try:
@@ -347,7 +349,8 @@ class AgentFactory:
                         **kwargs,
                     )
                 except Exception as e:
-                    logging.error(f"Failed to create YouTubeDownloadAgent: {e}")
+                    logging.error(f"Failed to create YouTubeDownloadAgent: {e}", exc_info=True)
+                    raise ValueError(f"Failed to create YouTubeDownloadAgent: {e}") from e
 
             elif capabilities.get("web_scraping", False):
                 try:
@@ -361,7 +364,8 @@ class AgentFactory:
                         **kwargs,
                     )
                 except Exception as e:
-                    logging.error(f"Failed to create WebScraperAgent: {e}")
+                    logging.error(f"Failed to create WebScraperAgent: {e}", exc_info=True)
+                    raise ValueError(f"Failed to create WebScraperAgent: {e}") from e
 
             elif capabilities.get("media_editor", False):
                 try:
@@ -375,7 +379,8 @@ class AgentFactory:
                         **kwargs,
                     )
                 except Exception as e:
-                    logging.error(f"Failed to create MediaEditorAgent: {e}")
+                    logging.error(f"Failed to create MediaEditorAgent: {e}", exc_info=True)
+                    raise ValueError(f"Failed to create MediaEditorAgent: {e}") from e
 
             # Fallback to assistant if no specialized researcher is available
             logging.warning(

@@ -1086,7 +1086,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             yield f"**Searching Knowledge Base:** {kb_name}\n"
             yield f"**Query:** {query_content}\n\n"
 
-            yield "⏳ Performing semantic search...\n"
+            yield "Performing semantic search...\n"
 
             # Perform the actual query
             result = await self._query_knowledge_base(kb_name, query_content)
@@ -1234,7 +1234,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                     f" **{operation_type} Ingestion Completed**\n\n"
                     f" **Source:** {document_path}\n"
                     f" **Knowledge Base:** {kb_name}\n"
-                    f"⏱ **Status:** Successfully processed and indexed\n\n"
+                    f"**Status:** Successfully processed and indexed\n\n"
                     f"You can now query this knowledge base! "
                 )
             else:
@@ -2060,7 +2060,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             yield f" **Processing:** {document_path}\n"
             yield f" **Target KB:** {kb_name}\n\n"
 
-            yield "⏳ Starting ingestion process...\n"
+            yield "Starting ingestion process...\n"
 
             # Simulate progress updates during ingestion
             start_time = time.time()
@@ -2100,7 +2100,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             yield f" **Processing text for {kb_name}**\n"
             yield f" **Text length:** {len(text_content)} characters\n\n"
 
-            yield "⏳ Processing and indexing text...\n"
+            yield "Processing and indexing text...\n"
 
             result = await self._ingest_text(kb_name, text_content)
 
@@ -2141,7 +2141,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             yield f" **Searching Knowledge Base:** {kb_name}\n"
             yield f" **Query:** {query_content}\n\n"
 
-            yield "⏳ Performing semantic search...\n"
+            yield "Performing semantic search...\n"
 
             # Perform the actual query
             result = await self._query_knowledge_base(kb_name, query_content)

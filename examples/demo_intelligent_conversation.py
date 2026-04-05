@@ -71,7 +71,7 @@ class ConversationDemo:
     async def initialize(self):
         """Initialize the demo system"""
         print("\n" + "="*100)
-        print("🚀 Intelligent Conversation System Demo")
+        print("Intelligent Conversation System Demo")
         print("="*100)
         print("This demo showcases:")
         print("• Multi-source information gathering (Knowledge Base, Web Search, Web Scraping)")
@@ -90,9 +90,9 @@ class ConversationDemo:
             max_scrape_urls=2
         )
         
-        print(f"\n✅ System initialized with session ID: {self.context.session_id}")
-        print(f"📊 Quality threshold: {QualityLevel.GOOD.value}")
-        print(f"🤖 User ID: {self.user_id}")
+        print(f"\n[OK] System initialized with session ID: {self.context.session_id}")
+        print(f"Quality threshold: {QualityLevel.GOOD.value}")
+        print(f"User ID: {self.user_id}")
     
     async def run_demo_query(self, query_info: dict, query_index: int):
         """Run a single demo query and display results"""
@@ -103,10 +103,10 @@ class ConversationDemo:
         print(f"\n" + "="*80)
         print(f"Demo Query #{query_index}")
         print("="*80)
-        print(f"📝 Description: {description}")
-        print(f"❓ Query: {query}")
-        print(f"🎯 Expected sources: {', '.join(expected_sources)}")
-        print("\n🔄 Processing...")
+        print(f"Description: {description}")
+        print(f"Query: {query}")
+        print(f"Expected sources: {', '.join(expected_sources)}")
+        print("\nProcessing...")
         
         # Detect user preferences from query
         user_preferences = {}
@@ -128,11 +128,11 @@ class ConversationDemo:
             processing_time = (end_time - start_time).total_seconds()
             
             # Display results
-            print("\n" + "📋 RESULTS".center(60, "-"))
+            print("\n" + "RESULTS".center(60, "-"))
             
             # Response content (truncated for demo)
             response = result.get('response', 'No response generated')
-            print(f"\n🤖 Response: {response[:300]}...")
+            print(f"\nResponse: {response[:300]}...")
             
             # Quality assessment
             if 'quality_assessment' in result:
@@ -143,56 +143,56 @@ class ConversationDemo:
                 
                 # Quality indicator
                 quality_emoji = {
-                    'excellent': '🌟',
-                    'good': '✅',
-                    'fair': '⚠️',
-                    'poor': '❌',
-                    'unacceptable': '🚫'
-                }.get(quality_level, '❓')
+                    'excellent': '',
+                    'good': '[OK]',
+                    'fair': '[WARN]',
+                    'poor': '[ERROR]',
+                    'unacceptable': ''
+                }.get(quality_level, '')
                 
                 print(f"\n{quality_emoji} Quality: {quality_level} (confidence: {confidence:.1%})")
-                print(f"📚 Sources used: {', '.join(sources_used) if sources_used else 'None'}")
+                print(f"Sources used: {', '.join(sources_used) if sources_used else 'None'}")
                 
                 # Check if expected sources were used
                 expected_set = set(expected_sources)
                 actual_set = set(sources_used)
                 if expected_set.intersection(actual_set):
-                    print("✅ Expected sources were consulted")
+                    print("[OK] Expected sources were consulted")
                 else:
-                    print("⚠️ Expected sources may not have been fully consulted")
+                    print("[WARN]Expected sources may not have been fully consulted")
                 
                 # Show strengths and weaknesses
                 if qa.get('strengths'):
-                    print(f"\n💪 Strengths:")
+                    print(f"\nStrengths:")
                     for strength in qa['strengths']:
                         print(f"   • {strength}")
                 
                 if qa.get('weaknesses'):
-                    print(f"\n⚠️ Areas for improvement:")
+                    print(f"\n[WARN]Areas for improvement:")
                     for weakness in qa['weaknesses']:
                         print(f"   • {weakness}")
             
             # Query analysis
             if 'query_analysis' in result:
                 analysis = result['query_analysis']
-                print(f"\n🧠 Query Analysis:")
+                print(f"\nQuery Analysis:")
                 print(f"   • Query type: {analysis.get('query_type', 'unknown')}")
                 print(f"   • Strategy used: {analysis.get('strategy_used', 'unknown')}")
                 print(f"   • Sources consulted: {analysis.get('sources_consulted', 0)}")
             
             # Processing metadata
             metadata = result.get('metadata', {})
-            print(f"\n⏱️ Processing Statistics:")
+            print(f"\nProcessing Statistics:")
             print(f"   • Processing time: {processing_time:.2f} seconds")
             print(f"   • Iterations: {metadata.get('iterations', 1)}")
             print(f"   • Total sources consulted: {metadata.get('total_sources_consulted', 0)}")
             
             # Success indicator
-            success_emoji = "🎉" if quality_level in ['excellent', 'good'] else "🔄"
-            print(f"\n{success_emoji} Query processing {'completed successfully' if success_emoji == '🎉' else 'completed with room for improvement'}")
+            success_emoji = "" if quality_level in ['excellent', 'good'] else ""
+            print(f"\n{success_emoji} Query processing {'completed successfully' if success_emoji == '' else 'completed with room for improvement'}")
             
         except Exception as e:
-            print(f"\n❌ Error processing query: {str(e)}")
+            print(f"\n[ERROR] Error processing query: {str(e)}")
             self.logger.error(f"Error in demo query {query_index}: {e}")
             import traceback
             traceback.print_exc()
@@ -200,7 +200,7 @@ class ConversationDemo:
     async def run_interactive_demo(self):
         """Run interactive demo where user can input custom queries"""
         print("\n" + "="*80)
-        print("🎮 Interactive Demo Mode")
+        print("Interactive Demo Mode")
         print("="*80)
         print("Now you can test the system with your own queries!")
         print("Tips:")
@@ -212,7 +212,7 @@ class ConversationDemo:
         
         while True:
             try:
-                user_query = input("\n💭 Your query: ").strip()
+                user_query = input("\nYour query: ").strip()
                 
                 if user_query.lower() in ['exit', 'quit', 'done']:
                     break
@@ -240,14 +240,14 @@ class ConversationDemo:
             
             # Small pause between queries
             if i < len(self.demo_queries):
-                input("\n⏸️ Press Enter to continue to next demo query...")
+                input("\nPress Enter to continue to next demo query...")
         
         # Ask if user wants interactive demo
         print("\n" + "="*80)
-        print("✨ Predefined demo completed!")
+        print("Predefined demo completed!")
         
         try:
-            run_interactive = input("\n🎮 Would you like to try the interactive demo? (y/n): ").strip().lower()
+            run_interactive = input("\nWould you like to try the interactive demo? (y/n): ").strip().lower()
             if run_interactive in ['y', 'yes']:
                 await self.run_interactive_demo()
         except (EOFError, KeyboardInterrupt):
@@ -255,41 +255,41 @@ class ConversationDemo:
         
         # Summary
         print("\n" + "="*80)
-        print("📊 Demo Summary")
+        print("Demo Summary")
         print("="*80)
-        print(f"✅ Completed {len(self.demo_queries)} predefined demo queries")
-        print("🎯 Demonstrated multi-source information gathering")
-        print("📈 Showed automatic quality assessment and improvement")
-        print("🧠 Showcased intelligent query analysis and source selection")
-        print("👤 Highlighted user preference handling")
+        print(f"[OK] Completed {len(self.demo_queries)} predefined demo queries")
+        print("Demonstrated multi-source information gathering")
+        print("Showed automatic quality assessment and improvement")
+        print("Showcased intelligent query analysis and source selection")
+        print("Highlighted user preference handling")
         
         # Cleanup
         await self.cleanup()
     
     async def cleanup(self):
         """Clean up resources"""
-        print("\n🧹 Cleaning up demo resources...")
+        print("\nCleaning up demo resources...")
         if self.moderator:
             await self.moderator.cleanup_session()
-        print("✅ Demo cleanup completed")
+        print("[OK] Demo cleanup completed")
 
 
 async def main():
     """Main entry point for the demo"""
-    print("🎬 Starting Intelligent Conversation System Demo...")
+    print("Starting Intelligent Conversation System Demo...")
     
     demo = ConversationDemo("demo_user_" + datetime.now().strftime("%Y%m%d_%H%M%S"))
     
     try:
         await demo.run_full_demo()
-        print("\n👋 Thank you for trying the Intelligent Conversation System Demo!")
+        print("\nThank you for trying the Intelligent Conversation System Demo!")
         
     except KeyboardInterrupt:
-        print("\n\n⏹️ Demo interrupted by user")
+        print("\n\nDemo interrupted by user")
         await demo.cleanup()
         
     except Exception as e:
-        print(f"\n❌ Demo failed with error: {e}")
+        print(f"\n[ERROR] Demo failed with error: {e}")
         import traceback
         traceback.print_exc()
         await demo.cleanup()

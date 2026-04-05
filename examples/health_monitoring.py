@@ -14,7 +14,7 @@ async def main():
     service = create_agent_service()
 
     # Health check
-    print("🏥 Health Check:")
+    print("Health Check:")
     health = service.health_check()
 
     print(f"   Service Available: {health['service_available']}")
@@ -23,7 +23,7 @@ async def main():
     print(f"   Current LLM Provider: {health.get('llm_current_provider', 'Unknown')}")
 
     # Service statistics
-    print(f"\n📊 Service Statistics:")
+    print(f"\nService Statistics:")
     stats = service.get_service_stats()
 
     print(f"   Status: {stats['service_status']}")
@@ -32,13 +32,13 @@ async def main():
     print(f"   Total Sessions: {stats['total_sessions_created']}")
     print(f"   Messages Processed: {stats['total_messages_processed']}")
 
-    print(f"\n🔧 Available Agent Types:")
+    print(f"\nAvailable Agent Types:")
     for agent_type, available in stats['available_agent_types'].items():
-        status = "✅" if available else "❌"
+        status = "[OK]" if available else "[ERROR]"
         print(f"   {status} {agent_type}")
 
     # Process some messages to generate activity
-    print(f"\n🔄 Processing test messages...")
+    print(f"\nProcessing test messages...")
 
     test_messages = [
         "Hello!",
@@ -52,11 +52,11 @@ async def main():
             session_id=f"test-session-{i}",
             user_id="test-user"
         )
-        print(f"   Message {i + 1}: {'✅' if result['success'] else '❌'}")
+        print(f"   Message {i + 1}: {'[OK]' if result['success'] else '[ERROR]'}")
         time.sleep(0.5)  # Small delay
 
     # Updated statistics
-    print(f"\n📊 Updated Statistics:")
+    print(f"\nUpdated Statistics:")
     updated_stats = service.get_service_stats()
     print(f"   Active Sessions: {updated_stats['active_sessions']}")
     print(f"   Total Sessions: {updated_stats['total_sessions_created']}")

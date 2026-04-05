@@ -227,7 +227,7 @@ class AmbivoWorkflow:
                     except Exception as e:
                         error_msg = f"Error executing {node_id}: {str(e)}"
                         errors.append(error_msg)
-                        self.logger.error(error_msg)
+                        self.logger.error(error_msg, exc_info=True)
 
             execution_time = time.time() - start_time
 
@@ -305,11 +305,18 @@ class AmbivoWorkflow:
                             task = node.agent.process_message(current_message, execution_context)
                             tasks.append((node_id, task))
 
-                    # Wait for all parallel tasks
+                    # Wait for all parallel tasks with timeout
                     if tasks:
-                        results = await asyncio.gather(
-                            *[task for _, task in tasks], return_exceptions=True
-                        )
+                        try:
+                            results = await asyncio.wait_for(
+                                asyncio.gather(
+                                    *[task for _, task in tasks], return_exceptions=True
+                                ),
+                                timeout=300,  # 5 minute timeout for parallel execution
+                            )
+                        except asyncio.TimeoutError:
+                            errors.append("Parallel workflow execution timed out after 300s")
+                            results = [TimeoutError("Parallel execution timed out")] * len(tasks)
 
                         parallel_responses = []
                         for i, (node_id, _) in enumerate(tasks):

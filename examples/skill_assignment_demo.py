@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 async def demo_assistant_with_api_skill():
     """Demo AssistantAgent with assigned API skill"""
     print("\n" + "="*80)
-    print("🎯 DEMO 1: AssistantAgent with API Skill Assignment")
+    print("DEMO 1: AssistantAgent with API Skill Assignment")
     print("="*80)
     
     # Create AssistantAgent
@@ -43,17 +43,17 @@ async def demo_assistant_with_api_skill():
     )
     
     if result['success']:
-        print(f"✅ Assigned API skill: {result['skill_name']}")
+        print(f"[OK] Assigned API skill: {result['skill_name']}")
         print(f"   - API Title: {result['api_title']}")
         print(f"   - Endpoints: {result['endpoints_count']}")
         print(f"   - Base URL: {result['base_url']}")
     else:
-        print(f"❌ Failed to assign API skill: {result['error']}")
+        print(f"[ERROR] Failed to assign API skill: {result['error']}")
         return
     
     # List assigned skills
     skills = assistant.list_assigned_skills()
-    print(f"\n📋 Assigned Skills Summary: {skills}")
+    print(f"\nAssigned Skills Summary: {skills}")
     
     # Now test with various user requests
     test_requests = [
@@ -64,18 +64,18 @@ async def demo_assistant_with_api_skill():
     ]
     
     for request in test_requests:
-        print(f"\n👤 User: {request}")
+        print(f"\nUser: {request}")
         response = await assistant.chat(request)
-        print(f"🤖 Assistant: {response}")
+        print(f"Assistant: {response}")
     
     await assistant.cleanup_session()
-    print("\n✅ Demo 1 completed!")
+    print("\n[OK] Demo 1 completed!")
 
 
 async def demo_moderator_with_multiple_skills():
     """Demo ModeratorAgent with multiple assigned skills"""
     print("\n" + "="*80)
-    print("🎯 DEMO 2: ModeratorAgent with Multiple Skills")
+    print("DEMO 2: ModeratorAgent with Multiple Skills")
     print("="*80)
     
     # Create ModeratorAgent
@@ -108,13 +108,13 @@ async def demo_moderator_with_multiple_skills():
         skill_name="company_docs"
     )
     
-    print(f"API Skill: {'✅' if api_result['success'] else '❌'} {api_result.get('skill_name', api_result.get('error'))}")
-    print(f"DB Skill: {'✅' if db_result['success'] else '❌'} {db_result.get('skill_name', db_result.get('error'))}")
-    print(f"KB Skill: {'✅' if kb_result['success'] else '❌'} {kb_result.get('skill_name', kb_result.get('error'))}")
+    print(f"API Skill: {'[OK]' if api_result['success'] else '[ERROR]'} {api_result.get('skill_name', api_result.get('error'))}")
+    print(f"DB Skill: {'[OK]' if db_result['success'] else '[ERROR]'} {db_result.get('skill_name', db_result.get('error'))}")
+    print(f"KB Skill: {'[OK]' if kb_result['success'] else '[ERROR]'} {kb_result.get('skill_name', kb_result.get('error'))}")
     
     # List all assigned skills
     all_skills = moderator.list_assigned_skills()
-    print(f"\n📋 All Assigned Skills: {all_skills}")
+    print(f"\nAll Assigned Skills: {all_skills}")
     
     # Test various requests that should use different skills
     test_scenarios = [
@@ -136,19 +136,19 @@ async def demo_moderator_with_multiple_skills():
     ]
     
     for request, expected in test_scenarios:
-        print(f"\n👤 User: {request}")
-        print(f"🎯 Expected: {expected}")
+        print(f"\nUser: {request}")
+        print(f"Expected: {expected}")
         response = await moderator.chat(request)
-        print(f"🤖 Moderator: {response}")
+        print(f"Moderator: {response}")
     
     await moderator.cleanup_session()
-    print("\n✅ Demo 2 completed!")
+    print("\n[OK] Demo 2 completed!")
 
 
 async def demo_skill_priority_and_fallback():
     """Demo how skills work with agent priority and fallback"""
     print("\n" + "="*80)
-    print("🎯 DEMO 3: Skill Priority and Fallback Behavior")
+    print("DEMO 3: Skill Priority and Fallback Behavior")
     print("="*80)
     
     assistant = AssistantAgent.create_simple(user_id="demo_user_3")
@@ -176,31 +176,31 @@ async def demo_skill_priority_and_fallback():
     ]
     
     for case in edge_cases:
-        print(f"\n👤 User: {case}")
+        print(f"\nUser: {case}")
         response = await assistant.chat(case)
-        print(f"🤖 Assistant: {response}")
+        print(f"Assistant: {response}")
     
     await assistant.cleanup_session()
-    print("\n✅ Demo 3 completed!")
+    print("\n[OK] Demo 3 completed!")
 
 
 async def demo_skill_configuration_and_management():
     """Demo skill configuration and management features"""
     print("\n" + "="*80)
-    print("🎯 DEMO 4: Skill Configuration and Management")
+    print("DEMO 4: Skill Configuration and Management")
     print("="*80)
     
     assistant = AssistantAgent.create_simple(user_id="demo_user_4")
     
     # Show initial state (no skills)
-    print("📊 Initial agent capabilities:")
+    print("Initial agent capabilities:")
     status = assistant.get_agent_status()
     print(f"   Agent Type: {status['agent_type']}")
     print(f"   Capabilities: {status['capabilities']}")
     print(f"   Assigned Skills: {status.get('assigned_skills', 'None')}")
     
     # Assign multiple skills and show how they're managed
-    print("\n🔧 Assigning skills...")
+    print("\nAssigning skills...")
     
     # API skill
     await assistant.assign_api_skill(
@@ -216,26 +216,26 @@ async def demo_skill_configuration_and_management():
     )
     
     # Show updated capabilities
-    print("\n📊 Updated agent capabilities:")
+    print("\nUpdated agent capabilities:")
     status = assistant.get_agent_status()
     print(f"   Agent Type: {status['agent_type']}")
     print(f"   Capabilities: {status['capabilities']}")
     print(f"   Assigned Skills: {status.get('assigned_skills')}")
     
     # Test a complex request that could use multiple skills
-    print("\n🧪 Testing complex request...")
+    print("\nTesting complex request...")
     complex_request = "Get sales data from database and then create a lead based on the top customer"
     response = await assistant.chat(complex_request)
-    print(f"👤 User: {complex_request}")
-    print(f"🤖 Assistant: {response}")
+    print(f"User: {complex_request}")
+    print(f"Assistant: {response}")
     
     await assistant.cleanup_session()
-    print("\n✅ Demo 4 completed!")
+    print("\n[OK] Demo 4 completed!")
 
 
 async def main():
     """Run all demos"""
-    print("🚀 Starting Skill Assignment Demos")
+    print("Starting Skill Assignment Demos")
     print("This demo shows how agents can be assigned external skills (APIs, databases, etc.)")
     print("and intelligently use them based on user intent.")
     
@@ -247,20 +247,20 @@ async def main():
         await demo_skill_configuration_and_management()
         
         print("\n" + "="*80)
-        print("🎉 ALL DEMOS COMPLETED SUCCESSFULLY!")
+        print("ALL DEMOS COMPLETED SUCCESSFULLY!")
         print("="*80)
         print("\nKey Features Demonstrated:")
-        print("✅ API skill assignment from OpenAPI specs")
-        print("✅ Database skill assignment with connection strings")  
-        print("✅ Knowledge base skill assignment with document paths")
-        print("✅ Intelligent intent detection and skill routing")
-        print("✅ Natural language response translation")
-        print("✅ Graceful fallback to normal agent behavior")
-        print("✅ Multiple skills on single agent")
-        print("✅ Skill management and configuration")
+        print("[OK] API skill assignment from OpenAPI specs")
+        print("[OK] Database skill assignment with connection strings")  
+        print("[OK] Knowledge base skill assignment with document paths")
+        print("[OK] Intelligent intent detection and skill routing")
+        print("[OK] Natural language response translation")
+        print("[OK] Graceful fallback to normal agent behavior")
+        print("[OK] Multiple skills on single agent")
+        print("[OK] Skill management and configuration")
         
     except Exception as e:
-        print(f"\n❌ Demo failed: {e}")
+        print(f"\n[ERROR] Demo failed: {e}")
         import traceback
         traceback.print_exc()
 

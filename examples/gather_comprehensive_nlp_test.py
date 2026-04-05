@@ -157,7 +157,7 @@ async def test_natural_language_parsing():
         }
     )
     
-    print("🧪 Testing Natural Language Understanding...")
+    print("Testing Natural Language Understanding...")
     print("-" * 50)
     
     # Test individual question types
@@ -177,22 +177,22 @@ async def test_natural_language_parsing():
     print("=" * 80)
     
     capabilities = [
-        "✅ Affirmative/Negative Intent Recognition",
+        "[OK] Affirmative/Negative Intent Recognition",
         "   'Absolutely!' → 'Yes', 'Not really' → 'No'",
         "",
-        "✅ Preference Expression Understanding", 
+        "[OK] Preference Expression Understanding", 
         "   'I'd prefer email' → 'email' option",
         "   'The first option would be good' → maps to first choice",
         "",
-        "✅ Multiple Selection from Natural Language",
+        "[OK] Multiple Selection from Natural Language",
         "   'Both AWS and Azure' → ['aws', 'azure']",
         "   'All except Oracle' → maps to all options except one",
         "",
-        "✅ Quantity/Size Understanding",
+        "[OK] Quantity/Size Understanding",
         "   'About 4 people' → '3-5 people' range",
         "   'Over 25 security folks' → '20+' category",
         "",
-        "✅ Contextual Mapping",
+        "[OK] Contextual Mapping",
         "   'Microsoft and Google clouds' → ['azure', 'gcp']",
         "   'Amazon's platform' → ['aws']"
     ]

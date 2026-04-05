@@ -23,7 +23,7 @@ async def example_1_search_scrape_ingest():
     Example 1: Search -> Scrape -> Ingest Workflow
     Similar to the AutoGen example you shared
     """
-    print("🔄 Example 1: Search -> Scrape -> Ingest Workflow")
+    print("Example 1: Search -> Scrape -> Ingest Workflow")
 
     # Create agents with auto-context
     search_agent = WebSearchAgent.create_simple(user_id="workflow_user")
@@ -42,16 +42,16 @@ async def example_1_search_scrape_ingest():
     )
 
     # Display results
-    print(f"✅ Workflow completed: {result.success}")
-    print(f"⏱️ Execution time: {result.execution_time:.2f}s")
-    print(f"🔧 Nodes executed: {', '.join(result.nodes_executed)}")
-    print(f"💬 Messages: {len(result.messages)}")
+    print(f"[OK] Workflow completed: {result.success}")
+    print(f"Execution time: {result.execution_time:.2f}s")
+    print(f"Nodes executed: {', '.join(result.nodes_executed)}")
+    print(f"Messages: {len(result.messages)}")
 
     if result.success and result.messages:
-        print(f"\n📄 Final result:\n{result.messages[-1].content[:200]}...")
+        print(f"\nFinal result:\n{result.messages[-1].content[:200]}...")
 
     if result.errors:
-        print(f"\n❌ Errors: {result.errors}")
+        print(f"\n[ERROR] Errors: {result.errors}")
 
 
 async def example_2_parallel_research():
@@ -59,7 +59,7 @@ async def example_2_parallel_research():
     Example 2: Parallel Research and Analysis
     Search feeds both storage and analysis simultaneously
     """
-    print("\n🔄 Example 2: Parallel Research and Analysis")
+    print("\nExample 2: Parallel Research and Analysis")
 
     # Create agents
     search_agent = WebSearchAgent.create_simple(user_id="workflow_user")
@@ -77,9 +77,9 @@ async def example_2_parallel_research():
         execution_context=search_agent.get_execution_context()
     )
 
-    print(f"✅ Parallel workflow completed: {result.success}")
-    print(f"⏱️ Execution time: {result.execution_time:.2f}s")
-    print(f"🔧 Nodes executed: {', '.join(result.nodes_executed)}")
+    print(f"[OK] Parallel workflow completed: {result.success}")
+    print(f"Execution time: {result.execution_time:.2f}s")
+    print(f"Nodes executed: {', '.join(result.nodes_executed)}")
 
 
 async def example_3_custom_workflow():
@@ -87,7 +87,7 @@ async def example_3_custom_workflow():
     Example 3: Custom Multi-Step Workflow
     Code generation -> Execution -> Documentation
     """
-    print("\n🔄 Example 3: Custom Multi-Step Workflow")
+    print("\nExample 3: Custom Multi-Step Workflow")
 
     # Create agents
     assistant_agent = AssistantAgent.create_simple(user_id="workflow_user")
@@ -117,9 +117,9 @@ async def example_3_custom_workflow():
         execution_context=assistant_agent.get_execution_context()
     )
 
-    print(f"✅ Custom workflow completed: {result.success}")
-    print(f"⏱️ Execution time: {result.execution_time:.2f}s")
-    print(f"🔧 Nodes executed: {', '.join(result.nodes_executed)}")
+    print(f"[OK] Custom workflow completed: {result.success}")
+    print(f"Execution time: {result.execution_time:.2f}s")
+    print(f"Nodes executed: {', '.join(result.nodes_executed)}")
 
 
 async def example_4_media_workflow():
@@ -127,7 +127,7 @@ async def example_4_media_workflow():
     Example 4: Media Processing Workflow
     YouTube Download -> Media Processing
     """
-    print("\n🔄 Example 4: Media Processing Workflow")
+    print("\nExample 4: Media Processing Workflow")
 
     # Create media agents
     youtube_agent = YouTubeDownloadAgent.create_simple(user_id="workflow_user")
@@ -144,16 +144,16 @@ async def example_4_media_workflow():
         execution_context=youtube_agent.get_execution_context()
     )
 
-    print(f"✅ Media workflow completed: {result.success}")
-    print(f"⏱️ Execution time: {result.execution_time:.2f}s")
-    print(f"🔧 Nodes executed: {', '.join(result.nodes_executed)}")
+    print(f"[OK] Media workflow completed: {result.success}")
+    print(f"Execution time: {result.execution_time:.2f}s")
+    print(f"Nodes executed: {', '.join(result.nodes_executed)}")
 
 
 async def example_5_workflow_moderator():
     """
     Example 5: Using WorkflowModerator for intelligent workflow detection
     """
-    print("\n🔄 Example 5: Workflow Moderator with Auto-Detection")
+    print("\nExample 5: Workflow Moderator with Auto-Detection")
 
     # Create moderator
     moderator = WorkflowModerator.create_simple(user_id="workflow_user")
@@ -171,7 +171,7 @@ async def example_5_workflow_moderator():
 
     # Test workflow detection
     response = await moderator.chat("I need to search scrape ingest information about AI safety")
-    print(f"📝 Moderator response: {response[:200]}...")
+    print(f"Moderator response: {response[:200]}...")
 
 
 async def example_6_streaming_workflow():
@@ -179,7 +179,7 @@ async def example_6_streaming_workflow():
     Example 6: Streaming Workflow Execution
     Shows real-time progress of workflow execution
     """
-    print("\n🔄 Example 6: Streaming Workflow with Progress")
+    print("\nExample 6: Streaming Workflow with Progress")
 
     # Create agents
     search_agent = WebSearchAgent.create_simple(user_id="workflow_user")
@@ -193,7 +193,7 @@ async def example_6_streaming_workflow():
     workflow = builder.build()
 
     # Simulate streaming execution with progress updates
-    print("🚀 Starting workflow execution...")
+    print("Starting workflow execution...")
 
     start_time = asyncio.get_event_loop().time()
 
@@ -205,11 +205,11 @@ async def example_6_streaming_workflow():
 
     end_time = asyncio.get_event_loop().time()
 
-    print(f"⏱️ Total execution time: {end_time - start_time:.2f}s")
-    print(f"📊 Workflow result: {'Success' if result.success else 'Failed'}")
+    print(f"Total execution time: {end_time - start_time:.2f}s")
+    print(f"Workflow result: {'Success' if result.success else 'Failed'}")
 
     # Show message flow
-    print("\n📨 Message Flow:")
+    print("\nMessage Flow:")
     for i, message in enumerate(result.messages):
         sender = message.sender_id
         preview = message.content[:50] + "..." if len(message.content) > 50 else message.content
@@ -220,7 +220,7 @@ async def example_7_conditional_workflow():
     """
     Example 7: Conditional Workflow with Branching Logic
     """
-    print("\n🔄 Example 7: Conditional Workflow")
+    print("\nExample 7: Conditional Workflow")
 
     # Create agents
     search_agent = WebSearchAgent.create_simple(user_id="workflow_user")
@@ -251,8 +251,8 @@ async def example_7_conditional_workflow():
         execution_context=search_agent.get_execution_context()
     )
 
-    print(f"✅ Conditional workflow completed: {result.success}")
-    print(f"🔀 Execution path: {' -> '.join(result.nodes_executed)}")
+    print(f"[OK] Conditional workflow completed: {result.success}")
+    print(f"Execution path: {' -> '.join(result.nodes_executed)}")
 
 
 # Two-Agent Conversation Examples
@@ -262,7 +262,7 @@ async def example_8_two_agent_conversation():
     Example 8: Two-Agent Conversation System
     Implements back-and-forth conversation between agents
     """
-    print("\n🔄 Example 8: Two-Agent Conversation")
+    print("\nExample 8: Two-Agent Conversation")
 
     # Create two agents with different roles
     researcher = AssistantAgent.create_simple(user_id="workflow_user")
@@ -281,13 +281,13 @@ async def example_8_two_agent_conversation():
         execution_context=researcher.get_execution_context()
     )
 
-    print(f"💬 Conversation completed after {len(result.messages)} messages")
-    print(f"⏱️ Total time: {result.execution_time:.2f}s")
+    print(f"Conversation completed after {len(result.messages)} messages")
+    print(f"Total time: {result.execution_time:.2f}s")
 
     # Show conversation flow
-    print("\n📝 Conversation Flow:")
+    print("\nConversation Flow:")
     for i, message in enumerate(result.messages):
-        role = "👨‍🔬 Researcher" if "researcher" in message.sender_id else "👩‍💼 Reviewer"
+        role = "Researcher" if "researcher" in message.sender_id else "Reviewer"
         preview = message.content[:100] + "..." if len(message.content) > 100 else message.content
         print(f"  {i + 1}. {role}: {preview}")
 
@@ -297,7 +297,7 @@ async def example_9_agent_collaboration():
     Example 9: Multi-Agent Collaboration
     Multiple agents working together on a complex task
     """
-    print("\n🔄 Example 9: Multi-Agent Collaboration")
+    print("\nExample 9: Multi-Agent Collaboration")
 
     # Create specialized agents
     search_agent = WebSearchAgent.create_simple(user_id="collaboration")
@@ -313,9 +313,9 @@ async def example_9_agent_collaboration():
         "Create a comprehensive analysis of machine learning algorithms, including code examples and store findings in a knowledge base"
     )
 
-    print(f"🤝 Collaboration completed: {result.success}")
-    print(f"👥 Agents participated: {len(result.participating_agents)}")
-    print(f"📊 Total interactions: {len(result.interactions)}")
+    print(f"Collaboration completed: {result.success}")
+    print(f"Agents participated: {len(result.participating_agents)}")
+    print(f"Total interactions: {len(result.interactions)}")
 
 
 class TwoAgentConversation:
@@ -513,7 +513,7 @@ async def example_10_feedback_loop():
     Example 10: Feedback Loop Workflow
     Implements iterative improvement through agent feedback
     """
-    print("\n🔄 Example 10: Feedback Loop Workflow")
+    print("\nExample 10: Feedback Loop Workflow")
 
     # Create agents for feedback loop
     writer = AssistantAgent.create_simple(user_id="feedback_user")
@@ -529,8 +529,8 @@ async def example_10_feedback_loop():
         "Write a brief explanation of quantum computing for beginners"
     )
 
-    print(f"🔄 Feedback loop completed after {result.iterations} iterations")
-    print(f"📈 Improvement score: {result.final_score}")
+    print(f"Feedback loop completed after {result.iterations} iterations")
+    print(f"Improvement score: {result.final_score}")
 
 
 class FeedbackLoopWorkflow:
@@ -604,7 +604,7 @@ class FeedbackResult:
 # Main execution function
 async def main():
     """Run all workflow examples"""
-    print("🚀 Ambivo Agents Workflow Examples\n")
+    print("Ambivo Agents Workflow Examples\n")
     print("=" * 50)
 
     try:
@@ -619,10 +619,10 @@ async def main():
         await example_9_agent_collaboration()
         await example_10_feedback_loop()
 
-        print("\n🎉 All workflow examples completed successfully!")
+        print("\nAll workflow examples completed successfully!")
 
     except Exception as e:
-        print(f"\n❌ Error running examples: {e}")
+        print(f"\n[ERROR] Error running examples: {e}")
         import traceback
         traceback.print_exc()
 

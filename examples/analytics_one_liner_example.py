@@ -14,8 +14,8 @@ from ambivo_agents import AnalyticsAgent
 async def analytics_one_liners():
     """Enhanced one-liner examples showcasing real Analytics Agent functionality"""
     
-    print("📊 Enhanced Analytics Agent One-Liners")
-    print("🔬 Real Docker-based Analytics with File Support")
+    print("Enhanced Analytics Agent One-Liners")
+    print("Real Docker-based Analytics with File Support")
     print("=" * 60)
     
     # Create agent
@@ -24,24 +24,24 @@ async def analytics_one_liners():
     try:
         # Quick data analysis - comprehensive functionality
         result = await agent.chat("load data from sample.csv and analyze it")
-        print(f"📈 CSV Analysis:\n{result}")
+        print(f"CSV Analysis:\n{result}")
         
         # Quick schema check with semantic analysis
         schema = await agent.chat("show schema")
-        print(f"\n📋 Schema Analysis:\n{schema}")
+        print(f"\nSchema Analysis:\n{schema}")
         
         # Docker-executed analytical queries
         top_result = await agent.chat("what are the top 3 salary records?")
-        print(f"\n🏆 Top Analysis:\n{top_result}")
+        print(f"\nTop Analysis:\n{top_result}")
         
         count_result = await agent.chat("count by department")
-        print(f"\n📊 Count Analysis:\n{count_result}")
+        print(f"\nCount Analysis:\n{count_result}")
         
         average_result = await agent.chat("average salary")
-        print(f"\n📊 Average Analysis:\n{average_result}")
+        print(f"\nAverage Analysis:\n{average_result}")
         
         summary_result = await agent.chat("summary statistics")
-        print(f"\n📈 Summary Statistics:\n{summary_result}")
+        print(f"\nSummary Statistics:\n{summary_result}")
         
     finally:
         await agent.cleanup_session()
@@ -50,7 +50,7 @@ async def analytics_one_liners():
 async def excel_one_liners():
     """One-liner examples for Excel file support"""
     
-    print("\n📊 Excel File Support One-Liners")
+    print("\nExcel File Support One-Liners")
     print("=" * 40)
     
     agent = AnalyticsAgent.create_simple()
@@ -59,16 +59,16 @@ async def excel_one_liners():
         # Test XLSX file if available
         try:
             result = await agent.chat("load data from sample.xlsx and analyze it")
-            print(f"📈 XLSX Analysis:\n{result}")
+            print(f"XLSX Analysis:\n{result}")
         except:
-            print("📂 XLSX file not available for testing")
+            print("XLSX file not available for testing")
         
         # Demonstrate XLS error handling
         try:
             result = await agent.chat("load data from sample.xls and analyze it")
-            print(f"🔧 XLS Result:\n{result}")
+            print(f"XLS Result:\n{result}")
         except:
-            print("⚠️  XLS file would show helpful conversion message")
+            print("[WARN] XLS file would show helpful conversion message")
         
     finally:
         await agent.cleanup_session()
@@ -76,7 +76,7 @@ async def excel_one_liners():
 # CLI usage examples
 def cli_examples():
     """Examples of using Enhanced Analytics Agent via CLI"""
-    print("\n🖥️  Enhanced CLI Usage Examples:")
+    print("\n Enhanced CLI Usage Examples:")
     print("# Load and analyze CSV data:")
     print("ambivo-agents -q 'load data from sales.csv and analyze it'")
     print("")

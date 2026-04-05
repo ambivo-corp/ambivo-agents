@@ -712,7 +712,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
  **Mode:** {result['execution_mode']}
  **Status:** {result.get('status_code', 'N/A')}
  **Content:** {result['content_length']:,} characters
-⏱ **Time:** {result['response_time']:.2f}s
+**Time:** {result['response_time']:.2f}s
 
 **Title:** {result.get('title', 'No title')}
 
@@ -798,7 +798,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
  **URL:** {result['url']}
  **Status:** {status}
  **HTTP Status:** {result.get('status_code', 'Unknown')}
-⏱ **Response Time:** {result.get('response_time', 0):.2f}s
+**Response Time:** {result.get('response_time', 0):.2f}s
  **Checked:** {result.get('timestamp', 'Unknown')}
 
 {'The website is accessible and responding normally.' if result.get('accessible', False) else 'The website is not accessible or not responding.'}"""
@@ -871,30 +871,15 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         }
 
     def _configure_ssl_for_proxy(self):
-        """Configure SSL settings for proxy usage - FIXED VERSION"""
+        """Configure SSL settings for proxy usage.
+
+        Note: When using scraping proxies (like ScraperAPI), SSL verification
+        must be relaxed because the proxy terminates and re-establishes TLS.
+        This is acceptable because the proxy itself handles upstream SSL verification.
+        """
         try:
-            # Disable SSL warnings globally for urllib3
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-            # Create a custom SSL context that's more permissive
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-
-            # For requests library - create a custom adapter
-            class SSLAdapter(HTTPAdapter):
-                def init_poolmanager(self, *args, **kwargs):
-                    context = ssl.create_default_context()
-                    context.check_hostname = False
-                    context.verify_mode = ssl.CERT_NONE
-                    kwargs["ssl_context"] = context
-                    return super().init_poolmanager(*args, **kwargs)
-
-            # Store the adapter for later use
-            self.ssl_adapter = SSLAdapter()
-
-            self.logger.info("SSL configuration updated for proxy usage")
-
+            self.logger.info("SSL warnings suppressed for proxy-based scraping")
         except Exception as e:
             self.logger.warning(f"SSL configuration warning: {e}")
 
@@ -1086,7 +1071,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             return result
 
         except Exception as e:
-            self.logger.error(f"Scraping error for {url}: {e}")
+            self.logger.error(f"Scraping error for {url}: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e),
@@ -1227,10 +1212,9 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         # Create session with custom SSL adapter
         session = requests.Session()
 
-        # Only mount SSL adapter if it exists, otherwise use verify=False
-        if hasattr(self, "ssl_adapter"):
-            session.mount("https://", self.ssl_adapter)
-            session.mount("http://", self.ssl_adapter)
+        # Only disable SSL verification when using a proxy (proxy handles upstream SSL)
+        use_proxy = bool(proxies)
+        ssl_verify = not use_proxy
 
         try:
             response = session.get(
@@ -1238,7 +1222,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 headers=headers,
                 proxies=proxies,
                 timeout=self.scraper_config.get("timeout", 60),
-                verify=False, # Disable SSL verification
+                verify=ssl_verify,
                 allow_redirects=True,
             )
             response.raise_for_status() # Raise exception for bad status codes
@@ -1676,7 +1660,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 yield f" **URL {i}/{len(urls)}:** {url}\n"
 
                 try:
-                    yield f"⏳ Processing...\n"
+                    yield f"Processing...\n"
                     result = await self._scrape_url(url, method="auto")
 
                     if result.get("success", False):
@@ -1711,7 +1695,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
             url = urls[0]
             yield f" **Checking Accessibility:** {url}\n\n"
 
-            yield "⏳ Testing connection...\n"
+            yield "Testing connection...\n"
 
             result = await self._check_accessibility(url)
 
@@ -1719,7 +1703,7 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                 status = " Accessible" if result.get("accessible", False) else " Not Accessible"
                 yield f" **Status:** {status}\n"
                 yield f" **HTTP Status:** {result.get('status_code', 'Unknown')}\n"
-                yield f"⏱ **Response Time:** {result.get('response_time', 0):.2f}s\n"
+                yield f"**Response Time:** {result.get('response_time', 0):.2f}s\n"
                 yield f" **Checked:** {result.get('timestamp', 'Unknown')}\n\n"
 
                 if result.get("accessible", False):

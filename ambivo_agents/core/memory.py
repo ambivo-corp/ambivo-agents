@@ -124,7 +124,7 @@ class CompressionManager:
             return data
 
         except Exception as e:
-            logging.error(f"Compression failed: {e}")
+            logging.error(f"Compression failed: {e}", exc_info=True)
             return data
 
     def decompress(self, data: str) -> str:
@@ -157,7 +157,7 @@ class CompressionManager:
             return data
 
         except Exception as e:
-            logging.error(f"Decompression failed: {e}")
+            logging.error(f"Decompression failed: {e}", exc_info=True)
             return str(data)
 
 
@@ -285,8 +285,9 @@ class RedisMemoryManager(MemoryManagerInterface):
 
         try:
             redis_params = {**self.redis_config}
-            redis_params.setdefault("socket_timeout", 5)
-            redis_params.setdefault("socket_connect_timeout", 5)
+            redis_params.setdefault("socket_timeout", 10)
+            redis_params.setdefault("socket_connect_timeout", 10)
+            redis_params.setdefault("retry_on_error", [ConnectionError, TimeoutError])
             self.redis_client = redis.Redis(**redis_params)
             self.redis_client.ping()
             self.available = True

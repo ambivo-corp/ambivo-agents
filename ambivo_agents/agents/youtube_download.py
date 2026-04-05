@@ -397,7 +397,7 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
  **File:** {result.get('filename', 'Unknown')}
  **Location:** {result.get('file_path', 'Unknown')}
  **Size:** {file_size_mb:.2f} MB
-⏱ **Download Time:** {result.get('execution_time', 0):.2f}s
+**Download Time:** {result.get('execution_time', 0):.2f}s
 
 Your audio file has been successfully downloaded and is ready to use! """
             else:
@@ -435,7 +435,7 @@ Your audio file has been successfully downloaded and is ready to use! """
  **File:** {result.get('filename', 'Unknown')}
  **Location:** {result.get('file_path', 'Unknown')}
  **Size:** {file_size_mb:.2f} MB
-⏱ **Download Time:** {result.get('execution_time', 0):.2f}s
+**Download Time:** {result.get('execution_time', 0):.2f}s
 
 Your video file has been successfully downloaded and is ready to use! """
             else:
@@ -467,7 +467,7 @@ Your video file has been successfully downloaded and is ready to use! """
 
 ** Title:** {video_info.get('title', 'Unknown')}
 ** Author:** {video_info.get('author', 'Unknown')}
-**⏱ Duration:** {self._format_duration(video_info.get('duration', 0))}
+**Duration:** {self._format_duration(video_info.get('duration', 0))}
 ** Views:** {video_info.get('views', 0):,}
 ** URL:** {url}
 

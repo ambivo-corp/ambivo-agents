@@ -17,8 +17,8 @@ from ambivo_agents import ModeratorAgent, AnalyticsAgent
 
 async def comprehensive_data_workflow():
     """Enhanced comprehensive workflow with real analytics"""
-    print("🔄 Enhanced Data Analysis Workflow")
-    print("🚀 Real Docker-based Analytics with Intelligence")
+    print("Enhanced Data Analysis Workflow")
+    print("Real Docker-based Analytics with Intelligence")
     print("=" * 60)
     
     # Use ModeratorAgent for intelligent routing to Analytics Agent
@@ -26,19 +26,19 @@ async def comprehensive_data_workflow():
     
     try:
         # Step 1: Data loading and initial analysis
-        print("\n1️⃣  Data Loading Phase - Comprehensive file analysis...")
+        print("\n1⃣  Data Loading Phase - Comprehensive file analysis...")
         analysis_query = "load data from sample_sales.csv and provide comprehensive analysis with widget recommendations"
         analysis_result = await moderator.chat(analysis_query)
-        print(f"📈 Analysis Result:\n{analysis_result}")
+        print(f"Analysis Result:\n{analysis_result}")
         
         # Step 2: Schema and quality assessment
-        print("\n2️⃣  Schema Analysis Phase - Data quality assessment...")
+        print("\n2⃣  Schema Analysis Phase - Data quality assessment...")
         schema_query = "show detailed schema with data quality metrics and semantic types"
         schema_result = await moderator.chat(schema_query)
-        print(f"📋 Schema Result:\n{schema_result}")
+        print(f"Schema Result:\n{schema_result}")
         
         # Step 3: Advanced analytical queries
-        print("\n3️⃣  Advanced Analytics Phase - Docker-based queries...")
+        print("\n3⃣  Advanced Analytics Phase - Docker-based queries...")
         analytical_queries = [
             "what are the top 5 revenue-generating records?",
             "count sales by region and customer segment", 
@@ -58,8 +58,8 @@ async def comprehensive_data_workflow():
 
 async def analytics_specific_workflow():
     """Direct Analytics Agent workflow with real functionality"""
-    print("\n📈 Direct Analytics Agent Workflow")
-    print("🔬 Real Docker-based Data Processing Pipeline")
+    print("\nDirect Analytics Agent Workflow")
+    print("Real Docker-based Data Processing Pipeline")
     print("=" * 50)
     
     # Direct Analytics Agent usage
@@ -78,22 +78,22 @@ async def analytics_specific_workflow():
         
         results = {}
         for i, step in enumerate(workflow_steps, 1):
-            print(f"\n🔍 Step {i}: {step}")
+            print(f"\nStep {i}: {step}")
             result = await analytics.chat(step)
             results[step] = result
             
             # Show truncated results for readability
             if len(result) > 300:
-                print(f"✅ Result: {result[:300]}...\n[Truncated - Full result saved]")
+                print(f"[OK] Result: {result[:300]}...\n[Truncated - Full result saved]")
             else:
-                print(f"✅ Result: {result}")
+                print(f"[OK] Result: {result}")
             print("─" * 50)
         
         # Summary report
-        print("\n📋 Workflow Execution Summary:")
+        print("\nWorkflow Execution Summary:")
         print("=" * 40)
         for i, (step, result) in enumerate(results.items(), 1):
-            success = "✅ Completed" if result and "❌" not in result else "❌ Failed"
+            success = "[OK] Completed" if result and "[ERROR]" not in result else "[ERROR] Failed"
             print(f"{i}. {step[:50]}{'...' if len(step) > 50 else ''}: {success}")
             
     finally:
@@ -102,8 +102,8 @@ async def analytics_specific_workflow():
 
 async def excel_workflow_example():
     """Excel file workflow example"""
-    print("\n📊 Excel File Workflow")
-    print("🔧 XLSX Support and XLS Error Handling")
+    print("\nExcel File Workflow")
+    print("XLSX Support and XLS Error Handling")
     print("=" * 45)
     
     analytics = AnalyticsAgent.create_simple(user_id="excel_workflow")
@@ -111,7 +111,7 @@ async def excel_workflow_example():
     try:
         # Test XLSX workflow if file exists
         if os.path.exists("sample_sales.xlsx"):
-            print("\n1️⃣  XLSX File Analysis Workflow...")
+            print("\n1⃣  XLSX File Analysis Workflow...")
             xlsx_steps = [
                 "load data from sample_sales.xlsx and analyze it",
                 "show schema",
@@ -119,17 +119,17 @@ async def excel_workflow_example():
             ]
             
             for step in xlsx_steps:
-                print(f"🔍 {step}")
+                print(f"{step}")
                 result = await analytics.chat(step)
-                print(f"✅ {result[:200]}..." if len(result) > 200 else f"✅ {result}")
+                print(f"[OK] {result[:200]}..." if len(result) > 200 else f"[OK] {result}")
                 print("-" * 30)
         else:
-            print("📁 XLSX file not available - create one first using the main example")
+            print("XLSX file not available - create one first using the main example")
         
         # Test XLS error handling
-        print("\n2️⃣  XLS Error Handling Demonstration...")
+        print("\n2⃣  XLS Error Handling Demonstration...")
         result = await analytics.chat("load data from sample_sales.xls and analyze it")
-        print(f"🔧 XLS Result: {result}")
+        print(f"XLS Result: {result}")
         
     finally:
         await analytics.cleanup_session()
@@ -137,24 +137,24 @@ async def excel_workflow_example():
 
 async def streaming_workflow():
     """Streaming workflow for real-time analysis feedback"""
-    print("\n🌊 Streaming Analytics Workflow")
-    print("📡 Real-time Analysis with Live Feedback")
+    print("\nStreaming Analytics Workflow")
+    print("Real-time Analysis with Live Feedback")
     print("=" * 50)
     
     analytics = AnalyticsAgent.create_simple(user_id="streaming_workflow")
     
     try:
         # Stream a comprehensive analysis
-        print("\n📊 Streaming comprehensive analysis with widget recommendations...")
+        print("\nStreaming comprehensive analysis with widget recommendations...")
         
         query = "load data from sample_sales.csv and provide comprehensive analysis with widget recommendations and business insights"
         
-        print("🔄 Starting stream...")
+        print("Starting stream...")
         async for chunk in analytics.chat_stream(query):
             if chunk.text:
-                print(f"[📡 STREAM] {chunk.text}")
+                print(f"[STREAM] {chunk.text}")
                 
-        print("\n✅ Streaming analysis completed!")
+        print("\n[OK] Streaming analysis completed!")
                 
     finally:
         await analytics.cleanup_session()
@@ -187,7 +187,7 @@ def create_workflow_data():
     
     with open("sample_sales.csv", "w") as f:
         f.write(enhanced_data)
-    print("📁 Created comprehensive sample_sales.csv for enhanced workflow testing")
+    print("Created comprehensive sample_sales.csv for enhanced workflow testing")
 
 
 def create_sample_xlsx():
@@ -212,19 +212,19 @@ else:
         ], capture_output=True, text=True)
         
         if result.returncode == 0:
-            print("📁 Created sample_sales.xlsx using Docker")
+            print("Created sample_sales.xlsx using Docker")
         else:
-            print("⚠️  Could not create XLSX file via Docker")
+            print("[WARN] Could not create XLSX file via Docker")
             
     except Exception as e:
-        print(f"⚠️  XLSX creation failed: {e}")
+        print(f"[WARN] XLSX creation failed: {e}")
 
 
 async def main():
     """Run all enhanced workflow examples"""
-    print("🚀 Enhanced Analytics Agent Workflow Examples")
-    print("🔗 Real Docker-based Analytics with Multi-Agent Integration")
-    print("📊 Comprehensive File Support and Intelligent Recommendations")
+    print("Enhanced Analytics Agent Workflow Examples")
+    print("Real Docker-based Analytics with Multi-Agent Integration")
+    print("Comprehensive File Support and Intelligent Recommendations")
     print("=" * 80)
     
     # Create comprehensive sample data
@@ -237,19 +237,19 @@ async def main():
     await excel_workflow_example()
     await streaming_workflow()
     
-    print("\n✅ All enhanced workflow examples completed!")
-    print("\n💡 Enhanced Workflow Capabilities:")
-    print("  • ✅ Real Docker-based analytical processing")
-    print("  • ✅ CSV and XLSX file support with proper error handling")
-    print("  • ✅ Multi-agent coordination via ModeratorAgent")
-    print("  • ✅ Step-by-step analysis pipelines with real results")
-    print("  • ✅ Semantic field type detection and data quality metrics")
-    print("  • ✅ Intelligent widget/visualization recommendations")
-    print("  • ✅ Real-time streaming analysis with live feedback")
-    print("  • ✅ Comprehensive business intelligence workflows")
-    print("  • ✅ Advanced analytical queries (top, count, average, summary)")
-    print("  • ✅ Secure containerized execution for all data processing")
-    print("  • ✅ Error handling with user-friendly messages and suggestions")
+    print("\n[OK] All enhanced workflow examples completed!")
+    print("\nEnhanced Workflow Capabilities:")
+    print("  • [OK] Real Docker-based analytical processing")
+    print("  • [OK] CSV and XLSX file support with proper error handling")
+    print("  • [OK] Multi-agent coordination via ModeratorAgent")
+    print("  • [OK] Step-by-step analysis pipelines with real results")
+    print("  • [OK] Semantic field type detection and data quality metrics")
+    print("  • [OK] Intelligent widget/visualization recommendations")
+    print("  • [OK] Real-time streaming analysis with live feedback")
+    print("  • [OK] Comprehensive business intelligence workflows")
+    print("  • [OK] Advanced analytical queries (top, count, average, summary)")
+    print("  • [OK] Secure containerized execution for all data processing")
+    print("  • [OK] Error handling with user-friendly messages and suggestions")
 
 
 if __name__ == "__main__":

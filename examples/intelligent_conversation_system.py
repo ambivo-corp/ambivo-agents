@@ -85,7 +85,7 @@ class IntelligentConversationSystem:
         
         # Display welcome message
         print("\n" + "="*80)
-        print("🤖 Intelligent Conversation System")
+        print("Intelligent Conversation System")
         print("="*80)
         print(f"Session ID: {self.context.session_id}")
         print(f"Quality Threshold: {self.quality_threshold.value}")
@@ -122,7 +122,7 @@ class IntelligentConversationSystem:
             return False
         
         elif command == '/help':
-            print("\n📚 Available Commands:")
+            print("\nAvailable Commands:")
             print("  /help - Show this help message")
             print("  /status - Show system status")
             print("  /sources - Show information sources status")
@@ -137,7 +137,7 @@ class IntelligentConversationSystem:
             print("  /exit or /quit - Exit the system\n")
         
         elif command == '/status':
-            print("\n📊 System Status:")
+            print("\nSystem Status:")
             print(f"  Session ID: {self.context.session_id}")
             print(f"  User ID: {self.user_id}")
             print(f"  Quality Threshold: {self.quality_threshold.value}")
@@ -151,7 +151,7 @@ class IntelligentConversationSystem:
                     print(f"  Last Confidence Score: {qa.get('confidence_score', 0):.2f}")
         
         elif command == '/sources':
-            print("\n🔍 Information Sources:")
+            print("\nInformation Sources:")
             print("  1. Knowledge Base - Curated information repository")
             print("  2. Web Search - Real-time internet search")
             print("  3. Web Scraping - Deep content extraction from URLs")
@@ -159,9 +159,9 @@ class IntelligentConversationSystem:
         
         elif command == '/history':
             if not self.conversation_history:
-                print("\n📜 No conversation history yet.")
+                print("\nNo conversation history yet.")
             else:
-                print("\n📜 Conversation History:")
+                print("\nConversation History:")
                 print("-" * 60)
                 for i, entry in enumerate(self.conversation_history, 1):
                     print(f"\n[{i}] {entry['timestamp']}")
@@ -174,10 +174,10 @@ class IntelligentConversationSystem:
         elif command == '/clear':
             self.conversation_history = []
             await self.moderator.clear_conversation_history()
-            print("\n🧹 Conversation history cleared.")
+            print("\nConversation history cleared.")
         
         elif command == '/config':
-            print("\n⚙️ Current Configuration:")
+            print("\nCurrent Configuration:")
             print(f"  Quality Threshold: {self.quality_threshold.value}")
             print(f"  Max Iterations: {self.moderator.max_iterations}")
             print(f"  Auto Scraping: {self.moderator.enable_auto_scraping}")
@@ -187,38 +187,38 @@ class IntelligentConversationSystem:
             preference = command.split(' ', 1)[1] if ' ' in command else ''
             if preference == 'kb':
                 self.session_metadata['preference'] = 'knowledge_base'
-                print("\n✅ Preference set: Prioritize Knowledge Base")
+                print("\n[OK] Preference set: Prioritize Knowledge Base")
             elif preference == 'web':
                 self.session_metadata['preference'] = 'web_search'
-                print("\n✅ Preference set: Prioritize Web Search")
+                print("\n[OK] Preference set: Prioritize Web Search")
             elif preference == 'all':
                 self.session_metadata['preference'] = 'all'
-                print("\n✅ Preference set: Use all sources in parallel")
+                print("\n[OK] Preference set: Use all sources in parallel")
             else:
-                print("\n❌ Invalid preference. Use: kb, web, or all")
+                print("\n[ERROR] Invalid preference. Use: kb, web, or all")
         
         elif command == '/quality':
             if self.conversation_history and 'quality_assessment' in self.conversation_history[-1]:
                 qa = self.conversation_history[-1]['quality_assessment']
-                print("\n📊 Last Response Quality Assessment:")
+                print("\nLast Response Quality Assessment:")
                 print(f"  Quality Level: {qa.get('quality_level', 'N/A')}")
                 print(f"  Confidence Score: {qa.get('confidence_score', 0):.2f}")
                 print(f"  Sources Used: {', '.join(qa.get('sources_used', []))}")
                 
                 if qa.get('strengths'):
-                    print(f"\n  ✅ Strengths:")
+                    print(f"\n  [OK] Strengths:")
                     for strength in qa['strengths']:
                         print(f"    - {strength}")
                 
                 if qa.get('weaknesses'):
-                    print(f"\n  ⚠️ Weaknesses:")
+                    print(f"\n  [WARN]Weaknesses:")
                     for weakness in qa['weaknesses']:
                         print(f"    - {weakness}")
             else:
-                print("\n📊 No quality assessment available yet.")
+                print("\nNo quality assessment available yet.")
         
         else:
-            print(f"\n❌ Unknown command: {command}")
+            print(f"\n[ERROR] Unknown command: {command}")
             print("Type /help for available commands.")
         
         return True
@@ -241,8 +241,8 @@ class IntelligentConversationSystem:
         # Process message through enhanced moderator
         self.logger.info(f"Processing message: {message[:50]}...")
         
-        print("\n🔄 Processing your query...")
-        print("  1️⃣ Analyzing query to determine optimal search strategy...")
+        print("\nProcessing your query...")
+        print("  1⃣ Analyzing query to determine optimal search strategy...")
         
         result = await self.moderator.process_with_quality_assessment(
             message,
@@ -252,12 +252,12 @@ class IntelligentConversationSystem:
         # Display progress information
         if 'query_analysis' in result:
             qa = result['query_analysis']
-            print(f"  2️⃣ Strategy selected: {qa.get('strategy_used', 'adaptive')}")
-            print(f"  3️⃣ Consulting {qa.get('sources_consulted', 0)} information sources...")
+            print(f"  2⃣ Strategy selected: {qa.get('strategy_used', 'adaptive')}")
+            print(f"  3⃣ Consulting {qa.get('sources_consulted', 0)} information sources...")
         
         if 'quality_assessment' in result:
             quality = result['quality_assessment']
-            print(f"  4️⃣ Response quality: {quality.get('quality_level', 'unknown')} (confidence: {quality.get('confidence_score', 0):.2f})")
+            print(f"  4⃣ Response quality: {quality.get('quality_level', 'unknown')} (confidence: {quality.get('confidence_score', 0):.2f})")
         
         # Store in conversation history
         history_entry = {
@@ -280,9 +280,9 @@ class IntelligentConversationSystem:
             while True:
                 # Get user input
                 try:
-                    user_input = input("\n💬 You: ").strip()
+                    user_input = input("\nYou: ").strip()
                 except (EOFError, KeyboardInterrupt):
-                    print("\n\n👋 Goodbye!")
+                    print("\n\nGoodbye!")
                     break
                 
                 if not user_input:
@@ -291,7 +291,7 @@ class IntelligentConversationSystem:
                 # Check for commands
                 if user_input.startswith('/'):
                     if not await self.process_command(user_input):
-                        print("\n👋 Thank you for using the Intelligent Conversation System!")
+                        print("\nThank you for using the Intelligent Conversation System!")
                         break
                     continue
                 
@@ -300,7 +300,7 @@ class IntelligentConversationSystem:
                     result = await self.process_message(user_input)
                     
                     # Display response
-                    print(f"\n🤖 Assistant: {result.get('response', 'No response generated.')}")
+                    print(f"\nAssistant: {result.get('response', 'No response generated.')}")
                     
                     # Display quality indicator
                     if 'quality_assessment' in result:
@@ -310,23 +310,23 @@ class IntelligentConversationSystem:
                         
                         # Quality indicator emoji
                         quality_emoji = {
-                            'excellent': '🌟',
-                            'good': '✅',
-                            'fair': '⚠️',
-                            'poor': '❌',
-                            'unacceptable': '🚫'
-                        }.get(quality_level, '❓')
+                            'excellent': '',
+                            'good': '[OK]',
+                            'fair': '[WARN]',
+                            'poor': '[ERROR]',
+                            'unacceptable': ''
+                        }.get(quality_level, '')
                         
                         print(f"\n{quality_emoji} Response Quality: {quality_level} (confidence: {confidence:.2%})")
                         
                         # Show sources used
                         if quality.get('sources_used'):
                             sources_display = ', '.join(quality['sources_used'])
-                            print(f"📚 Sources: {sources_display}")
+                            print(f"Sources: {sources_display}")
                 
                 except Exception as e:
                     self.logger.error(f"Error processing message: {e}")
-                    print(f"\n❌ Error: {str(e)}")
+                    print(f"\n[ERROR] Error: {str(e)}")
                     print("Please try again or rephrase your question.")
         
         finally:
@@ -346,7 +346,7 @@ class IntelligentConversationSystem:
                         'session_metadata': self.session_metadata,
                         'conversation_history': self.conversation_history
                     }, f, indent=2, default=str)
-                print(f"\n💾 Conversation history saved to: {history_file}")
+                print(f"\nConversation history saved to: {history_file}")
             except Exception as e:
                 self.logger.error(f"Failed to save conversation history: {e}")
         
@@ -360,7 +360,7 @@ class IntelligentConversationSystem:
 async def main():
     """Main entry point for the intelligent conversation system"""
     print("\n" + "="*80)
-    print("🚀 Intelligent Conversation System with Quality Assessment")
+    print("Intelligent Conversation System with Quality Assessment")
     print("="*80)
     
     # Parse command line arguments
@@ -395,7 +395,7 @@ async def main():
     try:
         await system.run()
     except Exception as e:
-        print(f"\n❌ Fatal error: {e}")
+        print(f"\n[ERROR] Fatal error: {e}")
         import traceback
         traceback.print_exc()
 

@@ -3,21 +3,37 @@ Universal File Resolution for All Agents
 Provides consistent file path resolution based on shared_base_dir configuration
 """
 
+import logging
 from pathlib import Path
 from typing import List, Optional, Union
 
 from ..config.loader import get_config_section
 from .docker_shared import get_shared_manager
 
+logger = logging.getLogger(__name__)
+
 
 def _is_path_within_allowed_dirs(
     resolved_path: Path, shared_base_dir: str, legacy_fallback_dirs: list = None
 ) -> bool:
-    """Validate that resolved path is within allowed base directories."""
+    """Validate that resolved path is within allowed base directories.
+
+    Uses resolve() to follow symlinks and validate the real path is within bounds.
+    Rejects paths containing '..' components before resolution as an extra guard.
+    """
+    # Reject paths with explicit traversal components
+    try:
+        path_str = str(resolved_path)
+        if ".." in path_str.split("/"):
+            return False
+    except Exception:
+        return False
+
     allowed_bases = [Path(shared_base_dir).resolve(), Path.cwd().resolve()]
     if legacy_fallback_dirs:
         for d in legacy_fallback_dirs:
             allowed_bases.append(Path(d).resolve())
+    # resolve() follows symlinks, so the real path is validated
     resolved = resolved_path.resolve()
     return any(resolved.is_relative_to(base) for base in allowed_bases if base.exists())
 
@@ -148,7 +164,8 @@ def resolve_agent_file_path(
 
         return None
 
-    except Exception:
+    except Exception as e:
+        logger.warning(f"File resolution failed for '{filename}': {e}", exc_info=True)
         # Fallback to simple path resolution
         if Path(filename).exists():
             fallback_path = Path(filename).resolve()
@@ -160,8 +177,8 @@ def resolve_agent_file_path(
                 )
                 if _is_path_within_allowed_dirs(fallback_path, fb_shared_base, fb_legacy):
                     return fallback_path
-            except Exception:
-                pass
+            except Exception as inner_e:
+                logger.warning(f"Fallback file resolution also failed: {inner_e}")
         return None
 
 
@@ -207,5 +224,6 @@ def get_agent_specific_subdirs(agent_type: str) -> List[str]:
         docker_config = get_config_section("docker") or {}
         agent_subdirs = docker_config.get("agent_subdirs", {})
         return agent_subdirs.get(agent_type, [])
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to get agent subdirs for '{agent_type}': {e}")
         return []

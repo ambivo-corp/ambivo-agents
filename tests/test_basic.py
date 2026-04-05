@@ -32,8 +32,8 @@ class TestBasicIntegration:
         assert context.session_id is not None
         assert agent.agent_id is not None
 
-        print(f"✅ Created agent {agent.agent_id} for user {context.user_id}")
-        print(f"📋 Session: {context.session_id}")
+        print(f"[OK] Created agent {agent.agent_id} for user {context.user_id}")
+        print(f"Session: {context.session_id}")
 
         # Cleanup
         await agent.cleanup_session()

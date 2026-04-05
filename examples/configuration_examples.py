@@ -17,42 +17,42 @@ def main():
     try:
         # Load full configuration
         config = load_config()
-        print("✅ Configuration loaded successfully")
+        print("[OK] Configuration loaded successfully")
 
         # Validate capabilities
         capabilities = validate_agent_capabilities(config)
-        print(f"\n🚀 Available capabilities:")
+        print(f"\nAvailable capabilities:")
         for capability, enabled in capabilities.items():
-            status = "✅" if enabled else "❌"
+            status = "[OK]" if enabled else "[ERROR]"
             print(f"   {status} {capability}")
 
         # Get specific sections
         redis_config = get_config_section('redis', config)
-        print(f"\n🔧 Redis Configuration:")
+        print(f"\nRedis Configuration:")
         print(f"   Host: {redis_config.get('host')}")
         print(f"   Port: {redis_config.get('port')}")
         print(f"   DB: {redis_config.get('db')}")
 
         llm_config = get_config_section('llm', config)
-        print(f"\n🧠 LLM Configuration:")
+        print(f"\nLLM Configuration:")
         print(f"   Preferred Provider: {llm_config.get('preferred_provider')}")
         print(f"   Temperature: {llm_config.get('temperature')}")
 
         # Check optional sections
         optional_sections = ['web_scraping', 'knowledge_base', 'web_search', 'media_editor']
 
-        print(f"\n📦 Optional Sections:")
+        print(f"\nOptional Sections:")
         for section in optional_sections:
             try:
                 section_config = get_config_section(section, config)
-                print(f"   ✅ {section}: configured")
+                print(f"   [OK] {section}: configured")
             except ConfigurationError:
-                print(f"   ❌ {section}: not configured")
+                print(f"   [ERROR] {section}: not configured")
 
     except ConfigurationError as e:
-        print(f"❌ Configuration Error: {e}")
+        print(f"[ERROR] Configuration Error: {e}")
     except Exception as e:
-        print(f"❌ Unexpected Error: {e}")
+        print(f"[ERROR] Unexpected Error: {e}")
 
 
 if __name__ == "__main__":
