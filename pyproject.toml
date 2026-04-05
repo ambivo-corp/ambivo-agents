@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.4.9"
+version = "1.4.10"
 description = "Multi-Agent AI System for automation"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}
@@ -49,7 +49,6 @@ dependencies = [
     "langchain-text-splitters~=0.3.8",
     "langchain-anthropic~=0.3.15",
     "langchain-aws~=0.2.24",
-    "langchain-voyageai~=0.1.6",
     "huggingface-hub~=0.33",
 
     # LlamaIndex dependencies
@@ -94,6 +93,11 @@ media = [
 # Additional LLM providers
 anthropic = [
     "anthropic>=0.55.0",
+]
+
+# VoyageAI embeddings (not available on Python 3.13+)
+voyageai = [
+    "langchain-voyageai~=0.1.6",
 ]
 
 # Database capabilities (DatabaseAgent)
@@ -144,7 +148,7 @@ dev = [
 
 # All runtime extras (no dev tools)
 full = [
-    "ambivo-agents[web,media,anthropic,database,documents,analytics,async]",
+    "ambivo-agents[web,media,anthropic,voyageai,database,documents,analytics,async]",
 ]
 
 # Everything including dev tools

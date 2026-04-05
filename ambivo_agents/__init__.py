@@ -4,7 +4,7 @@ Ambivo Agents Framework
 A minimalistic agent framework for building AI applications.
 """
 
-__version__ = "1.4.9"
+__version__ = "1.4.10"
 
 # Agent imports
 from .agents.assistant import AssistantAgent
