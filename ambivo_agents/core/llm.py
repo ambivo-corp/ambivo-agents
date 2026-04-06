@@ -363,7 +363,7 @@ class MultiProviderLLMService(LLMServiceInterface):
         if self.config_data.get("anthropic_api_key"):
             self.provider_tracker.providers["anthropic"] = ProviderConfig(
                 name="anthropic",
-                model_name="claude-sonnet-4-5-20250514",
+                model_name="claude-sonnet-4-20250514",
                 priority=1,
                 max_requests_per_minute=50,
                 max_requests_per_hour=1000,
@@ -385,7 +385,7 @@ class MultiProviderLLMService(LLMServiceInterface):
         if self.config_data.get("aws_access_key_id"):
             self.provider_tracker.providers["bedrock"] = ProviderConfig(
                 name="bedrock",
-                model_name="anthropic.claude-sonnet-4-5-20250514-v1:0",
+                model_name="us.anthropic.claude-sonnet-4-20250514-v1:0",
                 priority=3,
                 max_requests_per_minute=40,
                 max_requests_per_hour=2400,
@@ -432,7 +432,7 @@ class MultiProviderLLMService(LLMServiceInterface):
             raise ValueError("anthropic_api_key not configured")
 
         self.current_llm = DirectAnthropicLLM(
-            model="claude-sonnet-4-5-20250514",
+            model="claude-sonnet-4-20250514",
             temperature=self.temperature,
             api_key=api_key,
             timeout=120,
@@ -483,16 +483,16 @@ class MultiProviderLLMService(LLMServiceInterface):
         )
 
         self.current_llm = DirectBedrockLLM(
-            model="anthropic.claude-sonnet-4-5-20250514-v1:0", client=boto3_client
+            model="us.anthropic.claude-sonnet-4-20250514-v1:0", client=boto3_client
         )
         self.current_embeddings = None  # Embeddings handled by LlamaIndex if [knowledge] installed
 
-    def _try_fallback_provider(self):
-        """Try to switch to a fallback provider"""
-        # Find available providers (excluding current one)
+    def _try_fallback_provider(self, exclude: set = None):
+        """Try to switch to a fallback provider, skipping already-tried ones."""
+        exclude = exclude or {self.current_provider}
         fallback_providers = []
         for name, config in self.provider_tracker.providers.items():
-            if name != self.current_provider and self.provider_tracker.is_provider_available(name):
+            if name not in exclude and self.provider_tracker.is_provider_available(name):
                 fallback_providers.append((name, config))
 
         if not fallback_providers:
@@ -528,45 +528,43 @@ class MultiProviderLLMService(LLMServiceInterface):
             return False
 
     async def _execute_with_retry_stream(self, stream_func) -> AsyncIterator[str]:
-        """FIXED: Execute streaming function with proper provider rotation"""
+        """Execute streaming function with provider rotation. Each provider tried once."""
+        tried_providers = set()
         max_retries = len(self.provider_tracker.providers)
         retry_count = 0
 
         while retry_count < max_retries:
+            tried_providers.add(self.current_provider)
             try:
-                # Record request for current provider
                 self.provider_tracker.record_request(self.current_provider)
 
                 async for chunk in stream_func():
                     yield chunk
-                return  # Success, exit retry loop
+                return
 
             except Exception as e:
                 error_str = str(e).lower()
                 logging.warning(f"Streaming error with {self.current_provider}: {e}", exc_info=True)
-
-                # Record error
                 self.provider_tracker.record_error(self.current_provider, str(e))
 
-                # Only retry on transient/rate-limit errors
                 is_retryable = any(
                     keyword in error_str
                     for keyword in [
                         "429", "rate limit", "quota", "insufficient_quota",
                         "timeout", "connection", "network", "502", "503", "504",
+                        "404", "not_found", "not found",
                     ]
                 )
 
                 if is_retryable and retry_count < max_retries - 1:
-                    # Exponential backoff before retry
                     backoff = min(2 ** retry_count, 30)
-                    logging.info(
-                        f"Retrying after {backoff}s backoff from {self.current_provider} "
-                        f"(attempt {retry_count + 1}/{max_retries})"
-                    )
                     await asyncio.sleep(backoff)
 
-                    if self._try_fallback_provider():
+                    if self._try_fallback_provider(exclude=tried_providers):
+                        logging.info(
+                            f"Provider rotated to {self.current_provider} "
+                            f"(attempt {retry_count + 2}/{max_retries})"
+                        )
                         retry_count += 1
                         continue
                     else:
@@ -577,42 +575,41 @@ class MultiProviderLLMService(LLMServiceInterface):
         raise RuntimeError(f"All {max_retries} providers exhausted for streaming")
 
     def _execute_with_retry(self, func, *args, **kwargs):
-        """FIXED: Execute function with proper provider rotation"""
+        """Execute function with provider rotation. Each provider is tried once."""
+        tried_providers = set()
         max_retries = len(self.provider_tracker.providers)
         retry_count = 0
 
         while retry_count < max_retries:
+            tried_providers.add(self.current_provider)
             try:
-                # Record request for current provider
                 self.provider_tracker.record_request(self.current_provider)
                 return func(*args, **kwargs)
 
             except Exception as e:
                 error_str = str(e).lower()
                 logging.error(f"Error with {self.current_provider}: {e}", exc_info=True)
-
-                # Record error
                 self.provider_tracker.record_error(self.current_provider, str(e))
 
-                # Only retry on transient/rate-limit errors
                 is_retryable = any(
                     keyword in error_str
                     for keyword in [
                         "429", "rate limit", "quota", "insufficient_quota",
                         "timeout", "connection", "network", "502", "503", "504",
+                        "404", "not_found", "not found",
                     ]
                 )
 
                 if is_retryable and retry_count < max_retries - 1:
                     backoff = min(2 ** retry_count, 30)
-                    logging.info(
-                        f"Retrying after {backoff}s backoff from {self.current_provider} "
-                        f"(attempt {retry_count + 1}/{max_retries})"
-                    )
                     import time
                     time.sleep(backoff)
 
-                    if self._try_fallback_provider():
+                    if self._try_fallback_provider(exclude=tried_providers):
+                        logging.info(
+                            f"Provider rotated to {self.current_provider} "
+                            f"(attempt {retry_count + 2}/{max_retries})"
+                        )
                         retry_count += 1
                         continue
                     else:
@@ -876,16 +873,25 @@ class MultiProviderLLMService(LLMServiceInterface):
 
 
 def create_multi_provider_llm_service(
-    config_data: Dict[str, Any] = None, preferred_provider: str = "openai"
+    config_data: Dict[str, Any] = None, preferred_provider: str = None
 ) -> MultiProviderLLMService:
     """
     Create a multi-provider LLM service with configuration from YAML.
 
     Args:
         config_data: Optional LLM configuration. If None, loads from YAML.
-        preferred_provider: Preferred provider name
+        preferred_provider: Preferred provider name. If None, reads from
+            config_data['preferred_provider'] or defaults to 'openai'.
 
     Returns:
         MultiProviderLLMService instance
     """
+    if config_data is None:
+        from ..config.loader import load_config, get_config_section
+        config = load_config()
+        config_data = get_config_section("llm", config)
+
+    if preferred_provider is None:
+        preferred_provider = config_data.get("preferred_provider", "openai")
+
     return MultiProviderLLMService(config_data, preferred_provider)
