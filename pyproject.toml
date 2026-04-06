@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.4.13"
+version = "1.4.14"
 description = "Multi-Agent AI System for automation"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}
@@ -64,10 +64,9 @@ media = [
     "pytubefix>=6.0.0",
 ]
 
-# AWS Bedrock support
+# AWS Bedrock support (uses boto3 directly, no langchain needed)
 aws = [
     "boto3>=1.38,<2",
-    "langchain-aws>=0.2.24,<0.3",
 ]
 
 # VoyageAI embeddings (not available on Python 3.13+, requires langchain)
@@ -76,12 +75,16 @@ voyageai = [
     "langchain-voyageai>=0.1.6,<0.2",
 ]
 
-# Knowledge base (KnowledgeBaseAgent, FileProcessor - LlamaIndex + Qdrant)
+# Knowledge base (KnowledgeBaseAgent - LlamaIndex, LangChain, Qdrant)
+# Python 3.11-3.12 only - LlamaIndex/LangChain/unstructured do not support 3.13
 knowledge = [
     "qdrant-client>=1.16,<2",
     "langchain>=0.3.25,<0.4",
     "langchain-core>=0.3.63,<0.4",
     "langchain-openai>=0.3.19,<0.4",
+    "langchain-aws>=0.2.24,<0.3",
+    "langchain-unstructured~=0.1.6",
+    "unstructured~=0.17",
     "llama-index-core>=0.12.43,<0.13",
     "llama-index-embeddings-langchain>=0.3,<0.4",
     "llama-index-llms-langchain>=0.6,<0.7",
@@ -98,10 +101,8 @@ database = [
     "tabulate>=0.9.0",
 ]
 
-# Document processing (FileProcessor service, KnowledgeBaseAgent)
+# Document processing (FileProcessor service)
 documents = [
-    "unstructured~=0.17",
-    "langchain-unstructured~=0.1.6",
     "pypdf>=5.6.1",
     "python-docx>=1.2.0",
     "python-pptx>=1.0.2",
