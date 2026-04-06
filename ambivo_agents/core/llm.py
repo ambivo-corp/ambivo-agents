@@ -37,13 +37,18 @@ except ImportError:
     BOTO3_AVAILABLE = False
 
 # Optional: LlamaIndex for knowledge base (installed via [knowledge] extra)
+LLAMA_INDEX_AVAILABLE = False
+SentenceSplitter = None
+LangchainEmbedding = None
+LlamaIndexSettings = None
 try:
-    from llama_index.core.node_parser import SentenceSplitter
-    from llama_index.embeddings.langchain import LangchainEmbedding
+    from llama_index.core.node_parser import SentenceSplitter  # noqa: F811
+    from llama_index.embeddings.langchain import LangchainEmbedding  # noqa: F811
+    from llama_index.core import Settings as LlamaIndexSettings  # noqa: F811
 
     LLAMA_INDEX_AVAILABLE = True
 except ImportError:
-    LLAMA_INDEX_AVAILABLE = False
+    pass
 
 # Backward compat flag - True if at least one LLM provider is available
 LANGCHAIN_AVAILABLE = OPENAI_AVAILABLE or ANTHROPIC_AVAILABLE or BOTO3_AVAILABLE
@@ -69,7 +74,9 @@ def _retry_with_backoff(func, max_retries=3, base_delay=1.0):
             return func()
         except Exception as e:
             status = getattr(e, "status_code", None) or getattr(e, "status", None)
-            is_rate_limit = status == 429 or "rate" in str(e).lower()
+            status = getattr(e, "status_code", None) or getattr(e, "status", None)
+            err_str = str(e).lower()
+            is_rate_limit = status == 429 or "rate_limit" in err_str or "rate limit" in err_str
             if is_rate_limit and attempt < max_retries:
                 delay = base_delay * (2 ** attempt)
                 logging.warning(f"Rate limited (attempt {attempt + 1}/{max_retries + 1}), retrying in {delay}s")
@@ -85,7 +92,8 @@ async def _async_retry_with_backoff(coro_func, max_retries=3, base_delay=1.0):
             return await coro_func()
         except Exception as e:
             status = getattr(e, "status_code", None) or getattr(e, "status", None)
-            is_rate_limit = status == 429 or "rate" in str(e).lower()
+            err_str = str(e).lower()
+            is_rate_limit = status == 429 or "rate_limit" in err_str or "rate limit" in err_str
             if is_rate_limit and attempt < max_retries:
                 delay = base_delay * (2 ** attempt)
                 logging.warning(f"Rate limited (attempt {attempt + 1}/{max_retries + 1}), retrying in {delay}s")
@@ -132,16 +140,21 @@ class DirectOpenAILLM:
         return LLMResponse(content)
 
     async def astream(self, prompt: str):
-        stream = await self.async_client.chat.completions.create(
-            model=self.model,
-            temperature=self.temperature,
-            messages=[{"role": "user", "content": prompt}],
-            stream=True,
-        )
-        async for chunk in stream:
-            delta = chunk.choices[0].delta if chunk.choices else None
-            if delta and delta.content:
-                yield LLMResponse(delta.content)
+        try:
+            stream = await self.async_client.chat.completions.create(
+                model=self.model,
+                temperature=self.temperature,
+                messages=[{"role": "user", "content": prompt}],
+                stream=True,
+            )
+            async for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    yield LLMResponse(delta.content)
+        except Exception as e:
+            logging.warning(f"OpenAI streaming failed, falling back to non-streaming: {e}")
+            response = await self.ainvoke(prompt)
+            yield response
 
 
 class DirectAnthropicLLM:
@@ -187,15 +200,20 @@ class DirectAnthropicLLM:
         return LLMResponse(content)
 
     async def astream(self, prompt: str):
-        async with self.async_client.messages.stream(
-            model=self.model,
-            max_tokens=4096,
-            temperature=self.temperature,
-            messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            async for text in stream.text_stream:
-                if text:
-                    yield LLMResponse(text)
+        try:
+            async with self.async_client.messages.stream(
+                model=self.model,
+                max_tokens=4096,
+                temperature=self.temperature,
+                messages=[{"role": "user", "content": prompt}],
+            ) as stream:
+                async for text in stream.text_stream:
+                    if text:
+                        yield LLMResponse(text)
+        except Exception as e:
+            logging.warning(f"Anthropic streaming failed, falling back to non-streaming: {e}")
+            response = await self.ainvoke(prompt)
+            yield response
 
 
 class DirectBedrockLLM:
@@ -208,14 +226,38 @@ class DirectBedrockLLM:
     def invoke(self, prompt: str) -> LLMResponse:
         import json as _json
 
-        body = _json.dumps({"prompt": prompt, "max_tokens": 4096, "temperature": 0.5})
-        response = self.bedrock_client.invoke_model(modelId=self.model, body=body)
+        def _call():
+            # Anthropic Messages API format for Bedrock
+            if "anthropic" in self.model:
+                body = _json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 4096,
+                    "messages": [{"role": "user", "content": prompt}],
+                })
+            else:
+                # Generic format for other Bedrock models
+                body = _json.dumps({"prompt": prompt, "max_tokens": 4096, "temperature": 0.5})
+
+            return self.bedrock_client.invoke_model(modelId=self.model, body=body)
+
+        response = _retry_with_backoff(_call)
         result = _json.loads(response["body"].read())
-        # Handle different model response formats (Cohere, Anthropic, etc.)
-        generations = result.get("generations", [])
-        text = generations[0].get("text", "") if generations else ""
-        if not text:
-            text = result.get("completion", "") or result.get("output", "")
+
+        # Parse response based on model format
+        text = ""
+        if "content" in result and isinstance(result["content"], list):
+            # Anthropic Messages API response
+            for block in result["content"]:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text += block.get("text", "")
+        elif "generations" in result:
+            # Cohere response format
+            generations = result["generations"]
+            text = generations[0].get("text", "") if generations else ""
+        else:
+            # Fallback for other formats
+            text = result.get("completion", "") or result.get("output", "") or str(result)
+
         return LLMResponse(text)
 
     async def ainvoke(self, prompt: str) -> LLMResponse:
@@ -321,7 +363,7 @@ class MultiProviderLLMService(LLMServiceInterface):
         if self.config_data.get("anthropic_api_key"):
             self.provider_tracker.providers["anthropic"] = ProviderConfig(
                 name="anthropic",
-                model_name="claude-3-5-sonnet-20241022",
+                model_name="claude-sonnet-4-5-20250514",
                 priority=1,
                 max_requests_per_minute=50,
                 max_requests_per_hour=1000,
@@ -343,7 +385,7 @@ class MultiProviderLLMService(LLMServiceInterface):
         if self.config_data.get("aws_access_key_id"):
             self.provider_tracker.providers["bedrock"] = ProviderConfig(
                 name="bedrock",
-                model_name="cohere.command-text-v14",
+                model_name="anthropic.claude-sonnet-4-5-20250514-v1:0",
                 priority=3,
                 max_requests_per_minute=40,
                 max_requests_per_hour=2400,
@@ -369,11 +411,10 @@ class MultiProviderLLMService(LLMServiceInterface):
                     self.embed_model = LangchainEmbedding(self.current_embeddings)
                     text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=20)
 
-                    from llama_index.core import Settings
-                    Settings.llm = self.current_llm
-                    Settings.embed_model = self.embed_model
-                    Settings.chunk_size = 512
-                    Settings.text_splitter = text_splitter
+                    LlamaIndexSettings.llm = self.current_llm
+                    LlamaIndexSettings.embed_model = self.embed_model
+                    LlamaIndexSettings.chunk_size = 512
+                    LlamaIndexSettings.text_splitter = text_splitter
                 except Exception as e:
                     logging.debug(f"LlamaIndex setup skipped: {e}")
 
@@ -391,7 +432,7 @@ class MultiProviderLLMService(LLMServiceInterface):
             raise ValueError("anthropic_api_key not configured")
 
         self.current_llm = DirectAnthropicLLM(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-5-20250514",
             temperature=self.temperature,
             api_key=api_key,
             timeout=120,
@@ -442,7 +483,7 @@ class MultiProviderLLMService(LLMServiceInterface):
         )
 
         self.current_llm = DirectBedrockLLM(
-            model="cohere.command-text-v14", client=boto3_client
+            model="anthropic.claude-sonnet-4-5-20250514-v1:0", client=boto3_client
         )
         self.current_embeddings = None  # Embeddings handled by LlamaIndex if [knowledge] installed
 
