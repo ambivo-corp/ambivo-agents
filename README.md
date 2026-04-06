@@ -1039,6 +1039,18 @@ pip install ambivo-agents[all]
 pip install ambivo-agents[all-ml]
 ```
 
+### Extras Comparison: `[full]` vs `[all]` vs `[all-ml]`
+
+| Extra | Includes | Use Case |
+|-------|----------|----------|
+| `[full]` | web, media, aws, database, documents, analytics, async | **Production / integration** — all runtime agent capabilities, no dev tooling |
+| `[all]` | `[full]` + dev tools (pytest, black, isort, pre-commit) | **Development** — for contributors working on ambivo-agents itself |
+| `[all-ml]` | `[all]` + knowledge (LlamaIndex, LangChain, Qdrant) | **Development with KB** — Python 3.11-3.12 only |
+
+**Recommendation:** Use `[full]` for applications that consume ambivo-agents as a dependency. Use `[all]` or `[all-ml]` only when developing or testing the ambivo-agents package itself.
+
+> **Note:** None of the bundle extras include `[knowledge]` (LlamaIndex/LangChain/Qdrant) except `[all-ml]`. If your application needs KnowledgeBaseAgent, either install `[knowledge]` separately or use `[all-ml]`. Applications like vectordb-api that already list LlamaIndex and LangChain in their own requirements.txt do not need the `[knowledge]` extra.
+
 ### Python Version Compatibility
 
 | Extra | Python 3.11 | Python 3.12 | Python 3.13 |
