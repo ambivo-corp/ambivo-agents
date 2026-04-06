@@ -389,13 +389,16 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
             result = await self._download_youtube_audio(url, custom_filename)
 
             if result["success"]:
-                file_size_mb = result.get("file_size_bytes", 0) / (1024 * 1024)
+                file_size_bytes = result.get("file_size_bytes") or 0
+                file_size_mb = file_size_bytes / (1024 * 1024)
+                filename = result.get('filename') or 'Unknown'
+                file_path = result.get('file_path') or 'Not available'
                 return f""" **YouTube Audio Download Completed**
 
  **Type:** Audio (MP3)
  **URL:** {url}
- **File:** {result.get('filename', 'Unknown')}
- **Location:** {result.get('file_path', 'Unknown')}
+ **File:** {filename}
+ **Location:** {file_path}
  **Size:** {file_size_mb:.2f} MB
 **Download Time:** {result.get('execution_time', 0):.2f}s
 
@@ -427,13 +430,16 @@ Your audio file has been successfully downloaded and is ready to use! """
             result = await self._download_youtube_video(url, custom_filename)
 
             if result["success"]:
-                file_size_mb = result.get("file_size_bytes", 0) / (1024 * 1024)
+                file_size_bytes = result.get("file_size_bytes") or 0
+                file_size_mb = file_size_bytes / (1024 * 1024)
+                filename = result.get('filename') or 'Unknown'
+                file_path = result.get('file_path') or 'Not available'
                 return f""" **YouTube Video Download Completed**
 
  **Type:** Video (MP4)
  **URL:** {url}
- **File:** {result.get('filename', 'Unknown')}
- **Location:** {result.get('file_path', 'Unknown')}
+ **File:** {filename}
+ **Location:** {file_path}
  **Size:** {file_size_mb:.2f} MB
 **Download Time:** {result.get('execution_time', 0):.2f}s
 

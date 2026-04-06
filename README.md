@@ -1068,6 +1068,7 @@ The `[knowledge]` extra depends on LangChain and LlamaIndex for vector database 
 ```bash
 # Python 3.13
 pip uninstall ambivo-agents -y && pip install -e ".[all]"
+# pip uninstall ambivo-agents -y && pip install -e <local-path-to-ambivo-agent>
 
 # Python 3.11-3.12 (includes knowledge base)
 pip uninstall ambivo-agents -y && pip install -e ".[all-ml]"

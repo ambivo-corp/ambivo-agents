@@ -151,7 +151,8 @@ ls -la /workspace/output/
                     container_config["detach"] = True
                     container = self.docker_client.containers.run(**container_config)
                     try:
-                        container.wait(timeout=self.timeout)
+                        exit_result = container.wait(timeout=self.timeout)
+                        exit_code = exit_result.get("StatusCode", -1)
                         result = container.logs(stdout=True, stderr=True)
                     except Exception:
                         container.kill()
@@ -165,6 +166,15 @@ ls -la /workspace/output/
                     execution_time = time.time() - start_time
 
                     output = result.decode("utf-8") if isinstance(result, bytes) else str(result)
+
+                    if exit_code != 0:
+                        logging.error(f"YouTube download container exited with code {exit_code}. Output:\n{output}")
+                        return {
+                            "success": False,
+                            "error": f"Download failed (exit code {exit_code}): {output[:500]}",
+                            "url": url,
+                            "execution_time": execution_time,
+                        }
 
                     # Check if output file was created
                     output_files = list(container_output.glob("*"))
@@ -207,19 +217,25 @@ ls -la /workspace/output/
                             output_info["shared_dir_path"] = str(shared_copy)
                         except Exception as e:
                             logging.debug(f"Failed to copy to shared dir: {e}")
-                    else:
-                        logging.warning(f"No output files found in {container_output}. Container output:\n{output}")
 
-                    return {
-                        "success": True,
-                        "output": output,
-                        "execution_time": execution_time,
-                        "url": url,
-                        "audio_only": audio_only,
-                        "download_info": output_info,
-                        "temp_dir": str(temp_path),
-                        "shared_manager": True,  # Indicate we're using shared manager
-                    }
+                        return {
+                            "success": True,
+                            "output": output,
+                            "execution_time": execution_time,
+                            "url": url,
+                            "audio_only": audio_only,
+                            "download_info": output_info,
+                            "temp_dir": str(temp_path),
+                            "shared_manager": True,
+                        }
+                    else:
+                        logging.error(f"No output files found in {container_output}. Container output:\n{output}")
+                        return {
+                            "success": False,
+                            "error": f"Download completed but no output files were produced. Container output: {output[:500]}",
+                            "url": url,
+                            "execution_time": execution_time,
+                        }
 
                 except Exception as container_error:
                     return {
