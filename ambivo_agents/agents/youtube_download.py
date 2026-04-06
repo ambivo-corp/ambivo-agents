@@ -913,6 +913,21 @@ Would you like me to download this video?"""
             remaining_seconds = seconds % 60
             return f"{hours}h {remaining_minutes}m {remaining_seconds}s"
 
+    async def get_agent_status(self) -> Dict[str, Any]:
+        """Get current agent status and configuration"""
+        return {
+            "agent_id": self.agent_id,
+            "agent_type": "youtube_download",
+            "role": self.role.value,
+            "name": self.name,
+            "description": self.description,
+            "session_id": self.context.session_id,
+            "conversation_id": self.context.conversation_id,
+            "user_id": self.context.user_id,
+            "has_memory": bool(self.memory),
+            "has_llm_service": bool(self.llm_service),
+        }
+
     @classmethod
     def create_simple(cls, agent_id: str = None, **kwargs):
         """

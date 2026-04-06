@@ -170,13 +170,30 @@ ls -la /workspace/output/
                     output_files = list(container_output.glob("*"))
                     output_info = {}
 
+                    # Try to parse JSON result from the script output
+                    # The script outputs multi-line JSON between "=" delimiters
+                    try:
+                        json_lines = []
+                        capturing = False
+                        for line in output.split("\n"):
+                            if "DOWNLOAD RESULT:" in line:
+                                capturing = True
+                                continue
+                            if capturing:
+                                if line.strip().startswith("="):
+                                    break
+                                json_lines.append(line)
+                        if json_lines:
+                            download_result = json.loads("\n".join(json_lines))
+                            output_info.update(download_result)
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logging.warning(f"Failed to parse download metadata: {e}")
+
                     if output_files:
                         downloaded_file = output_files[0]  # Take first output file
-                        output_info = {
-                            "filename": downloaded_file.name,
-                            "size_bytes": downloaded_file.stat().st_size,
-                            "path": str(downloaded_file),
-                        }
+                        output_info["filename"] = downloaded_file.name
+                        output_info["size_bytes"] = downloaded_file.stat().st_size
+                        output_info["path"] = str(downloaded_file)
 
                         # Move output file to agent output directory
                         shared_output = self.output_dir / downloaded_file.name
@@ -190,17 +207,8 @@ ls -la /workspace/output/
                             output_info["shared_dir_path"] = str(shared_copy)
                         except Exception as e:
                             logging.debug(f"Failed to copy to shared dir: {e}")
-
-                        # Try to parse JSON result from the script output
-                        try:
-                            # Look for JSON in the output
-                            for line in output.split("\n"):
-                                if line.strip().startswith("{") and "file_path" in line:
-                                    download_result = json.loads(line.strip())
-                                    output_info.update(download_result)
-                                    break
-                        except (json.JSONDecodeError, ValueError) as e:
-                            logging.warning(f"Failed to parse download metadata: {e}")
+                    else:
+                        logging.warning(f"No output files found in {container_output}. Container output:\n{output}")
 
                     return {
                         "success": True,
@@ -340,7 +348,7 @@ if __name__ == '__main__':
     try:
         import json as _json
         url = _json.loads({json.dumps(json.dumps(url))})
-        audio_only = {json.dumps(audio_only)}
+        audio_only = {audio_only}
         output_dir = "/workspace/output"
         custom_filename = _json.loads({json.dumps(json.dumps(output_filename)) if output_filename else '"null"'})
 

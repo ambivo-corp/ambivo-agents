@@ -860,10 +860,49 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             },
         }
 
+    def _fast_route_check(self, user_message: str) -> Optional[Dict[str, Any]]:
+        """Deterministic fast-path routing for unambiguous patterns.
+
+        Skips the LLM entirely when the user intent is obvious from the message.
+        Returns None if no fast-path match, letting the LLM decide.
+        """
+        msg = user_message.lower()
+
+        # YouTube download: message contains a YouTube URL + download intent
+        has_yt_url = "youtube.com/watch" in msg or "youtu.be/" in msg
+        has_download_word = any(w in msg for w in ["download", "get video", "get audio", "save video", "save audio"])
+        if has_yt_url and has_download_word and "youtube_download" in self.specialized_agents:
+            return {
+                "primary_agent": "youtube_download",
+                "confidence": 0.98,
+                "requires_multiple_agents": False,
+                "workflow_detected": False,
+                "is_follow_up": False,
+                "reasoning": "Fast-path: YouTube URL with explicit download intent",
+            }
+
+        # YouTube download: bare YouTube URL with no other context
+        if has_yt_url and len(msg.split()) <= 3 and "youtube_download" in self.specialized_agents:
+            return {
+                "primary_agent": "youtube_download",
+                "confidence": 0.95,
+                "requires_multiple_agents": False,
+                "workflow_detected": False,
+                "is_follow_up": False,
+                "reasoning": "Fast-path: bare YouTube URL likely means download",
+            }
+
+        return None
+
     async def _analyze_query_intent(
         self, user_message: str, conversation_context: str = ""
     ) -> Dict[str, Any]:
         """Enhanced intent analysis with conversation context and system message support"""
+
+        # Fast-path: deterministic routing for unambiguous patterns (skip LLM)
+        fast_route = self._fast_route_check(user_message)
+        if fast_route:
+            return fast_route
 
         # Try LLM analysis first
         if self.llm_service:
@@ -1151,8 +1190,9 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         primary_agent = (
             max(agent_scores.items(), key=lambda x: x[1])[0] if agent_scores else "assistant"
         )
+        score_total = sum(agent_scores.values()) if agent_scores else 0
         confidence = (
-            agent_scores.get(primary_agent, 0) / sum(agent_scores.values()) if agent_scores else 0.5
+            agent_scores.get(primary_agent, 0) / score_total if score_total > 0 else 0.5
         )
 
         return {
