@@ -750,7 +750,8 @@ class BaseAgent(ABC):
 
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(run_chat)
-                    return future.result()
+                    timeout = kwargs.get("timeout", 120)
+                    return future.result(timeout=timeout)
 
             except RuntimeError:
                 # No event loop running, safe to use asyncio.run()

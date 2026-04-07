@@ -524,7 +524,7 @@ Would you like me to download this video?"""
                     response += " **Successfully Downloaded:**\n"
                     for i, download_result in enumerate(result["results"], 1):
                         if download_result.get("success", False):
-                            response += f"{i}. {download_result.get('filename', 'Unknown')}\n"
+                            response += f"{i}. {download_result.get('filename') or 'Unknown'}\n"
 
                 if failed > 0:
                     response += f"\n **Failed Downloads:** {failed}\n"
