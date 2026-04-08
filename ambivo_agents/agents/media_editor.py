@@ -1372,10 +1372,16 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         }
 
     def _initialize_media_executor(self):
-        """Initialize media executor"""
-        from ..executors.media_executor import MediaDockerExecutor
+        """Initialize media executor (Docker or local based on config)."""
+        from ..config.loader import is_docker_enabled
 
-        self.media_executor = MediaDockerExecutor(self.media_config)
+        if is_docker_enabled():
+            from ..executors.media_executor import MediaDockerExecutor
+            self.media_executor = MediaDockerExecutor(self.media_config)
+        else:
+            from ..executors.media_local_executor import MediaLocalExecutor
+            self.media_executor = MediaLocalExecutor(self.media_config)
+        logging.info(f"Media executor initialized: {type(self.media_executor).__name__}")
 
     def _resolve_media_file(self, file_path: str) -> str:
         """

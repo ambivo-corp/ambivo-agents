@@ -159,6 +159,7 @@ ENV_VARIABLE_MAPPING = {
     f"{ENV_PREFIX}DATABASE_AGENT_AUTO_COPY_TO_SHARED": ("database_agent", "auto_copy_to_shared"),
     f"{ENV_PREFIX}DATABASE_AGENT_SUPPORTED_TYPES": ("database_agent", "supported_types"),
     # Docker Configuration (Core infrastructure)
+    f"{ENV_PREFIX}DOCKER_USE_DOCKER": ("docker", "use_docker"),
     f"{ENV_PREFIX}DOCKER_IMAGES": ("docker", "images"),
     f"{ENV_PREFIX}DOCKER_MEMORY_LIMIT": ("docker", "memory_limit"),
     f"{ENV_PREFIX}DOCKER_TIMEOUT": ("docker", "timeout"),
@@ -1049,6 +1050,27 @@ def get_config_section(section: str, config: Dict[str, Any] = None) -> Dict[str,
         return {}
 
     return config[section]
+
+
+def is_docker_enabled(config: Dict[str, Any] = None) -> bool:
+    """Check if Docker execution is enabled.
+
+    Reads ``docker.use_docker`` from config (YAML or ENV).  Defaults to
+    ``True`` so existing deployments are unaffected.  Set to ``false`` via
+    YAML (``docker.use_docker: false``) or ENV
+    (``AMBIVO_AGENTS_DOCKER_USE_DOCKER=false``) to run executors locally.
+
+    This is intended for deployments inside the fat Docker image
+    (sgosain/amb-ubuntu-python-public-pod) on platforms like Railway
+    where Docker-in-Docker is not available.
+    """
+    if config is None:
+        config = load_config()
+    docker_section = config.get("docker", {})
+    val = docker_section.get("use_docker", True)
+    if isinstance(val, str):
+        return val.lower() not in ("false", "0", "no")
+    return bool(val)
 
 
 # Environment variable convenience functions

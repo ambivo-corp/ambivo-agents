@@ -885,17 +885,19 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
     def _determine_execution_mode(self) -> str:
         """Determine execution mode from configuration"""
+        from ..config.loader import is_docker_enabled
+
         # Check if proxy is enabled in config
         if self.scraper_config.get("proxy_enabled", False):
             proxy_url = self.scraper_config.get("proxy_config", {}).get("http_proxy")
             if proxy_url:
                 return "proxy"
 
-        # Check if Docker should be used
-        if self.scraper_config.get("docker_image"):
+        # Check if Docker should be used (only when docker execution is enabled)
+        if is_docker_enabled() and self.scraper_config.get("docker_image"):
             return "docker"
 
-        # Fall back to local execution
+        # Fall back to local execution (playwright/requests directly on host)
         if PLAYWRIGHT_AVAILABLE or REQUESTS_AVAILABLE:
             return "local"
 

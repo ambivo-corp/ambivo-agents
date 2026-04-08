@@ -1,6 +1,7 @@
 # CodeExecutorAgent with BaseAgentHistoryMixin - COMPLETE FIXED VERSION
 import asyncio
 import json
+import logging
 import re
 import uuid
 from typing import Any, AsyncIterator, Dict
@@ -19,9 +20,6 @@ from ..core.base import (
     StreamSubType,
 )
 from ..core.history import BaseAgentHistoryMixin, ContextType
-from ..executors import DockerCodeExecutor
-
-
 class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
     """Agent specialized in code execution with execution history and code writing"""
 
@@ -66,7 +64,7 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
         except Exception as e:
             docker_config = {}
 
-        self.docker_executor = DockerCodeExecutor(docker_config)
+        self.docker_executor = self._create_code_executor(docker_config)
         self._add_code_tools()
 
         # Add code-specific context extractors
@@ -76,6 +74,21 @@ class CodeExecutorAgent(BaseAgent, BaseAgentHistoryMixin):
                 r"```(?:python|bash|javascript)?\n?(.*?)\n?```", text, re.DOTALL
             ),
         )
+
+    @staticmethod
+    def _create_code_executor(docker_config):
+        """Create the appropriate code executor based on config."""
+        from ..config.loader import is_docker_enabled
+
+        if is_docker_enabled():
+            from ..executors import DockerCodeExecutor
+            executor = DockerCodeExecutor(docker_config)
+            logging.info("Code Docker executor initialized successfully")
+            return executor
+
+        from ..executors.local_code_executor import LocalCodeExecutor
+        logging.info("Code local executor initialized (no Docker)")
+        return LocalCodeExecutor(docker_config)
 
     async def _analyze_intent(
         self, user_message: str, conversation_context: str = ""

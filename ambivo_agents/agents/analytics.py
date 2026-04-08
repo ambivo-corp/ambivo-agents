@@ -100,9 +100,24 @@ class AnalyticsAgent(BaseAgent, BaseAgentHistoryMixin):
         self.current_dataset = None
         self.current_schema = None
 
+        # Cache the code executor (Docker or local based on config)
+        self._code_executor = None
+
         # Logging
         self.logger = logging.getLogger(f"AnalyticsAgent-{agent_id[:8]}")
         self.logger.info(f"Analytics Agent initialized with input_dir: {self.input_dir}")
+
+    def _get_code_executor(self):
+        """Get or create the code executor (Docker or local based on config)."""
+        if self._code_executor is None:
+            from ..config.loader import is_docker_enabled
+            if is_docker_enabled():
+                from ..executors.docker_executor import DockerCodeExecutor
+                self._code_executor = DockerCodeExecutor()
+            else:
+                from ..executors.local_code_executor import LocalCodeExecutor
+                self._code_executor = LocalCodeExecutor()
+        return self._code_executor
 
     def resolve_input_file(self, filename: str) -> Optional[Path]:
         """
@@ -663,12 +678,10 @@ Please try a simpler query pattern or load data first."""
             else:
                 return "Unknown query type"
 
-            # Execute in Docker
-            from ..executors.docker_executor import DockerCodeExecutor
+            # Execute code
+            executor = self._get_code_executor()
 
-            executor = DockerCodeExecutor()
-
-            # Prepare data for Docker
+            # Prepare data
             data_json = json.dumps({"data": self.current_dataset, "schema": self.current_schema})
 
             files = {"data.json": data_json}
@@ -706,12 +719,10 @@ Please try a simpler query pattern or load data first."""
             else:
                 return "Unknown query type"
 
-            # Execute in Docker
-            from ..executors.docker_executor import DockerCodeExecutor
+            # Execute code
+            executor = self._get_code_executor()
 
-            executor = DockerCodeExecutor()
-
-            # Prepare data for Docker
+            # Prepare data
             data_json = json.dumps({"data": self.current_dataset, "schema": self.current_schema})
 
             files = {"data.json": data_json}
@@ -832,8 +843,7 @@ Please try a simpler query pattern or load data first."""
                 with open(file_path, "rb") as f:
                     file_content = f.read()
 
-                # Use DockerCodeExecutor with binary file support
-                from ..executors.docker_executor import DockerCodeExecutor
+                # Use code executor with binary file support
                 import tempfile
                 import shutil
 
@@ -848,47 +858,45 @@ Please try a simpler query pattern or load data first."""
                     with open(code_path, "w") as f:
                         f.write(analysis_code)
 
-                    # Execute using Docker with volume mounting
-                    executor = DockerCodeExecutor()
+                    executor = self._get_code_executor()
 
-                    try:
-                        import docker
-
-                        client = executor.docker_client
-
-                        # Mount the temp directory containing both code and data file
-                        volumes = {temp_dir: {"bind": "/workspace", "mode": "rw"}}
-
-                        container = client.containers.run(
-                            image=executor.default_image,
-                            command=["python", "/workspace/analysis.py"],
-                            volumes=volumes,
-                            working_dir="/workspace",
-                            mem_limit=executor.memory_limit,
-                            network_disabled=True,
-                            remove=True,
-                            stdout=True,
-                            stderr=True,
+                    # Try Docker-native execution if available, else subprocess
+                    if hasattr(executor, 'docker_client'):
+                        try:
+                            client = executor.docker_client
+                            volumes = {temp_dir: {"bind": "/workspace", "mode": "rw"}}
+                            container = client.containers.run(
+                                image=executor.default_image,
+                                command=["python", "/workspace/analysis.py"],
+                                volumes=volumes,
+                                working_dir="/workspace",
+                                mem_limit=executor.memory_limit,
+                                network_disabled=True,
+                                remove=True,
+                                stdout=True,
+                                stderr=True,
+                            )
+                            output = (
+                                container.decode("utf-8")
+                                if isinstance(container, bytes)
+                                else str(container)
+                            )
+                            result = {"success": True, "output": output}
+                        except Exception as e:
+                            self.logger.error(f"Docker execution error: {e}")
+                            result = {"success": False, "error": str(e)}
+                    else:
+                        # Local execution — run analysis.py in the temp dir
+                        result = executor.execute_code(
+                            analysis_code, language="python",
+                            files={filename: open(file_path, "r", errors="replace").read()},
                         )
-
-                        output = (
-                            container.decode("utf-8")
-                            if isinstance(container, bytes)
-                            else str(container)
-                        )
-                        result = {"success": True, "output": output}
-
-                    except Exception as e:
-                        self.logger.error(f"Docker execution error: {e}")
-                        result = {"success": False, "error": str(e)}
 
             else:
                 # For CSV files, use the existing text-based approach
                 analysis_code = self._generate_analysis_code_for_text_file(file_path)
 
-                from ..executors.docker_executor import DockerCodeExecutor
-
-                executor = DockerCodeExecutor()
+                executor = self._get_code_executor()
 
                 # Read file content as text
                 with open(file_path, "r") as f:

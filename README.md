@@ -34,6 +34,7 @@ For production scenarios, we recommend:
 - [Docker Setup](#docker-setup)
   - [Agent Handoff Mechanism](#agent-handoff-mechanism)
   - [File Access Security Configuration](#file-access-security-configuration)
+- [Running Without Docker (Containerized Deployment)](#running-without-docker-containerized-deployment)
 - [Troubleshooting](#troubleshooting)
 - [Security Considerations](#security-considerations)
 - [Contributing](#contributing)
@@ -1078,6 +1079,8 @@ pip uninstall ambivo-agents -y && pip install -e ".[all-ml]"
 ```bash
 docker pull sgosain/amb-ubuntu-python-public-pod
 ```
+
+> **Note:** If deploying **inside** the Docker image itself (e.g., on Railway, Render), you can skip this step and set `use_docker: false` in config. See [Running Without Docker](#running-without-docker-containerized-deployment) below.
 
 ### 3. Setup Redis
 
@@ -2662,6 +2665,66 @@ docker run --rm \
  **Monitoring**: Centralized disk usage and cleanup 
  **Third-Party Integration**: Easy for custom agent development 
  **Auto-Management**: Directories created and managed automatically
+
+## Running Without Docker (Containerized Deployment)
+
+When deploying ambivo_agents **inside** the `sgosain/amb-ubuntu-python-public-pod` Docker image (e.g., on Railway, Render, or similar platforms that don't support Docker-in-Docker), you can disable Docker executor spawning. The image already contains all required dependencies (ffmpeg, pytubefix, playwright, pandas, duckdb, etc.).
+
+### Configuration
+
+**Via YAML (`agent_config.yaml`):**
+```yaml
+docker:
+  use_docker: false
+  shared_base_dir: "./docker_shared"  # still used for file organization
+  # ... rest of docker config remains the same
+```
+
+**Via Environment Variable:**
+```bash
+export AMBIVO_AGENTS_DOCKER_USE_DOCKER=false
+```
+
+### How It Works
+
+| Mode | `use_docker` | What Happens |
+|------|-------------|-------------|
+| **Docker (default)** | `true` | Agents spawn Docker containers using `sgosain/amb-ubuntu-python-public-pod` — requires a Docker daemon |
+| **Local** | `false` | Agents use local subprocess execution (Python, Bash, ffmpeg, pytubefix) — no Docker daemon needed |
+
+When `use_docker: false`, each agent uses a local executor:
+
+| Agent | Docker Executor | Local Executor | Host Requirement |
+|-------|----------------|----------------|-----------------|
+| CodeExecutorAgent | `DockerCodeExecutor` | `LocalCodeExecutor` | Python, Bash |
+| MediaEditorAgent | `MediaDockerExecutor` | `MediaLocalExecutor` | ffmpeg, ffprobe |
+| YouTubeDownloadAgent | `YouTubeDockerExecutor` | `YouTubeLocalExecutor` | pytubefix |
+| AnalyticsAgent | `DockerCodeExecutor` | `LocalCodeExecutor` | Python, pandas |
+| WebScraperAgent | `SimpleDockerExecutor` | Falls back to local playwright/requests | playwright or requests |
+
+### Important Notes
+
+- **Default is `true`** — existing deployments are completely unaffected.
+- This is **intended for running inside the fat Docker image** where all dependencies already exist, not for bare developer machines.
+- The `docker_shared/` directory structure is used by both modes for consistent file organization and cross-agent handoffs.
+- The `code_execution_policy` safety layer applies to both Docker and local execution for `LocalCodeExecutor`.
+- Local executors raise clear errors if dependencies are missing (e.g., `"ffmpeg not found"`, `"pytubefix not installed"`).
+
+### Typical Railway Deployment
+
+```dockerfile
+# Use the fat image as base — all agent deps included
+FROM sgosain/amb-ubuntu-python-public-pod:latest
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+
+# No Docker daemon needed
+ENV AMBIVO_AGENTS_DOCKER_USE_DOCKER=false
+CMD ["gunicorn", "your_app:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
+```
 
 ## Troubleshooting
 

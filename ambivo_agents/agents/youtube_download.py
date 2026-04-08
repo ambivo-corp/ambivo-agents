@@ -746,12 +746,17 @@ Would you like me to download this video?"""
             }
 
     def _initialize_youtube_executor(self):
-        """Initialize the YouTube executor"""
-        try:
-            from ..executors.youtube_executor import YouTubeDockerExecutor
+        """Initialize the YouTube executor (Docker or local based on config)."""
+        from ..config.loader import is_docker_enabled
 
-            self.youtube_executor = YouTubeDockerExecutor(self.youtube_config)
-            logging.info("YouTube executor initialized successfully")
+        try:
+            if is_docker_enabled():
+                from ..executors.youtube_executor import YouTubeDockerExecutor
+                self.youtube_executor = YouTubeDockerExecutor(self.youtube_config)
+            else:
+                from ..executors.youtube_local_executor import YouTubeLocalExecutor
+                self.youtube_executor = YouTubeLocalExecutor(self.youtube_config)
+            logging.info(f"YouTube executor initialized: {type(self.youtube_executor).__name__}")
         except Exception as e:
             logging.error(f"Failed to initialize YouTube executor: {e}")
             raise RuntimeError(f"Failed to initialize YouTube executor: {e}")
