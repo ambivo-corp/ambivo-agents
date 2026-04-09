@@ -1,11 +1,13 @@
 # ambivo_agents/executors/youtube_executor.py
 """
 YouTube Docker executor for downloading videos and audio from YouTube.
+Uses yt-dlp for reliable downloads with built-in bot-detection handling.
 """
 
 import asyncio
 import json
 import logging
+import os
 import shutil
 import tempfile
 import time
@@ -24,7 +26,7 @@ except ImportError:
 
 
 class YouTubeDockerExecutor:
-    """Specialized Docker executor for YouTube downloads with pytubefix"""
+    """Specialized Docker executor for YouTube downloads with yt-dlp"""
 
     def __init__(self, config: Dict[str, Any] = None):
         # Load from YAML if config not provided
@@ -109,7 +111,7 @@ class YouTubeDockerExecutor:
                 script_file = temp_path / "download_youtube.py"
                 script_file.write_text(download_script)
 
-                # Create execution script (no pip install needed)
+                # Create execution script
                 execution_script = f"""#!/bin/bash
 set -e
 cd /workspace
@@ -118,7 +120,7 @@ echo "Starting YouTube download..."
 echo "URL: {url}"
 echo "Audio only: {audio_only}"
 
-# Execute the download directly (pytubefix should be pre-installed)
+# Execute the download (yt-dlp should be pre-installed)
 python download_youtube.py
 
 echo "YouTube download completed successfully"
@@ -128,6 +130,13 @@ ls -la /workspace/output/
                 exec_script_file = temp_path / "run_download.sh"
                 exec_script_file.write_text(execution_script)
                 exec_script_file.chmod(0o755)
+
+                # Build container environment — pass through cookie/auth env vars
+                container_env = {"PYTHONUNBUFFERED": "1", "PYTHONPATH": "/workspace"}
+                for key in ("YT_DLP_COOKIES_FILE", "YT_DLP_COOKIES_FROM_BROWSER", "YT_DLP_COOKIES_BASE64", "YT_DLP_PROXY"):
+                    val = os.environ.get(key)
+                    if val:
+                        container_env[key] = val
 
                 # Container configuration for YouTube downloads
                 container_config = {
@@ -140,7 +149,7 @@ ls -la /workspace/output/
                     "remove": True,
                     "stdout": True,
                     "stderr": True,
-                    "environment": {"PYTHONUNBUFFERED": "1", "PYTHONPATH": "/workspace"},
+                    "environment": container_env,
                 }
 
                 start_time = time.time()
@@ -181,7 +190,6 @@ ls -la /workspace/output/
                     output_info = {}
 
                     # Try to parse JSON result from the script output
-                    # The script outputs multi-line JSON between "=" delimiters
                     try:
                         json_lines = []
                         capturing = False
@@ -255,135 +263,133 @@ ls -la /workspace/output/
     def _create_download_script(
         self, url: str, audio_only: bool, output_filename: str = None
     ) -> str:
-        """Create the Python script for downloading from YouTube"""
+        """Create the Python script for downloading from YouTube using yt-dlp"""
 
         script = f'''#!/usr/bin/env python3
 """
-YouTube downloader script using pytubefix
+YouTube downloader script using yt-dlp
 """
 
+import base64
 import os
 import json
 import sys
+import tempfile
 from pathlib import Path
 
-# Import required modules (should be pre-installed in container)
 try:
-    from pydantic import BaseModel, Field
-    from pytubefix import YouTube
-    from pytubefix.cli import on_progress
+    import yt_dlp
 except ImportError as e:
     print(f"Import error: {{e}}", file=sys.stderr)
-    print("Required packages not available in container", file=sys.stderr)
+    print("yt-dlp not available in container. Install with: pip install yt-dlp", file=sys.stderr)
     sys.exit(1)
-
-
-class DownloadResult(BaseModel):
-    file_path: str = Field(..., description="Path where the downloaded file is stored.")
-    title: str = Field(..., description="Sanitized title of the YouTube video.")
-    url: str = Field(..., description="Original URL of the YouTube video.")
-    thumbnail: str = Field(..., description="Thumbnail URL of the YouTube video.")
-    duration: int = Field(..., description="Duration of the video in seconds.")
-    file_size_bytes: int = Field(..., description="Size of the downloaded file in bytes.")
 
 
 def sanitize_title(title: str) -> str:
     """Remove special characters from the title."""
-    # Remove/replace problematic characters
-    title = title.replace('/', '_')
-    title = title.replace('\\\\', '_')
-    title = title.replace(':', '_')
-    title = title.replace('*', '_')
-    title = title.replace('?', '_')
-    title = title.replace('"', '_')
-    title = title.replace('<', '_')
-    title = title.replace('>', '_')
-    title = title.replace('|', '_')
-
-    # Keep only alphanumeric, spaces, hyphens, underscores
+    for ch in '\\\\/:*?"<>|':
+        title = title.replace(ch, '_')
     sanitized = ''.join(c for c in title if c.isalnum() or c in ' -_')
-
-    # Remove extra spaces and limit length
     sanitized = ' '.join(sanitized.split())[:100]
-
     return sanitized if sanitized else 'youtube_download'
 
 
-def download_yt(url: str, audio_only: bool = True, output_dir: str = ".", custom_filename: str = None) -> DownloadResult:
-    """Download audio or video from a YouTube URL."""
-    try:
-        # Create YouTube object
-        yt = YouTube(url, on_progress_callback=on_progress)
-
-        # Get video info
-        title = sanitize_title(yt.title)
-        duration = yt.length
-        thumbnail_url = yt.thumbnail_url
-
-        # Use custom filename if provided
-        filename_base = custom_filename if custom_filename else title
-        filename_base = sanitize_title(filename_base)
-
-        if audio_only:
-            # Get audio stream
-            stream = yt.streams.filter(only_audio=True).first()
-            if not stream:
-                stream = yt.streams.get_audio_only()
-
-            extension = "mp3"
-            filename = filename_base + "." + extension
-            file_path = stream.download(output_path=output_dir, filename=filename)
-        else:
-            # Get highest resolution video stream
-            stream = yt.streams.get_highest_resolution()
-            if not stream:
-                stream = yt.streams.filter(progressive=True, file_extension='mp4').first()
-
-            extension = "mp4"
-            filename = filename_base + "." + extension
-            file_path = stream.download(output_path=output_dir, filename=filename)
-
-        # Get file size
-        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
-
-        return DownloadResult(
-            file_path=file_path,
-            title=title,
-            url=url,
-            thumbnail=thumbnail_url,
-            duration=duration,
-            file_size_bytes=file_size
-        )
-
-    except Exception as e:
-        print(f"Error downloading {{url}}: {{e}}", file=sys.stderr)
-        raise
+def resolve_cookies_file():
+    """Resolve cookies file from env vars (file path or base64)."""
+    path = os.environ.get("YT_DLP_COOKIES_FILE")
+    if path and os.path.isfile(path):
+        return path
+    b64 = os.environ.get("YT_DLP_COOKIES_BASE64")
+    if b64:
+        content = base64.b64decode(b64)
+        fd, tmp = tempfile.mkstemp(prefix="yt_cookies_", suffix=".txt")
+        with os.fdopen(fd, "wb") as f:
+            f.write(content)
+        return tmp
+    return None
 
 
 if __name__ == '__main__':
     try:
-        import json as _json
-        url = _json.loads({json.dumps(json.dumps(url))})
+        url = json.loads({json.dumps(json.dumps(url))})
         audio_only = {audio_only}
         output_dir = "/workspace/output"
-        custom_filename = _json.loads({json.dumps(json.dumps(output_filename)) if output_filename else '"null"'})
+        custom_filename = json.loads({json.dumps(json.dumps(output_filename)) if output_filename else '"null"'})
 
         print(f"Downloading from: {{url}}")
         print(f"Audio only: {{audio_only}}")
         print(f"Output directory: {{output_dir}}")
 
-        # Perform download
-        result = download_yt(
-            url=url,
-            audio_only=audio_only,
-            output_dir=output_dir,
-            custom_filename=custom_filename
-        )
+        cookies_file = resolve_cookies_file()
+        proxy = os.environ.get("YT_DLP_PROXY")
 
-        # Output result as JSON for parsing
+        # Extract info first
+        info_opts = {{"quiet": True, "no_warnings": True, "skip_download": True}}
+        if cookies_file:
+            info_opts["cookiefile"] = cookies_file
+        if proxy:
+            info_opts["proxy"] = proxy
+
+        with yt_dlp.YoutubeDL(info_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+        title = sanitize_title(info.get("title", "youtube_download"))
+        duration = info.get("duration", 0)
+        thumbnail_url = info.get("thumbnail", "")
+
+        filename_base = sanitize_title(custom_filename) if custom_filename else title
+        extension = "mp3" if audio_only else "mp4"
+        filename = f"{{filename_base}}.{{extension}}"
+
+        # Download options
+        dl_opts = {{
+            "quiet": True,
+            "no_warnings": True,
+            "paths": {{"home": output_dir}},
+            "outtmpl": {{"default": filename}},
+        }}
+        if cookies_file:
+            dl_opts["cookiefile"] = cookies_file
+        if proxy:
+            dl_opts["proxy"] = proxy
+
+        if audio_only:
+            dl_opts["format"] = "bestaudio/best"
+            dl_opts["postprocessors"] = [{{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }}]
+        else:
+            dl_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            dl_opts["merge_output_format"] = "mp4"
+
+        with yt_dlp.YoutubeDL(dl_opts) as ydl:
+            ydl.download([url])
+
+        # Find the output file
+        file_path = os.path.join(output_dir, filename)
+        if not os.path.exists(file_path):
+            import glob
+            matches = glob.glob(os.path.join(output_dir, f"{{filename_base}}.*"))
+            if matches:
+                file_path = matches[0]
+                filename = os.path.basename(file_path)
+
+        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+
+        result = {{
+            "file_path": file_path,
+            "title": title,
+            "url": url,
+            "thumbnail": thumbnail_url,
+            "duration": duration,
+            "file_size_bytes": file_size,
+        }}
+
         print("\\n" + "="*50)
         print("DOWNLOAD RESULT:")
-        print(result.model_dump_json(indent=2))
+        print(json.dumps(result, indent=2))
         print("="*50)
 
     except Exception as e:
@@ -397,35 +403,63 @@ if __name__ == '__main__':
         """Get video information without downloading"""
 
         info_script = f"""#!/usr/bin/env python3
+import base64
 import json
+import os
 import sys
+import tempfile
 
 try:
-    from pytubefix import YouTube
+    import yt_dlp
 except ImportError as e:
-    print(f"Error: pytubefix not available: {{e}}", file=sys.stderr)
+    print(f"Error: yt-dlp not available: {{e}}", file=sys.stderr)
     sys.exit(1)
 
-try:
-    yt = YouTube("{url}")
+def resolve_cookies_file():
+    path = os.environ.get("YT_DLP_COOKIES_FILE")
+    if path and os.path.isfile(path):
+        return path
+    b64 = os.environ.get("YT_DLP_COOKIES_BASE64")
+    if b64:
+        content = base64.b64decode(b64)
+        fd, tmp = tempfile.mkstemp(prefix="yt_cookies_", suffix=".txt")
+        with os.fdopen(fd, "wb") as f:
+            f.write(content)
+        return tmp
+    return None
 
-    info = {{
-        "title": yt.title,
-        "duration": yt.length,
-        "views": yt.views,
-        "thumbnail_url": yt.thumbnail_url,
-        "description": yt.description[:500] + "..." if len(yt.description) > 500 else yt.description,
-        "author": yt.author,
-        "publish_date": yt.publish_date.isoformat() if yt.publish_date else None,
+try:
+    opts = {{"quiet": True, "no_warnings": True, "skip_download": True}}
+    cookies_file = resolve_cookies_file()
+    if cookies_file:
+        opts["cookiefile"] = cookies_file
+    proxy = os.environ.get("YT_DLP_PROXY")
+    if proxy:
+        opts["proxy"] = proxy
+
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info("{url}", download=False)
+
+    formats = info.get("formats") or []
+    audio_formats = [f for f in formats if f.get("acodec") != "none" and f.get("vcodec") == "none"]
+    video_formats = [f for f in formats if f.get("vcodec") != "none"]
+
+    result = {{
+        "title": info.get("title"),
+        "duration": info.get("duration"),
+        "views": info.get("view_count"),
+        "thumbnail_url": info.get("thumbnail"),
+        "description": (info.get("description") or "")[:500],
+        "author": info.get("uploader") or info.get("channel"),
+        "publish_date": info.get("upload_date"),
         "available_streams": {{
-            "audio_streams": len(yt.streams.filter(only_audio=True)),
-            "video_streams": len(yt.streams.filter(progressive=True)),
-            "highest_resolution": str(yt.streams.get_highest_resolution()),
-            "audio_only": str(yt.streams.get_audio_only())
+            "audio_streams": len(audio_formats),
+            "video_streams": len(video_formats),
+            "total_formats": len(formats),
         }}
     }}
 
-    print(json.dumps(info, indent=2))
+    print(json.dumps(result, indent=2))
 
 except Exception as e:
     print(f"Error getting video info: {{e}}", file=sys.stderr)
@@ -439,6 +473,12 @@ except Exception as e:
                 script_file = temp_path / "get_info.py"
                 script_file.write_text(info_script)
 
+                container_env = {"PYTHONUNBUFFERED": "1"}
+                for key in ("YT_DLP_COOKIES_FILE",):
+                    val = os.environ.get(key)
+                    if val:
+                        container_env[key] = val
+
                 container_config = {
                     "image": self.docker_image,
                     "command": ["python", "/workspace/get_info.py"],
@@ -449,6 +489,7 @@ except Exception as e:
                     "remove": True,
                     "stdout": True,
                     "stderr": True,
+                    "environment": container_env,
                 }
 
                 result = self.docker_client.containers.run(**container_config)

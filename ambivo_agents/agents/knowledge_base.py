@@ -255,6 +255,144 @@ class QdrantServiceAdapter:
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Qdrant: {e}")
 
+        # Configure LlamaIndex Settings (embed_model + llm) from ambivo config
+        self._configure_llama_index(config)
+        self._configure_llm(config)
+
+    def _configure_llama_index(self, config: Dict[str, Any]) -> None:
+        """Set up LlamaIndex Settings (embed_model + llm) using available provider keys.
+
+        Embeddings: OpenAI → Bedrock → VoyageAI
+        LLM: OpenAI → Anthropic (via langchain) → Bedrock
+        """
+        import os
+        try:
+            from llama_index.core import Settings
+        except ImportError:
+            return  # LlamaIndex not installed — nothing to configure
+
+        llm_config = get_config_section("llm", config)
+
+        # --- 1. OpenAI (preferred — fastest, cheapest) ---
+        openai_key = llm_config.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
+        if openai_key:
+            try:
+                from llama_index.embeddings.openai import OpenAIEmbedding
+                Settings.embed_model = OpenAIEmbedding(api_key=openai_key)
+                _logger.info("LlamaIndex embed_model set to OpenAIEmbedding")
+                return
+            except ImportError:
+                pass
+            # Fallback: langchain wrapper for OpenAI
+            try:
+                from langchain_openai import OpenAIEmbeddings
+                from llama_index.embeddings.langchain import LangchainEmbedding
+                Settings.embed_model = LangchainEmbedding(OpenAIEmbeddings(openai_api_key=openai_key))
+                _logger.info("LlamaIndex embed_model set to LangchainEmbedding(OpenAI)")
+                return
+            except ImportError:
+                pass
+
+        # --- 2. AWS Bedrock (Titan embeddings) ---
+        aws_access_key = llm_config.get("aws_access_key_id") or os.environ.get("AWS_ACCESS_KEY_ID")
+        aws_secret_key = llm_config.get("aws_secret_access_key") or os.environ.get("AWS_SECRET_ACCESS_KEY")
+        aws_region = llm_config.get("aws_region") or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        if aws_access_key and aws_secret_key:
+            try:
+                from langchain_aws import BedrockEmbeddings
+                from llama_index.embeddings.langchain import LangchainEmbedding
+                import boto3
+                bedrock_client = boto3.client(
+                    "bedrock-runtime",
+                    region_name=aws_region,
+                    aws_access_key_id=aws_access_key,
+                    aws_secret_access_key=aws_secret_key,
+                )
+                bedrock_embed = BedrockEmbeddings(
+                    client=bedrock_client,
+                    model_id="amazon.titan-embed-text-v2:0",
+                )
+                Settings.embed_model = LangchainEmbedding(bedrock_embed)
+                _logger.info("LlamaIndex embed_model set to Bedrock Titan embeddings")
+                return
+            except (ImportError, Exception) as e:
+                _logger.debug(f"Bedrock embeddings not available: {e}")
+
+        # --- 3. VoyageAI (Anthropic's embedding partner) ---
+        voyage_key = os.environ.get("VOYAGE_API_KEY")
+        if voyage_key:
+            try:
+                from langchain_voyageai import VoyageAIEmbeddings
+                from llama_index.embeddings.langchain import LangchainEmbedding
+                Settings.embed_model = LangchainEmbedding(
+                    VoyageAIEmbeddings(voyage_api_key=voyage_key, model="voyage-3")
+                )
+                _logger.info("LlamaIndex embed_model set to VoyageAI embeddings")
+                return
+            except (ImportError, Exception) as e:
+                _logger.debug(f"VoyageAI embeddings not available: {e}")
+
+        _logger.warning(
+            "No embedding provider configured. Set one of: "
+            "AMBIVO_AGENTS_LLM_OPENAI_API_KEY, AWS credentials, or VOYAGE_API_KEY"
+        )
+
+    def _configure_llm(self, config: Dict[str, Any]) -> None:
+        """Set LlamaIndex Settings.llm so response_synthesizer doesn't default to OpenAI."""
+        import os
+        try:
+            from llama_index.core import Settings
+        except ImportError:
+            return
+
+        llm_config = get_config_section("llm", config)
+        openai_key = llm_config.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
+
+        # --- 1. OpenAI ---
+        if openai_key:
+            try:
+                from llama_index.llms.openai import OpenAI as LlamaOpenAI
+                Settings.llm = LlamaOpenAI(api_key=openai_key, model="gpt-4o-mini")
+                _logger.info("LlamaIndex LLM set to OpenAI gpt-4o-mini")
+                return
+            except ImportError:
+                pass
+
+        # --- 2. Anthropic via langchain ---
+        anthropic_key = llm_config.get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")
+        if anthropic_key:
+            try:
+                from langchain_anthropic import ChatAnthropic
+                from llama_index.llms.langchain import LangChainLLM
+                lc_llm = ChatAnthropic(anthropic_api_key=anthropic_key, model_name="claude-sonnet-4-5-20250514")
+                Settings.llm = LangChainLLM(llm=lc_llm)
+                _logger.info("LlamaIndex LLM set to Anthropic Claude via LangChain")
+                return
+            except ImportError:
+                pass
+
+        # --- 3. Bedrock ---
+        aws_access_key = llm_config.get("aws_access_key_id") or os.environ.get("AWS_ACCESS_KEY_ID")
+        aws_secret_key = llm_config.get("aws_secret_access_key") or os.environ.get("AWS_SECRET_ACCESS_KEY")
+        aws_region = llm_config.get("aws_region") or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        if aws_access_key and aws_secret_key:
+            try:
+                from langchain_aws import ChatBedrock
+                from llama_index.llms.langchain import LangChainLLM
+                import boto3
+                bedrock_client = boto3.client(
+                    "bedrock-runtime", region_name=aws_region,
+                    aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key,
+                )
+                lc_llm = ChatBedrock(client=bedrock_client, model_id="anthropic.claude-sonnet-4-5-20250514-v1:0")
+                Settings.llm = LangChainLLM(llm=lc_llm)
+                _logger.info("LlamaIndex LLM set to Bedrock Claude")
+                return
+            except (ImportError, Exception) as e:
+                _logger.debug(f"Bedrock LLM not available: {e}")
+
+        _logger.warning("No LLM provider configured for LlamaIndex response synthesis")
+
     def documents_from_text(self, input_text: str) -> list:
         """Convert text to documents format"""
         from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -465,6 +603,10 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         6. Operation specifics (metadata, query type, etc.)
         7. Key topics and keywords for routing to the right knowledge base(s)
 
+        IMPORTANT: The kb_name must be the EXACT, COMPLETE identifier as it appears in the message.
+        Do NOT truncate, shorten, or remove any part of it (including numeric suffixes, hashes, or IDs).
+        Copy the full knowledge base name character-for-character from the message.
+
         Conversation Context:
         {conversation_context}
 
@@ -494,11 +636,41 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                result = json.loads(json_match.group())
+                result = self._validate_kb_name_from_message(result, user_message)
+                return result
             else:
                 return self._extract_kb_intent_from_llm_response(response, user_message)
         except Exception as e:
             return self._keyword_based_kb_analysis(user_message)
+
+    def _validate_kb_name_from_message(self, intent_result: Dict[str, Any], user_message: str) -> Dict[str, Any]:
+        """Validate and recover potentially truncated kb_name from the original message.
+
+        LLMs sometimes truncate long collection names (e.g. dropping trailing hash suffixes).
+        This finds the full name in the original message and corrects the result.
+        """
+        import re
+
+        kb_name = intent_result.get("kb_name")
+        if not kb_name or kb_name not in user_message:
+            return intent_result
+
+        # Find all potential collection-style identifiers in the message
+        # Matches patterns like: content_5a77b0fb_kavehg-franchise_5a77b0fb8b57864d7e16d4ba
+        # or more generally any long underscore/hyphen-separated identifier
+        candidates = re.findall(r'[a-zA-Z][a-zA-Z0-9_-]{8,}', user_message)
+
+        for candidate in candidates:
+            # If the LLM-extracted name is a prefix of a longer candidate, use the full one
+            if candidate.startswith(kb_name) and len(candidate) > len(kb_name):
+                self.logger.info(
+                    f"KB name corrected: '{kb_name}' -> '{candidate}'"
+                )
+                intent_result["kb_name"] = candidate
+                break
+
+        return intent_result
 
     def _keyword_based_kb_analysis(self, user_message: str) -> Dict[str, Any]:
         """Fallback keyword-based KB intent analysis with simple topic extraction"""
@@ -702,6 +874,10 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
         6. Operation specifics (metadata, query type, etc.)
         7. Key topics and keywords for routing to the right knowledge base(s)
 
+        IMPORTANT: The kb_name must be the EXACT, COMPLETE identifier as it appears in the message.
+        Do NOT truncate, shorten, or remove any part of it (including numeric suffixes, hashes, or IDs).
+        Copy the full knowledge base name character-for-character from the message.
+
         Conversation Context:
         {conversation_context}
 
@@ -736,7 +912,9 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
 
             json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                result = json.loads(json_match.group())
+                result = self._validate_kb_name_from_message(result, user_message)
+                return result
             else:
                 return self._extract_kb_intent_from_llm_response(response, user_message)
         except Exception as e:

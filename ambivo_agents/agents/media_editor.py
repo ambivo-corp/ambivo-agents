@@ -1381,7 +1381,7 @@ class MediaEditorAgent(BaseAgent, MediaAgentHistoryMixin):
         else:
             from ..executors.media_local_executor import MediaLocalExecutor
             self.media_executor = MediaLocalExecutor(self.media_config)
-        logging.info(f"Media executor initialized: {type(self.media_executor).__name__}")
+        self.logger.info(f"Media executor initialized: {type(self.media_executor).__name__}")
 
     def _resolve_media_file(self, file_path: str) -> str:
         """

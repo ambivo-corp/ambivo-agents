@@ -96,10 +96,13 @@ class BaseAgentHistoryMixin:
         )
 
         # Knowledge base name extractor (alphanumeric with underscores/hyphens)
+        # Matches both conventional suffixes (_kb, _base, _knowledge) and
+        # content-prefixed collection names (e.g. content_5a77b0fb_name_tenantid)
         self.register_context_extractor(
             ContextType.KNOWLEDGE_BASE,
             lambda text: re.findall(
-                r"\b[a-zA-Z][a-zA-Z0-9_-]*(?:_kb|_base|_knowledge)\b", text, re.IGNORECASE
+                r"\b(?:content_[a-f0-9]+_[\w-]+(?:_[a-f0-9]+)*|[a-zA-Z][a-zA-Z0-9_-]*(?:_kb|_base|_knowledge))\b",
+                text, re.IGNORECASE
             ),
         )
 

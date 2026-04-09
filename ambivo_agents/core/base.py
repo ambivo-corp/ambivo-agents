@@ -1087,6 +1087,23 @@ class BaseAgent(ABC):
 
         return {"execution_context": execution_context, "operation_metadata": operation_metadata}
 
+    # AGENT STATUS
+
+    async def get_agent_status(self) -> Dict[str, Any]:
+        """Get current agent status and configuration. Subclasses may override to add details."""
+        return {
+            "agent_id": self.agent_id,
+            "agent_type": getattr(self, "agent_type", self.role.value if self.role else "unknown"),
+            "role": self.role.value if self.role else "unknown",
+            "name": getattr(self, "name", self.agent_id),
+            "description": getattr(self, "description", ""),
+            "session_id": self.context.session_id if self.context else None,
+            "conversation_id": self.context.conversation_id if self.context else None,
+            "user_id": self.context.user_id if self.context else None,
+            "has_memory": bool(getattr(self, "memory", None)),
+            "has_llm_service": bool(getattr(self, "llm_service", None)),
+        }
+
     # SESSION CLEANUP
 
     async def cleanup_session(self) -> bool:

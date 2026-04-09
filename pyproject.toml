@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0,<76", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "1.4.21"
+version = "1.4.31"
 description = "Multi-Agent AI System for automation"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}
@@ -61,7 +61,7 @@ web = [
 
 # Media processing (YouTubeDownloadAgent)
 media = [
-    "pytubefix>=6.0.0",
+    "yt-dlp>=2025.1.0",
 ]
 
 # AWS Bedrock support (uses boto3 directly, no langchain needed)

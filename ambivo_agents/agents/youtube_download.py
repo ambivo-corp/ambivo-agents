@@ -1,7 +1,7 @@
 # ambivo_agents/agents/youtube_download.py
 """
-YouTube Download Agent with pytubefix integration
-Handles YouTube video and audio downloads using Docker containers
+YouTube Download Agent with yt-dlp integration
+Handles YouTube video and audio downloads (Docker or local).
 Updated with LLM-aware intent detection and conversation history integration.
 """
 
@@ -50,7 +50,7 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
             memory_manager=memory_manager,
             llm_service=llm_service,
             name="YouTube Download Agent",
-            description="Agent for downloading videos and audio from YouTube using pytubefix",
+            description="Agent for downloading videos and audio from YouTube using yt-dlp",
             **kwargs,
         )
 
@@ -404,9 +404,14 @@ class YouTubeDownloadAgent(BaseAgent, WebAgentHistoryMixin):
 
 Your audio file has been successfully downloaded and is ready to use! """
             else:
-                return f" **Audio download failed:** {result['error']}"
+                error_msg = result.get("error", "Unknown error")
+                if self._is_bot_detection_error(error_msg):
+                    return self._bot_detection_message(url)
+                return f" **Audio download failed:** {error_msg}"
 
         except Exception as e:
+            if self._is_bot_detection_error(str(e)):
+                return self._bot_detection_message(url)
             return f" **Error during audio download:** {str(e)}"
 
     async def _handle_video_download(
@@ -445,9 +450,14 @@ Your audio file has been successfully downloaded and is ready to use! """
 
 Your video file has been successfully downloaded and is ready to use! """
             else:
-                return f" **Video download failed:** {result['error']}"
+                error_msg = result.get("error", "Unknown error")
+                if self._is_bot_detection_error(error_msg):
+                    return self._bot_detection_message(url)
+                return f" **Video download failed:** {error_msg}"
 
         except Exception as e:
+            if self._is_bot_detection_error(str(e)):
+                return self._bot_detection_message(url)
             return f" **Error during video download:** {str(e)}"
 
     async def _handle_video_info(self, youtube_urls: List[str], user_message: str) -> str:
@@ -909,6 +919,38 @@ Would you like me to download this video?"""
         except Exception as e:
             self.logger.debug(f"Failed to extract URL: {e}")
         return None
+
+    @staticmethod
+    def _is_bot_detection_error(error_msg: str) -> bool:
+        """Check if an error is caused by YouTube bot detection."""
+        bot_indicators = [
+            "sign in to confirm you're not a bot",
+            "detected as a bot",
+            "confirm your identity",
+            "use --cookies",
+            "bot detection",
+            "please sign in",
+            "login required",
+        ]
+        error_lower = error_msg.lower()
+        return any(indicator in error_lower for indicator in bot_indicators)
+
+    @staticmethod
+    def _bot_detection_message(url: str) -> str:
+        """Return a user-friendly message when YouTube blocks the download."""
+        return (
+            f"**YouTube blocked this download due to bot detection.**\n\n"
+            f"YouTube's servers detected that this request came from an automated system "
+            f"and require browser-level authentication to proceed.\n\n"
+            f"**What you can do:**\n"
+            f"1. **Try again later** — YouTube's bot detection is inconsistent and may "
+            f"allow the request on a subsequent attempt\n"
+            f"2. **Use a cookies file** — export cookies from a browser logged into YouTube "
+            f"and set the `YT_DLP_COOKIES_BASE64` environment variable "
+            f"(see yt-dlp docs for details)\n"
+            f"3. **Download manually** — visit the video directly: {url}\n\n"
+            f"This is a known limitation when downloading YouTube content from cloud servers."
+        )
 
     def _format_duration(self, seconds: int) -> str:
         """Format duration in seconds to readable format"""

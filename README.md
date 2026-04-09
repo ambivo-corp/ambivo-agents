@@ -673,9 +673,12 @@ skills = agent.list_assigned_skills()
 - Audio extraction and volume adjustment
 
 ### YouTube Download Agent
-- Download videos and audio from YouTube
-- Docker-based execution with pytubefix
+- Download videos and audio from YouTube using **yt-dlp**
+- Docker-based or local execution (configurable via `use_docker`)
 - Automatic title sanitization and metadata extraction
+- **Bot detection handling** — graceful fallback with user-friendly messages
+- **Proxy support** — plug in residential/SOCKS5 proxies via env vars
+- **Cookie auth** — support for cookies file or base64-encoded cookies
 
 ### Gather Agent
 **Intelligent conversational form-filling with natural language understanding**
@@ -1281,7 +1284,7 @@ ambivo_agents/
     moderator.py # ModeratorAgent (main orchestrator)
     web_scraper.py # Web Scraper Agent (Playwright-based)
     web_search.py # Web Search Agent (Brave/AVES search)
-    youtube_download.py # YouTube Download Agent (pytubefix)
+    youtube_download.py # YouTube Download Agent (yt-dlp)
  config/ # Configuration management
  core/ # Core functionality
     base.py
@@ -1465,6 +1468,8 @@ async def context_conversation():
 
 ### YouTube Downloads
 
+The YouTube Download Agent uses **yt-dlp** for reliable video/audio downloads with built-in bot-detection handling.
+
 ```python
 from ambivo_agents import YouTubeDownloadAgent
 
@@ -1482,6 +1487,44 @@ async def download_youtube():
     
     await agent.cleanup_session()
 ```
+
+#### YouTube Environment Variables
+
+YouTube may block downloads from cloud/server IPs. Configure authentication and proxy settings via environment variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `YT_DLP_COOKIES_FILE` | Path to a Netscape-format cookies.txt file | `/app/cookies.txt` |
+| `YT_DLP_COOKIES_BASE64` | Base64-encoded cookies.txt content (ideal for PaaS like Railway) | `IyBOZXRzY2FwZS...` |
+| `YT_DLP_COOKIES_FROM_BROWSER` | Browser to extract cookies from (local dev only) | `chrome`, `firefox` |
+| `YT_DLP_PROXY` | HTTP/SOCKS5 proxy URL for download requests | `socks5://user:pass@host:port` |
+
+**Priority order:** `YT_DLP_COOKIES_FILE` > `YT_DLP_COOKIES_BASE64` > `YT_DLP_COOKIES_FROM_BROWSER`
+
+**Generating cookies for server deployment:**
+
+```bash
+# 1. On your local machine, export cookies from your browser
+yt-dlp --cookies-from-browser chrome --cookies cookies.txt "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+# 2. Base64-encode the cookies file
+base64 -i cookies.txt | tr -d '\n'
+
+# 3. Set the base64 string as an environment variable on your server
+export YT_DLP_COOKIES_BASE64="<paste base64 string>"
+```
+
+**Using a proxy (e.g., Bright Data, Oxylabs):**
+
+```bash
+# HTTP proxy
+export YT_DLP_PROXY="http://user:pass@proxy.example.com:8080"
+
+# SOCKS5 proxy (residential IPs recommended)
+export YT_DLP_PROXY="socks5://user:pass@proxy.example.com:1080"
+```
+
+> **Note:** When YouTube blocks a download due to bot detection, the agent returns a user-friendly message explaining the issue and available options instead of a raw error.
 
 ### Database Operations
 
@@ -2668,7 +2711,7 @@ docker run --rm \
 
 ## Running Without Docker (Containerized Deployment)
 
-When deploying ambivo_agents **inside** the `sgosain/amb-ubuntu-python-public-pod` Docker image (e.g., on Railway, Render, or similar platforms that don't support Docker-in-Docker), you can disable Docker executor spawning. The image already contains all required dependencies (ffmpeg, pytubefix, playwright, pandas, duckdb, etc.).
+When deploying ambivo_agents **inside** the `sgosain/amb-ubuntu-python-public-pod` Docker image (e.g., on Railway, Render, or similar platforms that don't support Docker-in-Docker), you can disable Docker executor spawning. The image already contains all required dependencies (ffmpeg, yt-dlp, playwright, pandas, duckdb, etc.).
 
 ### Configuration
 
@@ -2690,7 +2733,7 @@ export AMBIVO_AGENTS_DOCKER_USE_DOCKER=false
 | Mode | `use_docker` | What Happens |
 |------|-------------|-------------|
 | **Docker (default)** | `true` | Agents spawn Docker containers using `sgosain/amb-ubuntu-python-public-pod` — requires a Docker daemon |
-| **Local** | `false` | Agents use local subprocess execution (Python, Bash, ffmpeg, pytubefix) — no Docker daemon needed |
+| **Local** | `false` | Agents use local subprocess execution (Python, Bash, ffmpeg, yt-dlp) — no Docker daemon needed |
 
 When `use_docker: false`, each agent uses a local executor:
 
@@ -2698,7 +2741,7 @@ When `use_docker: false`, each agent uses a local executor:
 |-------|----------------|----------------|-----------------|
 | CodeExecutorAgent | `DockerCodeExecutor` | `LocalCodeExecutor` | Python, Bash |
 | MediaEditorAgent | `MediaDockerExecutor` | `MediaLocalExecutor` | ffmpeg, ffprobe |
-| YouTubeDownloadAgent | `YouTubeDockerExecutor` | `YouTubeLocalExecutor` | pytubefix |
+| YouTubeDownloadAgent | `YouTubeDockerExecutor` | `YouTubeLocalExecutor` | yt-dlp |
 | AnalyticsAgent | `DockerCodeExecutor` | `LocalCodeExecutor` | Python, pandas |
 | WebScraperAgent | `SimpleDockerExecutor` | Falls back to local playwright/requests | playwright or requests |
 
@@ -2708,7 +2751,7 @@ When `use_docker: false`, each agent uses a local executor:
 - This is **intended for running inside the fat Docker image** where all dependencies already exist, not for bare developer machines.
 - The `docker_shared/` directory structure is used by both modes for consistent file organization and cross-agent handoffs.
 - The `code_execution_policy` safety layer applies to both Docker and local execution for `LocalCodeExecutor`.
-- Local executors raise clear errors if dependencies are missing (e.g., `"ffmpeg not found"`, `"pytubefix not installed"`).
+- Local executors raise clear errors if dependencies are missing (e.g., `"ffmpeg not found"`, `"yt-dlp not installed"`).
 
 ### Typical Railway Deployment
 
@@ -2891,7 +2934,7 @@ This project leverages several open-source libraries and commercial services:
 ### Media & Web
 - **FFmpeg**: Multimedia processing framework
 - **YouTube**: Video platform (via public APIs)
-- **pytubefix**: YouTube video downloader library
+- **yt-dlp**: YouTube video downloader library
 - **Brave Search**: Web search API service
 - **Beautiful Soup**: HTML/XML parsing library
 
