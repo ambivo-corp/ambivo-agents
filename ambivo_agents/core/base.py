@@ -47,16 +47,12 @@ try:
 except ImportError:
     REQUESTS_AVAILABLE = False
 
-# Docker imports
-try:
-    import docker
-
-    DOCKER_AVAILABLE = True
-except ImportError:
-    DOCKER_AVAILABLE = False
+DOCKER_AVAILABLE = False  # Docker no longer used in core
 
 
 class AgentRole(Enum):
+    """Enumeration of agent roles that determine default behavior and system messages."""
+
     ASSISTANT = "assistant"
     PROXY = "proxy"
     ANALYST = "analyst"
@@ -67,6 +63,8 @@ class AgentRole(Enum):
 
 
 class MessageType(Enum):
+    """Types of messages exchanged between agents, users, and tools."""
+
     USER_INPUT = "user_input"
     AGENT_RESPONSE = "agent_response"
     SYSTEM_MESSAGE = "system_message"
@@ -78,6 +76,20 @@ class MessageType(Enum):
 
 @dataclass
 class AgentMessage:
+    """Structured message passed between agents, users, and the system.
+
+    Attributes:
+        id: Unique message identifier.
+        sender_id: ID of the sending agent or user.
+        recipient_id: ID of the intended recipient (None for broadcast).
+        content: Message body text.
+        message_type: Category of the message.
+        metadata: Arbitrary key-value pairs for extra context.
+        timestamp: When the message was created.
+        session_id: Session this message belongs to.
+        conversation_id: Conversation thread this message belongs to.
+    """
+
     id: str
     sender_id: str
     recipient_id: Optional[str]
@@ -120,6 +132,17 @@ class AgentMessage:
 
 @dataclass
 class AgentTool:
+    """Definition of a tool that an agent can invoke.
+
+    Attributes:
+        name: Unique tool identifier.
+        description: Human-readable description of what the tool does.
+        function: Callable to execute when the tool is invoked.
+        parameters_schema: JSON-schema-style dict describing expected parameters.
+        requires_approval: Whether user approval is needed before execution.
+        timeout: Maximum execution time in seconds.
+    """
+
     name: str
     description: str
     function: Callable
@@ -130,6 +153,16 @@ class AgentTool:
 
 @dataclass
 class ExecutionContext:
+    """Lightweight context passed to agent operations for session tracking.
+
+    Attributes:
+        session_id: Broader session identifier.
+        conversation_id: Specific conversation thread identifier.
+        user_id: Identifier of the user making the request.
+        tenant_id: Multi-tenant isolation identifier.
+        metadata: Additional key-value pairs for the operation.
+    """
+
     session_id: str
     conversation_id: str
     user_id: str
@@ -172,7 +205,11 @@ class AgentContext:
 
 @dataclass
 class ProviderConfig:
-    """Configuration for LLM providers"""
+    """Configuration and runtime state for a single LLM provider.
+
+    Tracks request counts, error counts, and availability to support
+    automatic provider rotation and rate limiting.
+    """
 
     name: str
     model_name: str
@@ -201,7 +238,12 @@ class ProviderConfig:
 
 
 class ProviderTracker:
-    """Tracks provider usage and availability"""
+    """Tracks LLM provider usage, availability, and rotation.
+
+    Maintains a registry of ``ProviderConfig`` instances and selects
+    the best available provider based on priority, error count, and
+    rate limit status.
+    """
 
     def __init__(self):
         self.providers: Dict[str, ProviderConfig] = {}
@@ -277,93 +319,6 @@ class ProviderTracker:
         return available_providers[0][0]
 
 
-class DockerCodeExecutor:
-    """Secure code execution using Docker containers"""
-
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
-        self.work_dir = config.get("work_dir", "/opt/ambivo/work_dir")
-        self.docker_images = config.get("docker_images", ["sgosain/amb-ubuntu-python-public-pod"])
-        self.timeout = config.get("timeout", 60)
-        self.default_image = (
-            self.docker_images[0] if self.docker_images else "sgosain/amb-ubuntu-python-public-pod"
-        )
-
-        if DOCKER_AVAILABLE:
-            try:
-                self.docker_client = docker.from_env()
-                self.docker_client.ping()
-                self.available = True
-            except Exception as e:
-                self.available = False
-        else:
-            self.available = False
-
-    def execute_code(
-        self, code: str, language: str = "python", files: Dict[str, str] = None
-    ) -> Dict[str, Any]:
-        """Execute code in Docker container"""
-        if not self.available:
-            return {"success": False, "error": "Docker not available", "language": language}
-
-        try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
-
-                if language == "python":
-                    code_file = temp_path / "code.py"
-                    code_file.write_text(code)
-                    cmd = ["python", "/workspace/code.py"]
-                elif language == "bash":
-                    code_file = temp_path / "script.sh"
-                    code_file.write_text(code)
-                    cmd = ["bash", "/workspace/script.sh"]
-                else:
-                    raise ValueError(f"Unsupported language: {language}")
-
-                if files:
-                    for filename, content in files.items():
-                        file_path = temp_path / filename
-                        file_path.write_text(content)
-
-                container_config = {
-                    "image": self.default_image,
-                    "command": cmd,
-                    "volumes": {str(temp_path): {"bind": "/workspace", "mode": "rw"}},
-                    "working_dir": "/workspace",
-                    "mem_limit": "512m",
-                    "network_disabled": True,
-                    "remove": True,
-                    "stdout": True,
-                    "stderr": True,
-                }
-
-                start_time = time.time()
-                container = self.docker_client.containers.run(**container_config)
-                execution_time = time.time() - start_time
-
-                output = (
-                    container.decode("utf-8") if isinstance(container, bytes) else str(container)
-                )
-
-                return {
-                    "success": True,
-                    "output": output,
-                    "execution_time": execution_time,
-                    "language": language,
-                }
-
-        except docker.errors.ContainerError as e:
-            return {
-                "success": False,
-                "error": f"Container error: {e.stderr.decode('utf-8') if e.stderr else 'Unknown error'}",
-                "exit_code": e.exit_status,
-                "language": language,
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e), "language": language}
-
-
 class SSEEventType(Enum):
     """SSE event types aligned with the Ambivo streaming wire format.
     Values are the exact strings sent as the 'type' field in SSE JSON payloads."""
@@ -426,9 +381,32 @@ class StreamChunk:
 
 
 class BaseAgent(ABC):
-    """
-    Enhanced BaseAgent with built-in auto-context session management and simplified chat interface
-    Every agent automatically gets a context with session_id, user_id, etc.
+    """Abstract base class for all agents in the ambivo framework.
+
+    Provides auto-context session management, a simplified ``chat()`` interface,
+    streaming support, file I/O, tool execution, and a skill assignment system.
+    Subclasses must implement ``process_message()`` and ``process_message_stream()``.
+
+    Agents are created via the factory class methods ``create()``,
+    ``create_simple()``, or ``create_advanced()`` which handle dependency
+    injection of memory, LLM service, and configuration.
+
+    Args:
+        agent_id: Unique identifier for the agent (auto-generated if None).
+        role: The agent's functional role.
+        user_id: User identifier for session context (auto-generated if None).
+        tenant_id: Tenant identifier for multi-tenant isolation.
+        session_metadata: Extra metadata attached to the session context.
+        memory_manager: Redis-based memory manager (auto-configured if None).
+        llm_service: LLM service instance (auto-configured if None).
+        config: Configuration dictionary (loaded from YAML if None).
+        name: Human-readable agent name.
+        description: Brief description of the agent's purpose.
+        auto_configure: If True, auto-load config, memory, and LLM service.
+        session_id: Explicit session ID (auto-generated if None).
+        conversation_id: Explicit conversation ID (auto-generated if None).
+        system_message: Custom system message for LLM calls.
+        **kwargs: Additional keyword arguments (e.g., ``tools``).
     """
 
     def __init__(
@@ -479,12 +457,9 @@ class BaseAgent(ABC):
         # Auto-configure memory if not provided and auto-configure is enabled
         if memory_manager is None and auto_configure:
             try:
-                from ..core.memory import create_redis_memory_manager
+                from ..core.memory import create_memory_manager
 
-                self.memory = create_redis_memory_manager(
-                    agent_id=agent_id, redis_config=None  # Will load from config automatically
-                )
-                # logging.info(f"Auto-configured memory for agent {agent_id}")
+                self.memory = create_memory_manager(agent_id=agent_id)
             except Exception as e:
                 logging.error(f"Failed to auto-configure memory for {agent_id}: {e}")
                 self.memory = None
@@ -687,7 +662,19 @@ class BaseAgent(ABC):
         )
 
     async def chat(self, message: str, **kwargs) -> str:
-        """ """
+        """Send a message and get a response as a simple string.
+
+        This is the primary high-level interface for interacting with an agent.
+        It wraps ``process_message()`` and handles message construction and
+        response extraction automatically.
+
+        Args:
+            message: User message text.
+            **kwargs: Optional metadata merged into the message and execution context.
+
+        Returns:
+            Agent response as a plain string.
+        """
         try:
 
             user_message = AgentMessage(
@@ -2256,60 +2243,9 @@ Only return JSON, no other text."""
                 return self._skill_agents[cache_key]
 
             # Import agents dynamically to avoid circular imports
-            if skill_type == "api":
-                try:
-                    from ..agents.api_agent import APIAgent
-                except ImportError:
-                    self.logger.error(
-                        "APIAgent not available. Install with: pip install ambivo-agents[web]"
-                    )
-                    return None
-
-                skill_config = self._assigned_skills["api_skills"][skill_name]
-
-                # Configure APIAgent with the API spec
-                agent_config = {
-                    "api_agent": {
-                        "allowed_domains": (
-                            [skill_config["base_url"]] if skill_config["base_url"] else None
-                        ),
-                        "verify_ssl": True,
-                        "timeout_seconds": 30,
-                    }
-                }
-
-                agent = APIAgent.create_simple(
-                    user_id=self.context.user_id,
-                    config=agent_config,
-                    session_id=self.context.session_id,
-                    conversation_id=self.context.conversation_id,
-                )
-
-                # Store API spec and config in agent for easy access
-                agent._assigned_api_spec = skill_config["spec"]
-                agent._assigned_base_url = skill_config["base_url"]
-                agent._assigned_api_token = skill_config["api_token"]
-
-            elif skill_type == "database":
-                try:
-                    from ..agents.database_agent import DatabaseAgent
-                except ImportError:
-                    self.logger.error(
-                        "DatabaseAgent not available. Install with: pip install ambivo-agents[database]"
-                    )
-                    return None
-
-                skill_config = self._assigned_skills["database_skills"][skill_name]
-
-                agent = DatabaseAgent.create_simple(
-                    user_id=self.context.user_id,
-                    session_id=self.context.session_id,
-                    conversation_id=self.context.conversation_id,
-                )
-
-                # Store connection info
-                agent._assigned_connection_string = skill_config["connection_string"]
-                agent._assigned_db_type = skill_config["type"]
+            if skill_type in ("api", "database"):
+                self.logger.warning(f"Skill type '{skill_type}' is no longer supported in core")
+                return None
 
             elif skill_type == "kb":
                 from ..agents.knowledge_base import KnowledgeBaseAgent
@@ -2708,12 +2644,16 @@ class AgentSession:
 
 
 async def quick_chat(agent_class, message: str, user_id: str = None, **kwargs) -> str:
-    """
-    ULTRA-SIMPLIFIED: One-liner agent chat
+    """Create an agent, send one message, clean up, and return the response.
 
-    Usage:
-        response = await quick_chat(YouTubeDownloadAgent, "Download https://youtube.com/watch?v=abc")
-        print(response)
+    Args:
+        agent_class: BaseAgent subclass to instantiate.
+        message: User message text.
+        user_id: Optional user identifier for session context.
+        **kwargs: Forwarded to ``create_simple()``.
+
+    Returns:
+        Agent response as a plain string.
     """
     try:
         agent = agent_class.create_simple(user_id=user_id, **kwargs)
@@ -2725,12 +2665,19 @@ async def quick_chat(agent_class, message: str, user_id: str = None, **kwargs) -
 
 
 def quick_chat_sync(agent_class, message: str, user_id: str = None, **kwargs) -> str:
-    """
-    FIXED: One-liner synchronous agent chat that properly handles event loops
+    """Synchronous version of ``quick_chat()`` that handles event loop detection.
 
-    Usage:
-        response = quick_chat_sync(YouTubeDownloadAgent, "Download https://youtube.com/watch?v=abc")
-        print(response)
+    Safely works both inside and outside of an existing async context by
+    spawning a thread-local event loop when necessary.
+
+    Args:
+        agent_class: BaseAgent subclass to instantiate.
+        message: User message text.
+        user_id: Optional user identifier for session context.
+        **kwargs: Forwarded to ``quick_chat()``.
+
+    Returns:
+        Agent response as a plain string.
     """
     try:
         # Check if we're in an async context

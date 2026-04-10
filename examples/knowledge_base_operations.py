@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from ambivo_agents.services import create_agent_service
 from ambivo_agents.services.factory import AgentFactory
-from ambivo_agents.core.memory import create_redis_memory_manager
+from ambivo_agents.core.memory import create_memory_manager
 from ambivo_agents.core.llm import create_multi_provider_llm_service
 
 
@@ -121,7 +121,7 @@ class KnowledgeBaseDemo:
             print("Initializing direct Knowledge Base Agent with configuration...")
 
             # Create memory manager for KB agent using config
-            kb_memory = create_redis_memory_manager(f"kb_agent_{int(time.time())}", self.redis_config)
+            kb_memory = create_memory_manager(f"kb_agent_{int(time.time())}", self.redis_config)
 
             # Create LLM service using config
             self.llm_service = create_multi_provider_llm_service(
@@ -621,7 +621,7 @@ if __name__ == "__main__":
             llm_config = get_config_section('llm', config)
 
             # Create memory manager for KB agent
-            kb_memory = create_redis_memory_manager(f"kb_agent_{int(time.time())}", redis_config)
+            kb_memory = create_memory_manager(f"kb_agent_{int(time.time())}", redis_config)
 
             # Create LLM service
             self.llm_service = create_multi_provider_llm_service(llm_config)

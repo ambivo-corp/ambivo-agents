@@ -41,12 +41,11 @@ class SimpleModeratorTest:
         # Default enabled agents for testing
         if enabled_agents is None:
             enabled_agents = [
-                'assistant',  # Always good to have
-                'knowledge_base',  # For document operations
-                'web_search',  # For web searches
-                'youtube_download',  # For YouTube operations
-                'media_editor',  # For media processing
-                'web_scraper'  # For web scraping
+                'assistant',
+                'knowledge_base',
+                'knowledge_synthesis',
+                'web_search',
+                'web_scraper',
             ]
 
         self.enabled_agents = enabled_agents
@@ -125,16 +124,8 @@ class SimpleModeratorTest:
                 "description": "Web search query (should route to WebSearchAgent)"
             },
             {
-                "message": "Download https://youtube.com/watch?v=C0DPdy98e4c",
-                "description": "YouTube download (should route to YouTubeDownloadAgent)"
-            },
-            {
                 "message": "Using the knowledge base ambivo_demo_kb, answer the question 'What Product and services are offered?'",
                 "description": "Knowledge base operation (should route to KnowledgeBaseAgent)"
-            },
-            {
-                "message": "Extract audio from ./media directory as MP3",
-                "description": "Media processing (should route to MediaEditorAgent)"
             },
             {
                 "message": "Scrape https://ambivo.com for content",
@@ -243,11 +234,10 @@ async def main():
     # You can customize which agents to enable for testing
     enabled_agents = [
         'assistant',  # Core agent
-        'web_search',  # If you have web search configured
-        'youtube_download',  # If you have YouTube download configured
-        'knowledge_base',   # Uncomment if you have Qdrant configured
-        'media_editor',     # Uncomment if you have FFmpeg configured
-        'web_scraper',      # Uncomment if you have scraping configured
+        'web_search',
+        'knowledge_base',
+        'knowledge_synthesis',
+        'web_scraper',
     ]
 
     # Create test instance

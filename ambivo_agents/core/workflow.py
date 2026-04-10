@@ -58,7 +58,16 @@ class WorkflowNode:
 
 @dataclass
 class WorkflowResult:
-    """Result of workflow execution"""
+    """Result of a workflow execution.
+
+    Attributes:
+        success: True if all nodes executed without errors.
+        messages: All AgentMessage objects produced during execution.
+        execution_time: Wall-clock time in seconds.
+        nodes_executed: Ordered list of node IDs that ran.
+        errors: Error descriptions collected during execution.
+        metadata: Additional result metadata.
+    """
 
     success: bool
     messages: List[AgentMessage]
@@ -69,7 +78,19 @@ class WorkflowResult:
 
 
 class WorkflowBuilder:
-    """Fluent builder for creating agent workflows"""
+    """Fluent builder for constructing agent workflow graphs.
+
+    Provides a chainable API to add agents, conditional nodes, and edges,
+    then compiles them into an executable ``AmbivoWorkflow``.
+
+    Example::
+
+        workflow = (WorkflowBuilder()
+            .add_agent(search_agent, "search")
+            .add_agent(scraper_agent, "scrape")
+            .add_edge("search", "scrape")
+            .build())
+    """
 
     def __init__(self):
         self.nodes: Dict[str, WorkflowNode] = {}
@@ -145,7 +166,11 @@ class WorkflowBuilder:
 
 
 class AmbivoWorkflow:
-    """Main workflow executor for agent-to-agent workflows"""
+    """Executable workflow graph that routes messages through a sequence of agents.
+
+    Supports both sequential and parallel execution patterns. Built via
+    ``WorkflowBuilder.build()``.
+    """
 
     def __init__(
         self,
@@ -170,7 +195,15 @@ class AmbivoWorkflow:
     async def execute(
         self, initial_message: str, execution_context: ExecutionContext = None
     ) -> WorkflowResult:
-        """Execute the workflow sequentially"""
+        """Execute the workflow by routing through agents in topological order.
+
+        Args:
+            initial_message: Starting message text for the workflow.
+            execution_context: Optional context for session tracking.
+
+        Returns:
+            WorkflowResult with collected messages, timing, and error info.
+        """
         start_time = time.time()
         messages = []
         nodes_executed = []
@@ -252,7 +285,17 @@ class AmbivoWorkflow:
     async def execute_parallel(
         self, initial_message: str, execution_context: ExecutionContext = None
     ) -> WorkflowResult:
-        """Execute workflow with parallel execution where possible"""
+        """Execute workflow with parallel execution where the graph allows.
+
+        Nodes at the same topological level run concurrently via ``asyncio.gather``.
+
+        Args:
+            initial_message: Starting message text for the workflow.
+            execution_context: Optional context for session tracking.
+
+        Returns:
+            WorkflowResult with collected messages, timing, and error info.
+        """
         start_time = time.time()
         messages = []
         nodes_executed = []
@@ -404,7 +447,11 @@ class AmbivoWorkflow:
 
 
 class WorkflowPatterns:
-    """Common workflow patterns using ambivo agents"""
+    """Factory methods for common multi-agent workflow patterns.
+
+    Each static method accepts pre-configured agent instances and returns
+    a ready-to-execute ``AmbivoWorkflow``.
+    """
 
     @staticmethod
     def create_search_scrape_ingest_workflow(
@@ -483,7 +530,7 @@ class WorkflowPatterns:
 
 
 class WorkflowModerator(BaseAgent):
-    """Enhanced moderator that can execute workflows"""
+    """Agent that detects workflow intent in messages and executes registered workflows."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

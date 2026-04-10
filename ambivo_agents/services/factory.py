@@ -12,7 +12,6 @@ import logging
 from typing import Any, Dict, Optional
 
 from ..agents.assistant import AssistantAgent
-from ..agents.code_executor import CodeExecutorAgent
 from ..config.loader import (
     get_available_agent_types,
     get_config_section,
@@ -26,7 +25,12 @@ from ..core.memory import MemoryManagerInterface
 
 
 class ProxyAgent(BaseAgent):
-    """Agent that routes messages to appropriate specialized agents - UPDATED WITH YOUTUBE SUPPORT"""
+    """Agent that routes incoming messages to specialized agents based on content analysis.
+
+    Maintains a registry of agents and matches message content against keyword
+    patterns to select the appropriate handler (web search, knowledge base,
+    web scraper, etc.). Falls back to the AssistantAgent when no pattern matches.
+    """
 
     def __init__(self, agent_id: str, memory_manager, llm_service=None, **kwargs):
         super().__init__(
@@ -41,7 +45,14 @@ class ProxyAgent(BaseAgent):
         self.agent_registry: Dict[str, BaseAgent] = {}
 
     def register_agent(self, agent: BaseAgent) -> bool:
-        """Register an agent for routing"""
+        """Register an agent in the routing registry.
+
+        Args:
+            agent: Agent instance to register. Must have an agent_id attribute.
+
+        Returns:
+            True if registration succeeded, False otherwise.
+        """
         if agent and hasattr(agent, "agent_id"):
             self.agent_registry[agent.agent_id] = agent
             logging.info(
@@ -57,7 +68,7 @@ class ProxyAgent(BaseAgent):
         return self.agent_registry.copy()
 
     def unregister_agent(self, agent_id: str) -> bool:
-        """Unregister an agent"""
+        """Remove an agent from the routing registry by its ID."""
         if agent_id in self.agent_registry:
             del self.agent_registry[agent_id]
             logging.info(f"Unregistered agent {agent_id} from proxy")
@@ -65,7 +76,15 @@ class ProxyAgent(BaseAgent):
         return False
 
     async def process_message(self, message, context=None):
-        """Route messages to appropriate agents based on content analysis - UPDATED WITH YOUTUBE"""
+        """Route a message to the appropriate specialized agent based on keyword content analysis.
+
+        Args:
+            message: AgentMessage to route.
+            context: Optional execution context.
+
+        Returns:
+            AgentMessage response from the selected agent, with routing metadata attached.
+        """
         self.memory.store_message(message)
 
         try:
@@ -74,36 +93,8 @@ class ProxyAgent(BaseAgent):
             # Improved routing logic with YouTube support
             target_agent = None
 
-            # YouTube download routing (HIGHEST PRIORITY for YouTube URLs)
-            if (
-                any(
-                    keyword in content
-                    for keyword in [
-                        "youtube.com",
-                        "youtu.be",
-                        "download youtube",
-                        "youtube download",
-                        "download video",
-                        "download audio",
-                        "youtube mp3",
-                        "youtube mp4",
-                        "download from youtube",
-                    ]
-                )
-                or "youtube" in content
-            ):
-                # Look for YouTubeDownloadAgent by class name or agent key
-                for agent_key, agent in self.agent_registry.items():
-                    if (
-                        "YouTubeDownloadAgent" in agent.__class__.__name__
-                        or "youtube_download" in agent_key
-                        or "youtube" in agent_key
-                    ):
-                        target_agent = agent
-                        break
-
             # Web search routing (HIGH PRIORITY for web search requests)
-            elif any(
+            if any(
                 keyword in content
                 for keyword in [
                     "search web",
@@ -153,56 +144,6 @@ class ProxyAgent(BaseAgent):
                         or "knowledge_base" in agent_key
                         or "knowledge" in agent_key
                     ):
-                        target_agent = agent
-                        break
-
-            # Media processing routing (for FFmpeg operations)
-            elif any(
-                keyword in content
-                for keyword in [
-                    "extract_audio",
-                    "convert_video",
-                    "media",
-                    "ffmpeg",
-                    "audio",
-                    "video",
-                    "mp4",
-                    "mp3",
-                    "wav",
-                    "extract audio",
-                    "resize video",
-                    "trim video",
-                    "video format",
-                    "audio format",
-                ]
-            ):
-                # Look for MediaEditorAgent
-                for agent_key, agent in self.agent_registry.items():
-                    if (
-                        "MediaEditorAgent" in agent.__class__.__name__
-                        or "media_editor" in agent_key
-                        or "mediaeditor" in agent_key
-                    ):
-                        target_agent = agent
-                        break
-
-            # Code execution routing
-            elif any(
-                keyword in content
-                for keyword in [
-                    "execute",
-                    "run code",
-                    "python",
-                    "bash",
-                    "```python",
-                    "```bash",
-                    "script",
-                    "code execution",
-                ]
-            ):
-                # Look for CodeExecutorAgent
-                for agent in self.agent_registry.values():
-                    if agent.role == AgentRole.CODE_EXECUTOR:
                         target_agent = agent
                         break
 
@@ -281,7 +222,7 @@ class ProxyAgent(BaseAgent):
 
 
 class AgentFactory:
-    """Factory for creating different types of agents - UPDATED WITH YOUTUBE SUPPORT"""
+    """Factory for creating agent instances by role or specialized type name."""
 
     @staticmethod
     def create_agent(
@@ -292,14 +233,27 @@ class AgentFactory:
         config: Dict[str, Any] = None,
         **kwargs,
     ) -> BaseAgent:
-        """Create an agent of the specified role"""
+        """Create an agent instance for the given AgentRole.
+
+        For RESEARCHER role, selects the best available specialized agent
+        (KnowledgeBase > WebSearch > WebScraper) based on config capabilities.
+
+        Args:
+            role: The AgentRole to create (ASSISTANT, RESEARCHER, PROXY).
+            agent_id: Unique identifier for the agent.
+            memory_manager: Memory manager for conversation persistence.
+            llm_service: Optional LLM service for language generation.
+            config: Optional config dict for capability checking.
+
+        Returns:
+            A BaseAgent subclass instance.
+
+        Raises:
+            ValueError: If the role is unsupported or agent creation fails.
+        """
 
         if role == AgentRole.ASSISTANT:
             return AssistantAgent(
-                agent_id=agent_id, memory_manager=memory_manager, llm_service=llm_service, **kwargs
-            )
-        elif role == AgentRole.CODE_EXECUTOR:
-            return CodeExecutorAgent(
                 agent_id=agent_id, memory_manager=memory_manager, llm_service=llm_service, **kwargs
             )
         elif role == AgentRole.RESEARCHER:
@@ -337,21 +291,6 @@ class AgentFactory:
                     logging.error(f"Failed to create WebSearchAgent: {e}", exc_info=True)
                     raise ValueError(f"Failed to create WebSearchAgent: {e}") from e
 
-            elif capabilities.get("youtube_download", False):
-                try:
-                    from ..agents.youtube_download import YouTubeDownloadAgent
-
-                    logging.info("Creating YouTubeDownloadAgent for RESEARCHER role")
-                    return YouTubeDownloadAgent(
-                        agent_id=agent_id,
-                        memory_manager=memory_manager,
-                        llm_service=llm_service,
-                        **kwargs,
-                    )
-                except Exception as e:
-                    logging.error(f"Failed to create YouTubeDownloadAgent: {e}", exc_info=True)
-                    raise ValueError(f"Failed to create YouTubeDownloadAgent: {e}") from e
-
             elif capabilities.get("web_scraping", False):
                 try:
                     from ..agents.web_scraper import WebScraperAgent
@@ -366,21 +305,6 @@ class AgentFactory:
                 except Exception as e:
                     logging.error(f"Failed to create WebScraperAgent: {e}", exc_info=True)
                     raise ValueError(f"Failed to create WebScraperAgent: {e}") from e
-
-            elif capabilities.get("media_editor", False):
-                try:
-                    from ..agents.media_editor import MediaEditorAgent
-
-                    logging.info("Creating MediaEditorAgent for RESEARCHER role")
-                    return MediaEditorAgent(
-                        agent_id=agent_id,
-                        memory_manager=memory_manager,
-                        llm_service=llm_service,
-                        **kwargs,
-                    )
-                except Exception as e:
-                    logging.error(f"Failed to create MediaEditorAgent: {e}", exc_info=True)
-                    raise ValueError(f"Failed to create MediaEditorAgent: {e}") from e
 
             # Fallback to assistant if no specialized researcher is available
             logging.warning(
@@ -406,7 +330,21 @@ class AgentFactory:
         config: Dict[str, Any] = None,
         **kwargs,
     ) -> BaseAgent:
-        """Create specialized agents by type name - UPDATED WITH YOUTUBE SUPPORT"""
+        """Create a specialized agent by type name string.
+
+        Args:
+            agent_type: One of 'knowledge_base', 'web_scraper', 'web_search', 'moderator'.
+            agent_id: Unique identifier for the agent.
+            memory_manager: Memory manager for conversation persistence.
+            llm_service: Optional LLM service.
+            config: Config dict used to validate capabilities are enabled.
+
+        Returns:
+            A specialized BaseAgent subclass instance.
+
+        Raises:
+            ValueError: If agent_type is unknown or not enabled in config.
+        """
 
         capabilities = validate_agent_capabilities(config)
 
@@ -431,19 +369,6 @@ class AgentFactory:
 
             return WebSearchAgent(agent_id, memory_manager, llm_service, **kwargs)
 
-        elif agent_type == "media_editor":
-            if not capabilities.get("media_editor", False):
-                raise ValueError("Media editor not enabled in agent_config.yaml")
-            from ..agents.media_editor import MediaEditorAgent
-
-            return MediaEditorAgent(agent_id, memory_manager, llm_service, **kwargs)
-
-        elif agent_type == "youtube_download":
-            if not capabilities.get("youtube_download", False):
-                raise ValueError("YouTube download not enabled in agent_config.yaml")
-            from ..agents.youtube_download import YouTubeDownloadAgent
-
-            return YouTubeDownloadAgent(agent_id, memory_manager, llm_service, **kwargs)
         elif agent_type == "moderator":
 
             from ..agents.moderator import ModeratorAgent

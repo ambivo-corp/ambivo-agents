@@ -15,9 +15,14 @@ from .base import (
     StreamSubType,
 )
 from .llm import LLMServiceInterface, MultiProviderLLMService, create_multi_provider_llm_service
-from .memory import MemoryManagerInterface, RedisMemoryManager, create_redis_memory_manager
+from .memory import (
+    InMemoryMemoryManager,
+    MemoryManagerInterface,
+    RedisMemoryManager,
+    create_memory_manager,
+    create_redis_memory_manager,
+)
 from .workflow import AmbivoWorkflow, WorkflowBuilder, WorkflowPatterns, WorkflowResult
-from .docker_shared import DockerSharedManager, get_shared_manager, reset_shared_manager
 
 __all__ = [
     "AgentContext",
@@ -31,6 +36,8 @@ __all__ = [
     "ProviderTracker",
     "MemoryManagerInterface",
     "RedisMemoryManager",
+    "InMemoryMemoryManager",
+    "create_memory_manager",
     "create_redis_memory_manager",
     "LLMServiceInterface",
     "MultiProviderLLMService",
@@ -43,7 +50,4 @@ __all__ = [
     "AmbivoWorkflow",
     "WorkflowPatterns",
     "WorkflowResult",
-    "DockerSharedManager",
-    "get_shared_manager",
-    "reset_shared_manager",
 ]

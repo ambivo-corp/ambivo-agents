@@ -106,14 +106,10 @@ def _create_agents(self) -> Dict[str, BaseAgent]:
  Communication style: Conversational, helpful, patient"""
  )
  
- # 2. DATABASE AGENT - Data operations
- agents['database'] = DatabaseAgent.create_simple(
- user_id="database_agent"
- # DatabaseAgent automatically handles:
- # - MongoDB connections
- # - Data querying and insertion
- # - Schema validation
- # - Error handling for database operations
+ # 2. DATA AGENT - For data-related tasks
+ agents['database'] = AssistantAgent.create_simple(
+ user_id="data_agent",
+ system_message="You handle data operations and queries."
  )
  
  # 3. SPECIALIST AGENT - Domain expertise

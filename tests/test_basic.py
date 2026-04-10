@@ -22,6 +22,7 @@ class TestBasicIntegration:
     """Simple integration tests using real agents and cloud services"""
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_agent_creation(self):
         """Test that we can create a real agent"""
         # Create agent using dynamic config (agent_config.yaml created by GitHub Actions)

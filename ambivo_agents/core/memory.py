@@ -1,7 +1,10 @@
 # ambivo_agents/core/memory.py
 """
 Memory management system for ambivo_agents.
-FIXED: Redis key consistency issue for session history retrieval
+
+Provides pluggable memory backends (Redis, in-memory) for storing conversation
+messages and contextual data. Includes compression, caching, and session-aware
+key management.
 """
 
 import base64
@@ -34,7 +37,7 @@ except ImportError:
 
 @dataclass
 class MemoryStats:
-    """Memory usage and performance statistics"""
+    """Memory usage and performance statistics for a memory manager."""
 
     total_operations: int = 0
     cache_hits: int = 0
@@ -53,36 +56,227 @@ class MemoryStats:
 
 
 class MemoryManagerInterface(ABC):
-    """Abstract interface for memory management"""
+    """Abstract interface for memory management backends.
+
+    All memory managers must implement message storage/retrieval, context
+    storage/retrieval, and memory clearing. Implementations may use Redis,
+    in-memory dictionaries, or other backends.
+    """
 
     @abstractmethod
     def store_message(self, message):
-        """Store a message in memory"""
+        """Store a conversation message.
+
+        Args:
+            message: An AgentMessage or dict-like object with optional
+                session_id and conversation_id attributes.
+        """
         pass
 
     @abstractmethod
     def get_recent_messages(self, limit: int = 10, conversation_id: Optional[str] = None):
-        """Retrieve recent messages from memory"""
+        """Retrieve recent messages in chronological order.
+
+        Args:
+            limit: Maximum number of messages to return.
+            conversation_id: Scope retrieval to a specific conversation.
+
+        Returns:
+            List of message dicts, oldest first.
+        """
         pass
 
     @abstractmethod
     def store_context(self, key: str, value: Any, conversation_id: Optional[str] = None):
-        """Store contextual information"""
+        """Store a key-value context entry.
+
+        Args:
+            key: Context key.
+            value: Arbitrary value to store.
+            conversation_id: Scope to a specific conversation.
+        """
         pass
 
     @abstractmethod
     def get_context(self, key: str, conversation_id: Optional[str] = None):
-        """Retrieve contextual information"""
+        """Retrieve a context value by key.
+
+        Args:
+            key: Context key to look up.
+            conversation_id: Scope to a specific conversation.
+
+        Returns:
+            The stored value, or None if not found.
+        """
         pass
 
     @abstractmethod
     def clear_memory(self, conversation_id: Optional[str] = None):
-        """Clear memory"""
+        """Clear stored messages and context.
+
+        Args:
+            conversation_id: If provided, clear only that conversation's data.
+                If None, clear all data for this manager.
+        """
         pass
 
 
+class InMemoryMemoryManager(MemoryManagerInterface):
+    """In-memory memory manager for lightweight usage without Redis.
+
+    Stores messages and context in plain Python dicts, keyed by
+    conversation_id, session_id, or agent_id (in priority order).
+    Suitable for testing, single-process deployments, or as a fallback
+    when Redis is unavailable.
+
+    Args:
+        agent_id: Unique identifier for the owning agent.
+    """
+
+    def __init__(self, agent_id: str):
+        self.agent_id = agent_id
+        self._messages: Dict[str, List[Dict]] = {}
+        self._context: Dict[str, Dict[str, Any]] = {}
+        self.available = True
+        self.stats = MemoryStats()
+
+    def _get_key(self, session_id: str = None, conversation_id: str = None) -> str:
+        """Resolve the storage key from session/conversation identifiers.
+
+        Args:
+            session_id: Session identifier.
+            conversation_id: Conversation identifier (takes priority).
+
+        Returns:
+            The resolved storage key string.
+        """
+        if conversation_id:
+            return conversation_id
+        elif session_id:
+            return session_id
+        return self.agent_id
+
+    def store_message(self, message):
+        """Store a message in memory.
+
+        Args:
+            message: An AgentMessage or dict-like object. Extracts session_id
+                and conversation_id to determine the storage key.
+        """
+        try:
+            session_id = getattr(message, "session_id", None)
+            conversation_id = getattr(message, "conversation_id", None)
+            key = self._get_key(session_id, conversation_id)
+
+            message_data = message.to_dict() if hasattr(message, "to_dict") else message
+            if isinstance(message_data, str):
+                message_data = json.loads(message_data)
+
+            if key not in self._messages:
+                self._messages[key] = []
+            self._messages[key].append(message_data)
+            self.stats.total_operations += 1
+        except Exception as e:
+            logging.error(f"InMemoryMemoryManager: Error storing message: {e}")
+            self.stats.error_count += 1
+
+    def get_recent_messages(self, limit: int = 10, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
+        """Retrieve the most recent messages in chronological order.
+
+        Args:
+            limit: Maximum number of messages to return.
+            conversation_id: Scope to a specific conversation.
+            session_id: Scope to a specific session.
+
+        Returns:
+            List of message dicts, oldest first.
+        """
+        try:
+            key = self._get_key(session_id, conversation_id)
+            messages = self._messages.get(key, [])
+            self.stats.total_operations += 1
+            return messages[-limit:]
+        except Exception as e:
+            logging.error(f"InMemoryMemoryManager: Error retrieving messages: {e}")
+            self.stats.error_count += 1
+            return []
+
+    def store_context(self, key: str, value: Any, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
+        """Store a key-value context entry.
+
+        Args:
+            key: Context key.
+            value: Arbitrary value to store.
+            conversation_id: Scope to a specific conversation.
+            session_id: Scope to a specific session.
+        """
+        try:
+            mem_key = self._get_key(session_id, conversation_id)
+            if mem_key not in self._context:
+                self._context[mem_key] = {}
+            self._context[mem_key][key] = value
+            self.stats.total_operations += 1
+        except Exception as e:
+            logging.error(f"InMemoryMemoryManager: Error storing context: {e}")
+            self.stats.error_count += 1
+
+    def get_context(self, key: str, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
+        """Retrieve a context value by key.
+
+        Args:
+            key: Context key to look up.
+            conversation_id: Scope to a specific conversation.
+            session_id: Scope to a specific session.
+
+        Returns:
+            The stored value, or None if not found.
+        """
+        try:
+            mem_key = self._get_key(session_id, conversation_id)
+            self.stats.total_operations += 1
+            return self._context.get(mem_key, {}).get(key)
+        except Exception as e:
+            logging.error(f"InMemoryMemoryManager: Error retrieving context: {e}")
+            self.stats.error_count += 1
+            return None
+
+    def clear_memory(self, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
+        """Clear stored messages and context.
+
+        Args:
+            conversation_id: If provided, clear only that conversation.
+            session_id: If provided, clear only that session.
+                If both are None, clears all stored data.
+        """
+        try:
+            if conversation_id or session_id:
+                key = self._get_key(session_id, conversation_id)
+                self._messages.pop(key, None)
+                self._context.pop(key, None)
+            else:
+                self._messages.clear()
+                self._context.clear()
+            self.stats.total_operations += 1
+        except Exception as e:
+            logging.error(f"InMemoryMemoryManager: Error clearing memory: {e}")
+            self.stats.error_count += 1
+
+    def get_stats(self) -> MemoryStats:
+        """Return current memory usage statistics."""
+        return self.stats
+
+
 class CompressionManager:
-    """Handles data compression with safe UTF-8 handling"""
+    """Handles data compression and decompression with safe UTF-8 handling.
+
+    Supports LZ4 and gzip algorithms. Compressed data is base64-encoded and
+    prefixed with ``COMPRESSED:<algorithm>:`` for transparent decompression.
+
+    Args:
+        enabled: Whether compression is active.
+        algorithm: Compression algorithm (``"lz4"`` or ``"gzip"``).
+        compression_level: Algorithm-specific compression level.
+    """
 
     def __init__(self, enabled: bool = True, algorithm: str = "lz4", compression_level: int = 1):
         self.enabled = enabled
@@ -92,7 +286,17 @@ class CompressionManager:
         self.stats = {"compressed_count": 0, "decompressed_count": 0, "bytes_saved": 0}
 
     def compress(self, data: str) -> str:
-        """Compress string data with safe UTF-8 handling"""
+        """Compress a string, returning a prefixed base64 representation.
+
+        Returns the original string unchanged if compression is disabled,
+        the data is too small, or compression would increase size.
+
+        Args:
+            data: String data to compress.
+
+        Returns:
+            Compressed prefixed string, or the original data.
+        """
         if not self.enabled or len(data) < self.min_size_bytes or not COMPRESSION_AVAILABLE:
             return data
 
@@ -128,7 +332,17 @@ class CompressionManager:
             return data
 
     def decompress(self, data: str) -> str:
-        """Decompress data with safe UTF-8 handling"""
+        """Decompress a previously compressed string.
+
+        Non-compressed strings (those without the ``COMPRESSED:`` prefix)
+        are returned as-is.
+
+        Args:
+            data: Compressed or plain string.
+
+        Returns:
+            Decompressed string.
+        """
         if not isinstance(data, str) or not data.startswith("COMPRESSED:"):
             return str(data)
 
@@ -162,7 +376,16 @@ class CompressionManager:
 
 
 class IntelligentCache:
-    """Intelligent caching with safe encoding"""
+    """Thread-safe TTL cache with safe key encoding.
+
+    Wraps ``cachetools.TTLCache`` with thread locking and key sanitization
+    to handle bytes or non-string keys safely.
+
+    Args:
+        enabled: Whether caching is active.
+        max_size: Maximum number of entries.
+        ttl_seconds: Time-to-live for each entry in seconds.
+    """
 
     def __init__(self, enabled: bool = True, max_size: int = 1000, ttl_seconds: int = 300):
         self.enabled = enabled
@@ -234,7 +457,22 @@ class IntelligentCache:
 
 
 class RedisMemoryManager(MemoryManagerInterface):
-    """Redis memory manager with session-based keys and UTF-8 handling - FIXED KEY CONSISTENCY"""
+    """Redis-backed memory manager with session-aware key generation.
+
+    Stores messages in Redis lists and context in Redis hashes, using
+    consistent key prefixes derived from conversation_id, session_id, or
+    agent_id (in priority order). Includes LZ4 compression and local
+    TTL caching for performance.
+
+    Args:
+        agent_id: Unique identifier for the owning agent.
+        redis_config: Redis connection parameters. If None, loaded from
+            ``agent_config.yaml``.
+
+    Raises:
+        ImportError: If the ``redis`` package is not installed.
+        ConnectionError: If Redis is unreachable.
+    """
 
     def __init__(self, agent_id: str, redis_config: Dict[str, Any] = None):
         self.agent_id = agent_id
@@ -295,9 +533,9 @@ class RedisMemoryManager(MemoryManagerInterface):
             raise ConnectionError(f"Failed to connect to Redis: {e}")
 
     def _get_primary_identifier(self, session_id: str = None, conversation_id: str = None) -> str:
-        """
-        FIXED: Get consistent primary identifier for key generation
-        Priority: conversation_id > session_id > agent_id
+        """Resolve the primary identifier for Redis key generation.
+
+        Priority: conversation_id > session_id > agent_id.
         """
         if conversation_id:
             return conversation_id
@@ -307,9 +545,10 @@ class RedisMemoryManager(MemoryManagerInterface):
             return self.agent_id
 
     def _get_message_key(self, session_id: str = None, conversation_id: str = None) -> str:
-        """
-        FIXED: Generate consistent message key
-        Uses the same primary identifier logic for both storage and retrieval
+        """Generate a Redis key for the message list.
+
+        Uses ``session:<id>:messages`` when a session or conversation ID is
+        available, falling back to ``agent:<agent_id>:messages``.
         """
         primary_id = self._get_primary_identifier(session_id, conversation_id)
 
@@ -321,9 +560,10 @@ class RedisMemoryManager(MemoryManagerInterface):
             return f"agent:{primary_id}:messages"
 
     def _get_context_key(self, session_id: str = None, conversation_id: str = None) -> str:
-        """
-        FIXED: Generate consistent context key
-        Uses the same primary identifier logic
+        """Generate a Redis key for the context hash.
+
+        Uses ``session:<id>:context`` when a session or conversation ID is
+        available, falling back to ``agent:<agent_id>:context``.
         """
         primary_id = self._get_primary_identifier(session_id, conversation_id)
 
@@ -333,7 +573,14 @@ class RedisMemoryManager(MemoryManagerInterface):
             return f"agent:{primary_id}:context"
 
     def _safe_serialize(self, obj: Any) -> str:
-        """Safely serialize object to JSON with UTF-8 handling"""
+        """Serialize an object to JSON and optionally compress it.
+
+        Args:
+            obj: Object to serialize (must be JSON-compatible).
+
+        Returns:
+            JSON string, possibly with compression prefix.
+        """
         try:
             json_str = json.dumps(obj, ensure_ascii=True, default=str)
             return self.compression_manager.compress(json_str)
@@ -342,7 +589,14 @@ class RedisMemoryManager(MemoryManagerInterface):
             return json.dumps({"error": "serialization_failed", "original_type": str(type(obj))})
 
     def _safe_deserialize(self, data: str) -> Any:
-        """Safely deserialize JSON data"""
+        """Decompress (if needed) and deserialize JSON data.
+
+        Args:
+            data: JSON string, possibly compressed.
+
+        Returns:
+            Deserialized Python object.
+        """
         try:
             if isinstance(data, bytes):
                 data = data.decode("utf-8", errors="replace")
@@ -354,7 +608,12 @@ class RedisMemoryManager(MemoryManagerInterface):
             return {"error": "deserialization_failed", "data": str(data)[:100]}
 
     def store_message(self, message):
-        """FIXED: Store message with consistent key generation"""
+        """Store a message in Redis using session-aware key generation.
+
+        Args:
+            message: An AgentMessage or dict-like object. Session and
+                conversation IDs are extracted to determine the Redis key.
+        """
         try:
             # Extract session/conversation info from message
             session_id = getattr(message, "session_id", None)
@@ -388,7 +647,19 @@ class RedisMemoryManager(MemoryManagerInterface):
             self.stats.error_count += 1
 
     def get_recent_messages(self, limit: int = 10, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
-        """Get recent messages with proper message ordering and error handling"""
+        """Retrieve recent messages in chronological order from Redis.
+
+        Messages are stored newest-first via LPUSH, so results are reversed
+        before returning to provide oldest-first (chronological) order.
+
+        Args:
+            limit: Maximum number of messages to return.
+            conversation_id: Scope to a specific conversation.
+            session_id: Scope to a specific session.
+
+        Returns:
+            List of message dicts in chronological order.
+        """
         try:
             key = self._get_message_key(session_id, conversation_id)
 
@@ -445,7 +716,14 @@ class RedisMemoryManager(MemoryManagerInterface):
             return []
 
     def store_context(self, key: str, value: Any, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
-        """Store context with consistent keys"""
+        """Store a key-value context entry in a Redis hash.
+
+        Args:
+            key: Context key.
+            value: Arbitrary JSON-serializable value.
+            conversation_id: Scope to a specific conversation.
+            session_id: Scope to a specific session.
+        """
         try:
             redis_key = self._get_context_key(session_id, conversation_id)
 
@@ -464,7 +742,16 @@ class RedisMemoryManager(MemoryManagerInterface):
             self.stats.error_count += 1
 
     def get_context(self, key: str, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
-        """Get context with consistent keys"""
+        """Retrieve a context value by key, checking the local cache first.
+
+        Args:
+            key: Context key to look up.
+            conversation_id: Scope to a specific conversation.
+            session_id: Scope to a specific session.
+
+        Returns:
+            The stored value, or None if not found.
+        """
         try:
             redis_key = self._get_context_key(session_id, conversation_id)
 
@@ -491,7 +778,13 @@ class RedisMemoryManager(MemoryManagerInterface):
             return None
 
     def clear_memory(self, conversation_id: Optional[str] = None, session_id: Optional[str] = None):
-        """Clear memory with consistent keys"""
+        """Clear stored messages and context from Redis and local cache.
+
+        Args:
+            conversation_id: If provided, clear only that conversation.
+            session_id: If provided, clear only that session.
+                If both are None, clears all agent and session keys.
+        """
         try:
             if conversation_id or session_id:
                 message_key = self._get_message_key(session_id, conversation_id)
@@ -525,7 +818,7 @@ class RedisMemoryManager(MemoryManagerInterface):
             self.stats.error_count += 1
 
     def get_stats(self) -> MemoryStats:
-        """Get memory usage statistics"""
+        """Return current memory statistics, refreshed from Redis and cache."""
         try:
             info = self.redis_client.info("memory")
             self.stats.redis_memory_usage_bytes = info.get("used_memory", 0)
@@ -541,9 +834,17 @@ class RedisMemoryManager(MemoryManagerInterface):
     def debug_session_keys(
         self, session_id: str = None, conversation_id: str = None
     ) -> Dict[str, Any]:
-        """
-        NEW: Debug method to inspect Redis keys for a session
-        Useful for troubleshooting key consistency issues
+        """Inspect Redis keys associated with a session for debugging.
+
+        Checks all possible key combinations (session-based, agent-based)
+        and reports existence, type, and length for each.
+
+        Args:
+            session_id: Session to inspect.
+            conversation_id: Conversation to inspect.
+
+        Returns:
+            Dict with key status information and resolved identifiers.
         """
         try:
             keys_to_check = []
@@ -604,7 +905,14 @@ class RedisMemoryManager(MemoryManagerInterface):
             return {"error": str(e)}
 
     def debug_keys(self, pattern: str = "*") -> Dict[str, Any]:
-        """Enhanced debug method to inspect Redis keys"""
+        """List Redis keys matching a glob pattern for debugging.
+
+        Args:
+            pattern: Redis key glob pattern (default ``"*"``).
+
+        Returns:
+            Dict with total key count and details for up to 20 keys.
+        """
         try:
             keys = self.redis_client.keys(pattern)
             result = {"total_keys": len(keys), "keys": []}
@@ -641,3 +949,24 @@ def create_redis_memory_manager(agent_id: str, redis_config: Dict[str, Any] = No
         RedisMemoryManager instance
     """
     return RedisMemoryManager(agent_id, redis_config)
+
+
+def create_memory_manager(agent_id: str, redis_config: Dict[str, Any] = None) -> MemoryManagerInterface:
+    """
+    Create the best available memory manager.
+    Tries Redis first, falls back to InMemoryMemoryManager.
+
+    Args:
+        agent_id: Unique identifier for the agent
+        redis_config: Optional Redis configuration. If None, loads from YAML.
+
+    Returns:
+        MemoryManagerInterface instance (Redis or InMemory)
+    """
+    if REDIS_AVAILABLE:
+        try:
+            return RedisMemoryManager(agent_id, redis_config)
+        except Exception as e:
+            logging.warning(f"Redis unavailable, falling back to in-memory storage: {e}")
+
+    return InMemoryMemoryManager(agent_id)

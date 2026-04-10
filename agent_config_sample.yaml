@@ -1,419 +1,112 @@
-# Enhanced Agent Configuration with Knowledge Base and Web Search
+# Ambivo Agents v2.0.0 - Sample Configuration
 # agent_config_sample.yaml
 #
 # INSTRUCTIONS:
 # 1. Copy this file to agent_config.yaml
-# 2. Replace ALL placeholder values with your actual credentials
-# 3. Remove or comment out sections for services you don't plan to use
+# 2. Replace placeholder values with your actual credentials
+# 3. Remove or comment out sections for services you don't use
 
-docker:
-  images:
-  - sgosain/amb-ubuntu-python-public-pod
-  memory_limit: 512m
-  timeout: 60
-  work_dir: /opt/ambivo/work_dir
-
+# ================================
+# LLM Configuration (required)
+# ================================
 llm:
-  # Replace with your actual API keys
-  anthropic_api_key: "your-anthropic-api-key-here"
-  openai_api_key: "your-openai-api-key-here"
-
-  # AWS Credentials (optional - for Bedrock)
-  aws_access_key_id: "your-aws-access-key-id"
-  aws_secret_access_key: "your-aws-secret-access-key"
-  aws_region: "us-east-1"
-
-  # Embedding API (optional - for advanced knowledge base features)
-  voyage_api_key: "your-voyage-api-key"
-
-  # LLM Settings
-  preferred_provider: openai
+  preferred_provider: anthropic  # openai | anthropic
   temperature: 0.5
   max_tokens: 4000
 
-# Memory management settings
-memory_management:
-  compression:
-    enabled: true
-    algorithm: "lz4"
-    compression_level: 1
-  cache:
-    enabled: true
-    max_size: 1000
-    ttl_seconds: 300
-  backup:
-    enabled: true
-    interval_minutes: 60
-    backup_directory: "./backups"
+  # At least one API key required
+  openai_api_key: "your-openai-api-key"
+  anthropic_api_key: "your-anthropic-api-key"
 
-redis:
-  # Replace with your Redis connection details
-  host: "your-redis-host.redis.cloud"
-  port: 6379
-  db: 0
-  password: "your-redis-password"
+  # Optional: AWS Bedrock
+  aws_access_key_id: ""
+  aws_secret_access_key: ""
+  aws_region: "us-east-1"
 
-service:
-  enable_metrics: true
-  log_level: INFO
-  log_to_file: true
-  max_sessions: 100
-  session_timeout: 3600
+# ================================
+# Agent Capabilities
+# ================================
+agent_capabilities:
+  enable_knowledge_base: false  # requires Qdrant
+  enable_web_search: true
+  enable_web_scraping: true
+  enable_gather: true
 
-# Knowledge Base Configuration (Qdrant Cloud)
+# ================================
+# Web Search
+# ================================
+web_search:
+  brave_api_key: "your-brave-api-key"
+  avesapi_api_key: ""
+  default_max_results: 10
+
+# ================================
+# Web Scraping (API-based, no Docker/Playwright)
+# ================================
+web_scraping:
+  timeout: 60
+  rate_limit_seconds: 1.0
+
+  scraping:
+    provider: "jina"  # jina | firecrawl | requests
+    jina_api_key: ""  # optional, free tier works without key
+    firecrawl_api_key: ""  # required if using firecrawl
+
+  default_headers:
+    User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+# ================================
+# Knowledge Base (optional - requires Qdrant)
+# ================================
 knowledge_base:
-  # Replace with your Qdrant Cloud credentials
-  qdrant_url: "https://your-cluster-id.us-east4-0.gcp.cloud.qdrant.io:6333"
+  qdrant_url: "https://your-cluster.qdrant.tech:6333"
   qdrant_api_key: "your-qdrant-api-key"
-
-  # VectorDB API URL — used for temporary KB lifecycle management (TTL, cleanup)
-  # When set, skill-assigned KBs use the vectordb-api HTTP endpoints instead of
-  # writing directly to Qdrant, enabling automatic TTL-based expiration.
-  vectordb_api_url: ""  # e.g. "https://vectordb.ambivo.com"
-  vectordb_api_token: ""  # JWT or X-AMBIVO-INTERNAL-SECRET for vectordb-api auth
-
-  # Temporary KB defaults (used when agents create session-scoped KBs)
-  temp_kb_ttl_hours: 24  # Default TTL for temporary knowledge bases
-
-  # Feature Settings
-  enable_file_processing: true
-  enable_web_ingestion: true
-  enable_api_calls: true
-  enable_database_queries: false
-
-  # File Processing Limits
-  max_file_size_mb: 50
-  supported_file_types:
-    - ".pdf"
-    - ".txt"
-    - ".docx"
-    - ".md"
-    - ".html"
-    - ".csv"
-    - ".json"
-
-  # Collection Settings
-  default_collection_prefix: ""
-  vector_size: 1536  # OpenAI embeddings dimension
+  vector_size: 1536
   distance_metric: "cosine"
-
-  # Performance Settings
   similarity_top_k: 5
   chunk_size: 1024
   chunk_overlap: 20
+  default_collection_prefix: ""
 
-  # Security Settings
-  max_api_calls_per_session: 100
-  allowed_domains:
-    - "*.com"
-    - "*.org"
-    - "*.edu"
-  blocked_domains:
-    - "*.exe"
-    - "*.zip"
+# ================================
+# Redis (optional - in-memory is default)
+# ================================
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: ""
 
-web_search:
-  # Replace with your search API keys
-  brave_api_key: "your-brave-search-api-key"
-  avesapi_api_key: "your-aves-api-key"
-
-  # Search Settings
-  default_max_results: 10
-  max_results_limit: 50
-  search_timeout_seconds: 10
-  enable_caching: true
-  cache_ttl_minutes: 30
-
-  # Provider Priorities (lower number = higher priority)
-  provider_priorities:
-    brave: 2
-    aves: 1
-
-  # Search Features
-  enable_news_search: true
-  enable_academic_search: true
-  enable_image_search: false
-  enable_video_search: false
-
-  # Geographic Settings
-  default_country: "US"
-  default_language: "en"
-  supported_countries:
-    - "US"
-    - "GB"
-    - "CA"
-    - "AU"
-
-  # Content Filtering
-  safe_search: "moderate"
-  filter_adult_content: true
-  blocked_domains:
-    - "spam-site.com"
-    - "malware-site.com"
-
-  # Rate Limiting
-  requests_per_minute: 60
-  requests_per_hour: 1000
-  cooldown_on_error_minutes: 5
-
-  # News Search Specific Settings
-  news_search:
-    default_days_back: 7
-    max_days_back: 30
-    preferred_sources:
-      - "reuters.com"
-      - "bbc.com"
-      - "apnews.com"
-
-  # Academic Search Specific Settings
-  academic_search:
-    preferred_sources:
-      - "scholar.google.com"
-      - "arxiv.org"
-      - "pubmed.ncbi.nlm.nih.gov"
-      - "researchgate.net"
-
-  # Performance Settings
-  connection_pool_size: 10
-  retry_attempts: 3
-  retry_delay_seconds: 1
-
-  # Security Settings
-  max_searches_per_session: 100
-  require_user_agent: true
-  custom_user_agent: "EnhancedAgentSystem/1.0"
-
-# Agent Capabilities Configuration
-agent_capabilities:
-  # Enable/disable agent types
-  enable_knowledge_base: true
-  enable_web_search: true
-  enable_code_execution: true
-  enable_file_processing: true
-  enable_web_ingestion: true
-  enable_api_calls: true
-  enable_web_scraping: true
-  enable_proxy_mode: true
-  enable_media_editor: true
-  enable_youtube_download: true
-  enable_gather: true
-
-  # Cross-agent features
-  enable_agent_collaboration: true
-  enable_result_synthesis: true
-  enable_multi_source_validation: true
-
-  # Performance limits
-  max_concurrent_operations: 5
-  operation_timeout_seconds: 30
-  max_memory_usage_mb: 500
-
-youtube_download:
-  docker_image: "sgosain/amb-ubuntu-python-public-pod"
-  download_dir: "./youtube_downloads"
-  timeout: 600
-  memory_limit: "1g"
-  default_audio_only: true
-
-# Media Processing Configuration
-media_editor:
-  # Docker Configuration
-  docker_image: "sgosain/amb-ubuntu-python-public-pod"
-  work_dir: "/opt/ambivo/work_dir"
-
-  # File Handling
-  input_dir: "./examples/media_input"
-  output_dir: "./examples/media_output"
-  temp_dir: "/tmp/media_editor"
-
-  # Processing Limits
-  timeout: 300
-  max_file_size_gb: 5
-  max_concurrent_jobs: 3
-
-  # FFmpeg Configuration
-  ffmpeg_threads: 4
-  enable_gpu_acceleration: false
-  gpu_codec: "h264_nvenc"
-  memory_limit: "2g"
-
-  # Quality Presets
-  quality_presets:
-    ultra:
-      crf: 15
-      preset: "veryslow"
-      description: "Ultra high quality (very slow)"
-    high:
-      crf: 18
-      preset: "slow"
-      description: "High quality (slow)"
-    medium:
-      crf: 23
-      preset: "medium"
-      description: "Balanced quality and speed"
-    low:
-      crf: 28
-      preset: "fast"
-      description: "Lower quality (fast)"
-    web:
-      crf: 25
-      preset: "fast"
-      description: "Web optimized"
-    mobile:
-      crf: 30
-      preset: "veryfast"
-      description: "Mobile optimized"
-
-  # Supported Formats
-  supported_video_formats:
-    - ".mp4"
-    - ".avi"
-    - ".mov"
-    - ".mkv"
-    - ".webm"
-    - ".flv"
-    - ".wmv"
-    - ".m4v"
-    - ".3gp"
-
-  supported_audio_formats:
-    - ".mp3"
-    - ".wav"
-    - ".aac"
-    - ".flac"
-    - ".ogg"
-    - ".m4a"
-    - ".wma"
-    - ".opus"
-
-  supported_image_formats:
-    - ".jpg"
-    - ".jpeg"
-    - ".png"
-    - ".bmp"
-    - ".tiff"
-    - ".webp"
-
-  # Default Settings
-  default_video_codec: "h264"
-  default_audio_codec: "aac"
-  default_audio_bitrate: "192k"
-  default_audio_sample_rate: 44100
-  default_thumbnail_width: 320
-  default_thumbnail_format: "jpg"
-
-  # Advanced Options
-  enable_hardware_acceleration: false
-  enable_streaming_processing: false
-  enable_batch_processing: true
-  preserve_metadata: true
-  auto_cleanup_temp: true
-
-  # Error Handling
-  max_retries: 3
-  retry_delay: 5
-  continue_on_error: false
-
-  # Monitoring
-  enable_progress_tracking: true
-  log_ffmpeg_output: true
-  performance_logging: true
-
-# Enhanced Web Scraping Configuration - Docker + Proxy Mode
-web_scraping:
-  # Docker Configuration
-  docker_image: "sgosain/amb-ubuntu-python-public-pod"
-  proxy_enabled: true
-
-  # Replace with your proxy credentials (ScraperAPI format)
-  proxy_config:
-    http_proxy: "http://scraperapi:your-scraperapi-key@proxy-server.scraperapi.com:8001"
-
-  # Performance and Limits
-  timeout: 120
-  rate_limit_seconds: 2.0
-  max_concurrent_requests: 2
-
-  # Content Extraction
-  max_content_size_mb: 5
-  max_links_per_page: 50
-  max_images_per_page: 25
-
-  # Docker-specific settings
-  docker_memory_limit: "2g"
-  docker_timeout: 120
-  docker_cleanup: true
-
-  # Proxy settings for Docker
-  proxy_timeout: 30
-  proxy_retries: 2
-  ssl_verify: false
-
-  # Browser Configuration for Docker
-  browser_config:
-    headless: true
-    viewport_width: 1920
-    viewport_height: 1080
-    disable_images: false
-    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
-  # Output Configuration
-  default_output_format: "json"
-  compress_output: true
-  max_response_size: "10MB"
-
+# ================================
+# Moderator Agent
+# ================================
 moderator:
-  # Default enabled agents (used when enabled_agents not specified)
   default_enabled_agents:
     - knowledge_base
+    - knowledge_synthesis
     - web_search
-    - assistant
-    - media_editor
-    - youtube_download
-    - code_executor
     - web_scraper
+    - assistant
 
-  # Routing Intelligence Settings
   routing:
     confidence_threshold: 0.6
-    enable_multi_agent: true
     fallback_agent: "assistant"
-    max_routing_attempts: 3
 
-  # Agent Coordination Settings
-  coordination:
-    max_concurrent_agents: 3
-    timeout_seconds: 30
-    retry_failed_agents: true
-    enable_response_synthesis: true
-
-  # Performance Settings
-  performance:
-    cache_agent_instances: true
-    cleanup_interval_minutes: 30
-    max_session_duration_hours: 2
-
-  # Security Settings
-  security:
-    restrict_code_execution: true
-    sanitize_inputs: true
-    log_all_routing: true
-
-# Gather Agent Configuration
-# Conversational form-filling agent that collects answers and submits to an API
-# Enable via agent_capabilities.enable_gather: true
-# Provide endpoint and optional headers below
+# ================================
+# Gather Agent (conversational forms)
+# ================================
 gather:
   submission_endpoint: "https://your-api.example.com/submit"
   submission_method: "POST"
   submission_headers:
-    Authorization: "Bearer your-api-token"
     Content-Type: "application/json"
   memory_ttl_seconds: 3600
-  # Optional: Use LLM to evaluate free-text answers before moving on
   enable_llm_answer_validation: false
-  answer_validation:
-    # Default minimum length for free-text answers (can be overridden per question via min_answer_length)
-    default_min_length: 1
-  # Optional: Use LLM to rewrite question prompts for friendlier phrasing
-  enable_llm_prompt_rewrite: false
+
+# ================================
+# Service
+# ================================
+service:
+  log_level: INFO
+  max_sessions: 100
+  session_timeout: 3600

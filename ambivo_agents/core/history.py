@@ -405,11 +405,11 @@ class BaseAgentHistoryMixin:
                     self.conversation_state.knowledge_bases.append(kb)
 
     def get_conversation_state(self) -> ConversationState:
-        """Get current conversation state"""
+        """Get the current conversation state tracking object."""
         return self.conversation_state
 
     def clear_conversation_state(self):
-        """Clear conversation state"""
+        """Reset conversation state to a fresh ``ConversationState``."""
         self.conversation_state = ConversationState()
 
     # ========================
@@ -517,38 +517,12 @@ class BaseAgentHistoryMixin:
 # ========================
 
 
-class MediaAgentHistoryMixin(BaseAgentHistoryMixin):
-    """Specialized history mixin for media processing agents"""
-
-    def setup_history_mixin(self):
-        super().setup_history_mixin()
-
-        # Register media-specific extractors
-        self.register_context_extractor(
-            ContextType.MEDIA_FILE,
-            lambda text: re.findall(
-                r"[^\s]+\.(?:mp4|avi|mov|mkv|mp3|wav|flac|aac|m4a|webm|ogg)", text, re.IGNORECASE
-            ),
-        )
-
-        # Add media-specific intents
-        self.intent_keywords.update(
-            {
-                "extract_audio": ["extract audio", "get audio", "audio from"],
-                "convert_video": ["convert video", "convert to", "change format"],
-                "resize": ["resize", "scale", "change size"],
-                "trim": ["trim", "cut", "clip"],
-                "thumbnail": ["thumbnail", "screenshot", "frame"],
-            }
-        )
-
-    def get_recent_media_file(self) -> Optional[str]:
-        """Get most recent media file from conversation"""
-        return self.get_most_recent_context(ContextType.MEDIA_FILE)
-
-
 class KnowledgeBaseAgentHistoryMixin(BaseAgentHistoryMixin):
-    """Specialized history mixin for knowledge base agents"""
+    """History mixin with extractors for document names and knowledge base intents.
+
+    Extends ``BaseAgentHistoryMixin`` with KB-specific context extraction
+    (document file names) and intent keywords (ingest, query_kb, create_kb).
+    """
 
     def setup_history_mixin(self):
         super().setup_history_mixin()
@@ -571,18 +545,22 @@ class KnowledgeBaseAgentHistoryMixin(BaseAgentHistoryMixin):
         )
 
     def get_current_knowledge_base(self) -> Optional[str]:
-        """Get current knowledge base from state or history"""
+        """Get the active knowledge base name from state or conversation history."""
         if self.conversation_state.knowledge_bases:
             return self.conversation_state.knowledge_bases[-1]
         return self.get_most_recent_context(ContextType.KNOWLEDGE_BASE)
 
     def get_recent_document(self) -> Optional[str]:
-        """Get most recent document from conversation"""
+        """Get the most recently referenced document name from conversation history."""
         return self.get_most_recent_context(ContextType.DOCUMENT_NAME)
 
 
 class WebAgentHistoryMixin(BaseAgentHistoryMixin):
-    """Specialized history mixin for web-related agents (search, scraping)"""
+    """History mixin with extractors for search terms and web-specific intents.
+
+    Extends ``BaseAgentHistoryMixin`` with search term extraction and
+    intent keywords for search, scrape, news, and academic operations.
+    """
 
     def setup_history_mixin(self):
         super().setup_history_mixin()
@@ -624,7 +602,7 @@ class WebAgentHistoryMixin(BaseAgentHistoryMixin):
         return []
 
     def get_recent_search_term(self) -> Optional[str]:
-        """Get most recent search term from conversation"""
+        """Get the most recently used search term from conversation history."""
         return self.get_most_recent_context(ContextType.SEARCH_TERM)
 
     def get_recent_url(self) -> Optional[str]:

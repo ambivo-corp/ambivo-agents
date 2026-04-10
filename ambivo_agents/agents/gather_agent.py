@@ -2,7 +2,7 @@
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.base import (
@@ -138,9 +138,11 @@ class GatherAgent(BaseAgent):
 
     # -------- State Management --------
     def _state_key(self, session_id: str) -> str:
+        """Return the Redis key used to persist gather state for a session."""
         return f"gather_state:{session_id}"
 
     async def _load_state(self) -> Dict[str, Any]:
+        """Load and return the gather state from Redis, resetting if TTL expired."""
         session_id = self.context.session_id
         state = {}
         try:
@@ -156,17 +158,18 @@ class GatherAgent(BaseAgent):
         if started_at:
             try:
                 started = datetime.fromisoformat(started_at)
-                if datetime.utcnow() - started > timedelta(seconds=self.memory_ttl_seconds):
+                if datetime.now(timezone.utc) - started > timedelta(seconds=self.memory_ttl_seconds):
                     state = {}
             except Exception:
                 pass
         return state or {}
 
     async def _save_state(self, state: Dict[str, Any]):
+        """Persist gather state to Redis, setting started_at if not present."""
         session_id = self.context.session_id
         state = dict(state)
         if "started_at" not in state:
-            state["started_at"] = datetime.utcnow().isoformat()
+            state["started_at"] = datetime.now(timezone.utc).isoformat()
         try:
             if self.memory:
                 await self.memory.store_context(self._state_key(session_id), state)
@@ -174,6 +177,7 @@ class GatherAgent(BaseAgent):
             self.logger.warning(f"Failed to save state: {e}")
 
     async def _clear_state(self):
+        """Clear all gather state for the current session."""
         session_id = self.context.session_id
         try:
             if self.memory:
@@ -184,6 +188,13 @@ class GatherAgent(BaseAgent):
     # -------- Questionnaire Handling --------
     @staticmethod
     def _normalize_question(q: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize a raw question dict into the canonical schema with defaults.
+
+        Returns:
+            Dict with keys: question_id, text, type, is_conditional,
+            parent_question_id, required, answer_option_dict_list,
+            condition_trigger_values, answer_requirements, min_answer_length.
+        """
         qn = {
             "question_id": str(q.get("question_id") or q.get("id") or str(uuid.uuid4())),
             "text": q.get("text") or q.get("question") or "",
@@ -206,6 +217,11 @@ class GatherAgent(BaseAgent):
 
     @staticmethod
     def _normalize_questionnaire(obj: Any) -> Dict[str, Any]:
+        """Normalize a questionnaire object (dict or list) into ``{"questions": [...]}``.
+
+        Raises:
+            ValueError: If obj is not a dict with 'questions' key or a list.
+        """
         if isinstance(obj, dict) and "questions" in obj:
             questions = obj["questions"]
         elif isinstance(obj, list):
@@ -218,6 +234,11 @@ class GatherAgent(BaseAgent):
     async def _try_parse_questionnaire_from_message(
         self, user_text: str
     ) -> Optional[Dict[str, Any]]:
+        """Attempt to extract a questionnaire from user text (inline JSON, file path, or URL).
+
+        Returns:
+            Normalized questionnaire dict, or None if parsing fails.
+        """
         # Try JSON in message
         try:
             maybe_json = user_text.strip()
@@ -326,6 +347,11 @@ class GatherAgent(BaseAgent):
     def _get_next_question(
         self, questionnaire: Dict[str, Any], answers: Dict[str, Any], asked: set
     ) -> Optional[Dict[str, Any]]:
+        """Return the next unanswered question, skipping inapplicable conditionals.
+
+        Returns:
+            The next question dict, or None if all questions are complete.
+        """
         for q in questionnaire.get("questions", []):
             qid = q.get("question_id")
             if qid in asked:
@@ -354,6 +380,7 @@ class GatherAgent(BaseAgent):
         return None
 
     def _format_question_prompt(self, q: Dict[str, Any]) -> str:
+        """Format a question dict into a user-facing prompt string with choices if applicable."""
         qtext = q.get("text", "")
         qtype = (q.get("type") or "free-text").lower()
         choices = q.get("answer_option_dict_list") or []
@@ -371,7 +398,16 @@ class GatherAgent(BaseAgent):
     async def _extract_answer_with_llm(
         self, q: Dict[str, Any], user_text: str
     ) -> Tuple[bool, Any, str]:
-        """Use LLM to extract structured answer from natural language response"""
+        """Use LLM to extract a structured answer from a natural language response.
+
+        Args:
+            q: The current question dict.
+            user_text: The user's raw response text.
+
+        Returns:
+            Tuple of (success, parsed_answer, error_message). On failure,
+            parsed_answer is None and error_message may be None (fall back to strict).
+        """
         if not self.llm_service:
             return False, None, "LLM service not available for natural language parsing"
 
@@ -475,6 +511,11 @@ Examples:
     def _validate_and_parse_answer(
         self, q: Dict[str, Any], user_text: str
     ) -> Tuple[bool, Any, str]:
+        """Validate and parse user_text against the question's expected type.
+
+        Returns:
+            Tuple of (valid, parsed_value, error_message).
+        """
         qtype = (q.get("type") or "free-text").lower()
         user_text = (user_text or "").strip()
         if qtype == "free-text":
@@ -584,6 +625,14 @@ Examples:
 
     # -------- Submission --------
     async def _submit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Submit collected answers to the configured endpoint.
+
+        Args:
+            payload: Dict containing session_id, answers, result_status, and timestamp.
+
+        Returns:
+            Dict with 'success', 'status'/'error', and optionally 'response' body.
+        """
         if not self.submission_endpoint:
             return {"success": False, "error": "No submission endpoint configured"}
         try:
@@ -634,6 +683,19 @@ Examples:
     async def process_message(
         self, message: AgentMessage, context: ExecutionContext = None
     ) -> AgentMessage:
+        """Process a user message through the gather workflow.
+
+        Handles questionnaire loading, question asking, answer validation,
+        conditional logic, and final submission. Supports user commands
+        'finish', 'submit', 'done', 'cancel', 'abort', 'stop'.
+
+        Args:
+            message: Incoming user message.
+            context: Optional execution context (auto-created if None).
+
+        Returns:
+            AgentMessage with the next question, validation feedback, or submission result.
+        """
         if context is None:
             context = self.get_execution_context()
 
@@ -668,7 +730,7 @@ Examples:
                 "conversation_id": self.context.conversation_id,
                 "result_status": result_status,
                 "answers": answers,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             submit_result = await self._submit(payload)
             await self._clear_state()
@@ -690,7 +752,7 @@ Examples:
                 "conversation_id": self.context.conversation_id,
                 "result_status": "conversation_aborted",
                 "answers": answers,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             submit_result = await self._submit(payload)
             await self._clear_state()
@@ -759,7 +821,7 @@ Examples:
                     "conversation_id": self.context.conversation_id,
                     "result_status": result_status,
                     "answers": answers,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
                 submit_result = await self._submit(payload)
                 await self._clear_state()
@@ -861,7 +923,7 @@ Examples:
                 "conversation_id": self.context.conversation_id,
                 "result_status": result_status,
                 "answers": answers,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             submit_result = await self._submit(payload)
             await self._clear_state()

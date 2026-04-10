@@ -112,7 +112,7 @@ Quality Standards:
         return [a for a in agents if a != 'knowledge_synthesis']
 
     def _load_available_collections(self):
-        """Load available KB collections from context metadata"""
+        """Load available KB collection names from context metadata into self.available_collections."""
         if hasattr(self, 'context') and self.context:
             metadata = self.context.metadata or {}
             self.available_collections = metadata.get('available_knowledge_bases', [])
@@ -123,7 +123,7 @@ Quality Standards:
                 self.logger.info("No collections found in metadata")
     
     async def _ensure_assessor(self):
-        """Ensure the response assessor is initialized"""
+        """Lazily initialize the ResponseQualityAssessor if not already created."""
         if not self.assessor_initialized:
             self.assessor = ResponseQualityAssessor(
                 agent_id=f"{self.agent_id}_assessor",
@@ -134,10 +134,14 @@ Quality Standards:
             self.assessor_initialized = True
     
     def detect_target_collections(self, query: str) -> List[Tuple[str, float]]:
-        """Intelligently detect which KB collections to target based on query content
-        
-        This method analyzes the query and matches it against available collection names
-        by extracting keywords from the collection names themselves.
+        """Detect which KB collections are relevant to a query using keyword matching.
+
+        Args:
+            query: The user's search query.
+
+        Returns:
+            List of (collection_name, relevance_score) tuples, sorted by score
+            descending, filtered to scores > 0.2.
         """
         query_lower = query.lower()
         collection_scores = {}
@@ -194,7 +198,7 @@ Quality Standards:
         return [(col, score) for col, score in sorted_collections if score > 0.2]
     
     def optimize_search_query(self, original_query: str) -> str:
-        """Optimize search query for better results"""
+        """Optimize a search query by removing noise, expanding abbreviations, and adding time context."""
         query = original_query.lower()
         
         # Remove redundant terms
@@ -231,7 +235,11 @@ Quality Standards:
         return query.strip()
     
     async def analyze_query(self, query: str) -> QueryAnalysis:
-        """Analyze user query to determine optimal search strategy"""
+        """Analyze a user query via LLM to determine optimal search strategy.
+
+        Returns:
+            QueryAnalysis with query_type, suggested_sources, search_strategy, etc.
+        """
         analysis_prompt = f"""Analyze the following user query and determine the optimal search strategy.
 
 Query: {query}
@@ -280,7 +288,14 @@ Please provide analysis in JSON format:
         )
     
     async def gather_from_knowledge_base(self, query: str) -> Optional[SourceResponse]:
-        """Gather information from knowledge bases - queries multiple KBs and aggregates results"""
+        """Query relevant knowledge base collections in parallel and aggregate results.
+
+        Args:
+            query: The search query to run against knowledge bases.
+
+        Returns:
+            SourceResponse with combined KB content, or None if no useful results.
+        """
         try:
             # Reload collections in case they were updated after initialization
             self._load_available_collections()
@@ -382,7 +397,7 @@ Please provide analysis in JSON format:
         return None
     
     async def gather_from_web_search(self, query: str) -> Optional[SourceResponse]:
-        """Gather information from web search with query optimization"""
+        """Run an optimized web search and return results as a SourceResponse."""
         try:
             # Optimize the search query for better results
             optimized_query = self.optimize_search_query(query)
@@ -426,7 +441,15 @@ Please provide analysis in JSON format:
         return None
     
     async def gather_from_web_scraping(self, query: str, urls: Optional[List[str]] = None) -> Optional[SourceResponse]:
-        """Gather information from web scraping"""
+        """Scrape specific URLs (or auto-discover via web search) for query-relevant content.
+
+        Args:
+            query: The topic to scrape for.
+            urls: Optional list of URLs to scrape. If None, URLs are discovered via web search.
+
+        Returns:
+            SourceResponse with combined scraped content, or None on failure.
+        """
         try:
             # If no URLs provided, get from web search first
             if not urls and self.enable_auto_scraping:
@@ -459,7 +482,7 @@ Please provide analysis in JSON format:
         return None
     
     async def gather_responses_parallel(self, query: str) -> List[SourceResponse]:
-        """Gather responses from all sources in parallel"""
+        """Gather responses from KB, web search, and optionally web scraping in parallel."""
         tasks = [
             self.gather_from_knowledge_base(query),
             self.gather_from_web_search(query),
@@ -488,7 +511,10 @@ Please provide analysis in JSON format:
         strategy: SearchStrategy,
         sources: List[ResponseSource]
     ) -> List[SourceResponse]:
-        """Gather responses sequentially based on strategy"""
+        """Gather responses sequentially, ordering sources by strategy.
+
+        Exits early if a high-confidence response is found (unless PARALLEL strategy).
+        """
         responses = []
         
         # Determine order based on strategy

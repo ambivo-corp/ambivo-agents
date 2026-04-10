@@ -274,25 +274,54 @@ class DirectBedrockLLM:
 
 
 class LLMServiceInterface(ABC):
-    """Abstract interface for LLM services"""
+    """Abstract interface that all LLM service implementations must follow.
+
+    Defines the contract for synchronous generation, streaming generation,
+    and knowledge base querying.
+    """
 
     @abstractmethod
     async def generate_response(self, prompt: str, context: Dict[str, Any] = None) -> str:
-        """Generate a response using the LLM"""
+        """Generate a text response from the LLM.
+
+        Args:
+            prompt: The user prompt or instruction.
+            context: Optional dict with ``conversation_history`` and other metadata.
+
+        Returns:
+            Generated text response.
+        """
         pass
 
     @abstractmethod
     async def query_knowledge_base(
         self, query: str, kb_name: str, context: Dict[str, Any] = None
     ) -> tuple[str, List[Dict]]:
-        """Query a knowledge base"""
+        """Query a knowledge base and return an answer with sources.
+
+        Args:
+            query: Natural language query.
+            kb_name: Name of the knowledge base to search.
+            context: Optional conversation context.
+
+        Returns:
+            Tuple of (answer_text, list_of_source_dicts).
+        """
         pass
 
     @abstractmethod
     async def generate_response_stream(
         self, prompt: str, context: Dict[str, Any] = None
     ) -> AsyncIterator[str]:
-        """Generate a streaming response using the LLM"""
+        """Generate a streaming response, yielding text chunks.
+
+        Args:
+            prompt: The user prompt or instruction.
+            context: Optional conversation context.
+
+        Yields:
+            Text chunks as they become available.
+        """
         pass
 
 
@@ -320,7 +349,17 @@ def _clean_chunk_content(chunk: str) -> str:
 
 
 class MultiProviderLLMService(LLMServiceInterface):
-    """LLM service with multiple provider support and automatic rotation"""
+    """LLM service that manages multiple providers with automatic failover.
+
+    Supports OpenAI, Anthropic, and AWS Bedrock. Automatically rotates to
+    a fallback provider when the current one hits rate limits or errors.
+    Configuration is loaded from ``agent_config.yaml`` by default.
+
+    Args:
+        config_data: LLM configuration dict (loaded from YAML if None).
+        preferred_provider: Initial provider to use (``"openai"``, ``"anthropic"``,
+            or ``"bedrock"``).
+    """
 
     def __init__(self, config_data: Dict[str, Any] = None, preferred_provider: str = "openai"):
         # Load configuration from YAML if not provided
@@ -622,7 +661,23 @@ class MultiProviderLLMService(LLMServiceInterface):
     async def generate_response(
         self, prompt: str, context: Dict[str, Any] = None, system_message: str = None
     ) -> str:
-        """Generate a response using the current LLM provider Preserves context across provider switches"""
+        """Generate a response using the current LLM provider.
+
+        Builds a context-aware prompt from conversation history and system
+        message, then invokes the LLM with automatic provider rotation on
+        failure.
+
+        Args:
+            prompt: User prompt text.
+            context: Optional dict with ``conversation_history`` for continuity.
+            system_message: Optional system-level instructions prepended to the prompt.
+
+        Returns:
+            Generated text response.
+
+        Raises:
+            RuntimeError: If all providers fail after retries.
+        """
         if not self.current_llm:
             raise RuntimeError("No LLM provider available")
 
@@ -749,7 +804,22 @@ class MultiProviderLLMService(LLMServiceInterface):
     async def generate_response_stream(
         self, prompt: str, context: Dict[str, Any] = None, system_message: str = None
     ) -> AsyncIterator[str]:
-        """Generate a streaming response - FIXED: Preserves context across provider switches"""
+        """Generate a streaming response, yielding text chunks as they arrive.
+
+        Preserves conversation context across provider switches. Falls back
+        to non-streaming generation if streaming is unavailable.
+
+        Args:
+            prompt: User prompt text.
+            context: Optional dict with ``conversation_history``.
+            system_message: Optional system-level instructions.
+
+        Yields:
+            Text chunks from the LLM.
+
+        Raises:
+            RuntimeError: If all providers fail.
+        """
         if not self.current_llm:
             raise RuntimeError("No LLM provider available")
 
@@ -794,11 +864,11 @@ class MultiProviderLLMService(LLMServiceInterface):
         return response, sources
 
     def get_current_provider(self) -> str:
-        """Get the current provider name"""
+        """Get the name of the currently active LLM provider."""
         return self.current_provider
 
     def get_available_providers(self) -> List[str]:
-        """Get list of available provider names"""
+        """Get names of all providers that are currently available (not in cooldown)."""
         return [
             name
             for name, config in self.provider_tracker.providers.items()
@@ -806,7 +876,12 @@ class MultiProviderLLMService(LLMServiceInterface):
         ]
 
     def get_provider_stats(self) -> Dict[str, Dict[str, Any]]:
-        """Get statistics for all providers"""
+        """Get usage statistics for all registered providers.
+
+        Returns:
+            Dict mapping provider name to stats (priority, request_count,
+            error_count, is_available, timestamps).
+        """
         stats = {}
         for name, config in self.provider_tracker.providers.items():
             stats[name] = {

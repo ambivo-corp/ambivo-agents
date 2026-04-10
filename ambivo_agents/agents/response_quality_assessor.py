@@ -195,7 +195,7 @@ When assessing, be thorough but fair. Consider the context and complexity of the
         responses: List[SourceResponse],
         user_preferences: Optional[Dict[str, Any]]
     ) -> str:
-        """Build the assessment prompt for the LLM"""
+        """Build an LLM prompt requesting JSON quality assessment of source responses."""
         prompt = f"Please assess the quality of the following responses to the user's question.\n\n"
         prompt += f"USER QUESTION: {question}\n\n"
         
@@ -227,7 +227,11 @@ Please provide your assessment in the following JSON format:
         return prompt
     
     def _parse_assessment(self, assessment_content: str) -> Dict[str, Any]:
-        """Parse the assessment from LLM response"""
+        """Parse the LLM assessment response into a dict of scores and recommendations.
+
+        Attempts JSON parsing, then markdown code block extraction, then falls back
+        to a default assessment dict.
+        """
         try:
             # Try to parse as JSON
             if assessment_content.strip().startswith('{'):
@@ -269,7 +273,7 @@ Please provide your assessment in the following JSON format:
         responses: List[SourceResponse],
         assessment_data: Dict[str, Any]
     ) -> float:
-        """Calculate overall confidence score"""
+        """Calculate an overall confidence score (0.0-1.0) from assessment scores and source weights."""
         # Get assessment scores
         relevance = assessment_data.get('relevance_score', 0.5)
         completeness = assessment_data.get('completeness_score', 0.5)
@@ -298,7 +302,7 @@ Please provide your assessment in the following JSON format:
         return min(1.0, max(0.0, final_score))
     
     def _determine_quality_level(self, confidence_score: float) -> QualityLevel:
-        """Determine quality level based on confidence score"""
+        """Map a confidence score to a QualityLevel using configured thresholds."""
         if confidence_score >= self.quality_thresholds['excellent']:
             return QualityLevel.EXCELLENT
         elif confidence_score >= self.quality_thresholds['good']:
@@ -316,7 +320,7 @@ Please provide your assessment in the following JSON format:
         responses: List[SourceResponse],
         assessment_data: Dict[str, Any]
     ) -> str:
-        """Synthesize multiple responses into a final comprehensive answer"""
+        """Synthesize multiple source responses into a single comprehensive answer via LLM."""
         if not responses:
             return ""
         
@@ -358,7 +362,7 @@ Create a synthesized response that:
         responses: List[SourceResponse],
         assessment_data: Dict[str, Any]
     ) -> List[ResponseSource]:
-        """Suggest additional sources to consult based on assessment"""
+        """Suggest additional ResponseSources to consult based on what is missing in the assessment."""
         suggestions = []
         used_sources = {r.source for r in responses}
         

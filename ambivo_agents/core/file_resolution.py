@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from ..config.loader import get_config_section
-from .docker_shared import get_shared_manager
 
 logger = logging.getLogger(__name__)
 
@@ -194,17 +193,11 @@ def get_agent_type_from_config(agent_name: str) -> str:
     """
     # Mapping from agent class names to directory types
     agent_type_mapping = {
-        "AnalyticsAgent": "analytics",
-        "MediaEditorAgent": "media",
-        "CodeExecutorAgent": "code",
-        "DatabaseAgent": "database",
         "WebScraperAgent": "scraper",
-        "KnowledgeBaseAgent": "code",  # KB uses 'code' subdirs
-        "AssistantAgent": "code",  # Assistant uses 'code' subdirs
-        "APIAgent": "code",  # API agent uses 'code' subdirs
-        "ModeratorAgent": "code",  # Moderator uses 'code' subdirs
-        "WebSearchAgent": "code",  # Web search uses 'code' subdirs
-        "YouTubeDownloadAgent": "media",  # YouTube uses 'media' subdirs
+        "KnowledgeBaseAgent": "code",
+        "AssistantAgent": "code",
+        "ModeratorAgent": "code",
+        "WebSearchAgent": "code",
     }
 
     return agent_type_mapping.get(agent_name, "code")  # Default to 'code'

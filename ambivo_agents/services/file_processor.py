@@ -71,8 +71,11 @@ except ImportError:
 
 
 class FileProcessorService:
-    """
-    Service for processing various file types and converting them to indexable documents
+    """Service for processing various file types into LlamaIndex Document objects.
+
+    Supports spreadsheets (xlsx, csv), documents (docx, pdf, txt), presentations
+    (pptx), data formats (json, jsonl, xml), images, and code files. Routes each
+    file type to a specialized processor and falls back to SimpleDirectoryReader.
     """
 
     def __init__(self):
@@ -289,7 +292,7 @@ class FileProcessorService:
             return self._process_csv_basic(file_path)
 
     def _process_csv_basic(self, file_path: str) -> List[LIDoc]:
-        """Basic CSV processing without pandas"""
+        """Fallback CSV processing using stdlib csv module when pandas is unavailable."""
         try:
             import csv
 
@@ -332,7 +335,7 @@ class FileProcessorService:
         return []
 
     def _generate_csv_analysis(self, df, file_path: str, encoding: str) -> str:
-        """Generate comprehensive CSV analysis text"""
+        """Generate a text summary of a pandas DataFrame including column stats and sample data."""
         analysis = f"CSV File Analysis:\n"
         analysis += f"File: {os.path.basename(file_path)}\n"
         analysis += f"Encoding: {encoding}\n"
@@ -391,7 +394,7 @@ class FileProcessorService:
         return []
 
     def _process_json_data(self, data: Any, file_path: str) -> List[LIDoc]:
-        """Process JSON data structure and convert to searchable documents"""
+        """Convert parsed JSON data (list, dict, or primitive) into searchable Document objects."""
         try:
             documents = []
 
@@ -450,7 +453,7 @@ class FileProcessorService:
         return []
 
     def _analyze_json_array(self, data: List[Dict]) -> str:
-        """Analyze array of JSON objects for insights"""
+        """Generate a text analysis of field types, unique counts, and sample values from a JSON array."""
         if not data:
             return "Empty dataset"
 
@@ -478,7 +481,7 @@ class FileProcessorService:
         return analysis
 
     def _format_json_record(self, record: Dict) -> str:
-        """Format a JSON record as searchable text"""
+        """Format a single JSON record dict as human-readable key-value text."""
         if not isinstance(record, dict):
             return str(record)
 
@@ -551,7 +554,7 @@ class FileProcessorService:
         return []
 
     def _extract_text_with_pypdf(self, pdf_path: str) -> str:
-        """Extract text using PyPDF"""
+        """Extract concatenated page text from a PDF using pypdf."""
         try:
             text = ""
             with open(pdf_path, "rb") as file:
@@ -566,7 +569,7 @@ class FileProcessorService:
             return ""
 
     def _is_text_readable(self, text: str) -> bool:
-        """Check if extracted text is readable"""
+        """Return True if more than 80% of characters are printable or whitespace."""
         if not text:
             return False
 

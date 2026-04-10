@@ -7,8 +7,8 @@ Demonstrates proper memory retention, context preservation, and system messages
 import asyncio
 from datetime import datetime
 from ambivo_agents import (
-    KnowledgeBaseAgent, WebSearchAgent, YouTubeDownloadAgent,
-    ModeratorAgent, AssistantAgent, CodeExecutorAgent
+    KnowledgeBaseAgent, WebSearchAgent,
+    ModeratorAgent, AssistantAgent
 )
 
 
@@ -135,29 +135,6 @@ async def specialized_agent_examples():
 
     except Exception as e:
         print(f"   [WARN]Search error handled: {e}")
-
-    finally:
-        await agent.cleanup_session()
-
-    # [OK] YouTube with safe testing
-    print("\nYouTube Example:")
-    agent, context = YouTubeDownloadAgent.create(
-        user_id="downloader",
-        system_message="You are a media assistant. Always respect copyright and suggest legal alternatives."
-    )
-
-    try:
-        # [OK] Safe info retrieval (no actual download)
-        test_url = "https://www.youtube.com/watch?v=C0DPdy98e4c"  # Big Buck Bunny (public domain)
-        result = await agent._get_youtube_info(test_url)
-
-        if result['success']:
-            video_info = result['video_info']
-            print(f"   [OK] Video info retrieved: {video_info.get('title', 'Unknown')[:50]}...")
-            print(f"   Duration: {video_info.get('duration', 'Unknown')} seconds")
-
-    except Exception as e:
-        print(f"   [WARN]YouTube error handled: {e}")
 
     finally:
         await agent.cleanup_session()

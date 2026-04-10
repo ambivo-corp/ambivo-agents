@@ -805,12 +805,12 @@ class WorkflowFactory:
 async def quick_start_example():
     """Example showing how third-party developers can quickly create workflows"""
 
-    from ambivo_agents import AssistantAgent, DatabaseAgent
+    from ambivo_agents import AssistantAgent
 
     # 1. Create your agents
     realtor = AssistantAgent.create_simple(user_id="realtor")
     renter = AssistantAgent.create_simple(user_id="renter")
-    database = DatabaseAgent.create_simple(user_id="property_db")
+    database = AssistantAgent.create_simple(user_id="property_db")
 
     # 2. Create orchestrator
     orchestrator = ConversationOrchestrator()

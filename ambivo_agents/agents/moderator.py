@@ -85,16 +85,11 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     AVAILABLE AGENT TYPES AND SPECIALIZATIONS:
     - assistant: General conversation, questions, explanations, help, follow-up discussions
-    - code_executor: Writing and executing Python/bash code, programming tasks, debugging
     - web_search: Finding information online, research queries, current events, fact-checking
     - knowledge_base: Document storage, retrieval, semantic search, document ingestion
-    - knowledge_synthesis: Multi-source information synthesis for comprehensive answers when query doesn't clearly fit single agent
-    - media_editor: Video/audio processing and conversion using FFmpeg tools
-    - youtube_download: Downloading content from YouTube (video/audio formats)
-    - web_scraper: Extracting data from websites and web crawling operations
-    - api_agent: Making HTTP/REST API calls with authentication, retries, and security features
-    - analytics: Data analysis with DuckDB, CSV/Excel ingestion, SQL queries, chart generation
-    - database_agent: Database operations with MongoDB, MySQL, PostgreSQL connections and safe query execution
+    - knowledge_synthesis: Multi-source information synthesis for comprehensive answers
+    - web_scraper: Extracting content from websites using scraping APIs
+    - gather_agent: Conversational form filling with conditional logic and validation
 
     ROUTING PRINCIPLES:
     - Choose the most appropriate agent based on user's specific needs and conversation context
@@ -167,36 +162,21 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
 
     def _get_default_enabled_agents(self) -> List[str]:
         """Get default enabled agents from configuration - Always includes assistant"""
-        # Check moderator config first
         if "default_enabled_agents" in self.moderator_config:
             enabled = self.moderator_config["default_enabled_agents"].copy()
         else:
-            # Build from capabilities config
             enabled = []
 
             if self.capabilities.get("enable_knowledge_base", False):
                 enabled.append("knowledge_base")
-            # Knowledge synthesis is always enabled by default
             enabled.append("knowledge_synthesis")
             if self.capabilities.get("enable_web_search", False):
                 enabled.append("web_search")
-            if self.capabilities.get("enable_code_execution", False):
-                enabled.append("code_executor")
-            if self.capabilities.get("enable_media_editor", False):
-                enabled.append("media_editor")
-            if self.capabilities.get("enable_youtube_download", False):
-                enabled.append("youtube_download")
             if self.capabilities.get("enable_web_scraping", False):
                 enabled.append("web_scraper")
-            if self.capabilities.get("enable_analytics", False):
-                enabled.append("analytics")
-            if self.capabilities.get("enable_database_agent", False):
-                enabled.append("database_agent")
 
-        # CRITICAL: Always ensure assistant is included
         if "assistant" not in enabled:
             enabled.append("assistant")
-            self.logger.info("Assistant agent added to enabled agents list")
 
         self.logger.info(f"Enabled agents: {enabled}")
         return enabled
@@ -206,22 +186,15 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         if agent_type in self.enabled_agents:
             return True
 
-        # Double-check against capabilities config
+        if agent_type == "assistant":
+            return True
+
         capability_map = {
             "knowledge_base": "enable_knowledge_base",
             "knowledge_synthesis": "enable_knowledge_synthesis",
             "web_search": "enable_web_search",
-            "code_executor": "enable_code_execution",
-            "media_editor": "enable_media_editor",
-            "youtube_download": "enable_youtube_download",
             "web_scraper": "enable_web_scraping",
-            "analytics": "enable_analytics",
-            "database_agent": "enable_database_agent",
-            "assistant": True, # Always enabled
         }
-
-        if agent_type == "assistant":
-            return True
 
         capability_key = capability_map.get(agent_type)
         if capability_key and isinstance(capability_key, str):
@@ -230,132 +203,28 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         return False
 
     def _initialize_specialized_agents(self):
-        """Initialize specialized agents with SHARED memory and context - COMPLETE VERSION"""
+        """Initialize specialized agents with SHARED memory and context"""
 
-        # Try importing all agents
+        # Import available agents
+        from .assistant import AssistantAgent
+        from .knowledge_base import KnowledgeBaseAgent
+        from .knowledge_synthesis import KnowledgeSynthesisAgent
+        from .web_scraper import WebScraperAgent
+        from .web_search import WebSearchAgent
+
+        GatherAgent = None
         try:
-            from . import (
-                AnalyticsAgent,
-                APIAgent,
-                AssistantAgent,
-                CodeExecutorAgent,
-                KnowledgeBaseAgent,
-                KnowledgeSynthesisAgent,
-                MediaEditorAgent,
-                WebScraperAgent,
-                WebSearchAgent,
-                YouTubeDownloadAgent,
-            )
-
-            # Import DatabaseAgent separately due to optional dependencies
-            try:
-                from .database_agent import DatabaseAgent
-            except ImportError:
-                DatabaseAgent = None
-
-            self.logger.info("Successfully imported all agent classes")
-        except ImportError as e:
-            self.logger.warning(f"Bulk import failed: {e}, trying individual imports")
-
-            # Individual imports with fallbacks
-            agent_imports = {}
-
-            # Try importing each agent individually
-            for agent_type, module_path in [
-                ("assistant", ".assistant"),
-                ("knowledge_base", ".knowledge_base"),
-                ("knowledge_synthesis", ".knowledge_synthesis"),
-                ("web_search", ".web_search"),
-                ("code_executor", ".code_executor"),
-                ("media_editor", ".media_editor"),
-                ("youtube_download", ".youtube_download"),
-                ("web_scraper", ".web_scraper"),
-                ("api_agent", ".api_agent"),
-                ("analytics", ".analytics"),
-                ("database_agent", ".database_agent"),
-            ]:
-                try:
-                    if agent_type == "assistant":
-                        from .assistant import AssistantAgent
-
-                        agent_imports["assistant"] = AssistantAgent
-                    elif agent_type == "knowledge_base":
-                        from .knowledge_base import KnowledgeBaseAgent
-
-                        agent_imports["knowledge_base"] = KnowledgeBaseAgent
-                    elif agent_type == "knowledge_synthesis":
-                        from .knowledge_synthesis import KnowledgeSynthesisAgent
-
-                        agent_imports["knowledge_synthesis"] = KnowledgeSynthesisAgent
-                    elif agent_type == "web_search":
-                        from .web_search import WebSearchAgent
-
-                        agent_imports["web_search"] = WebSearchAgent
-                    elif agent_type == "code_executor":
-                        from .code_executor import CodeExecutorAgent
-
-                        agent_imports["code_executor"] = CodeExecutorAgent
-                    elif agent_type == "media_editor":
-                        from .media_editor import MediaEditorAgent
-
-                        agent_imports["media_editor"] = MediaEditorAgent
-                    elif agent_type == "youtube_download":
-                        from .youtube_download import YouTubeDownloadAgent
-
-                        agent_imports["youtube_download"] = YouTubeDownloadAgent
-                    elif agent_type == "web_scraper":
-                        from .web_scraper import WebScraperAgent
-
-                        agent_imports["web_scraper"] = WebScraperAgent
-                    elif agent_type == "api_agent":
-                        from .api_agent import APIAgent
-
-                        agent_imports["api_agent"] = APIAgent
-                    elif agent_type == "analytics":
-                        from .analytics import AnalyticsAgent
-
-                        agent_imports["analytics"] = AnalyticsAgent
-                    elif agent_type == "database_agent":
-                        from .database_agent import DatabaseAgent
-
-                        agent_imports["database_agent"] = DatabaseAgent
-
-                    self.logger.info(f"Imported {agent_type}")
-                except ImportError as import_error:
-                    self.logger.warning(f"Failed to import {agent_type}: {import_error}")
-                    agent_imports[agent_type] = None
-
-            # Use the imported classes
-            AssistantAgent = agent_imports.get("assistant")
-            KnowledgeBaseAgent = agent_imports.get("knowledge_base")
-            KnowledgeSynthesisAgent = agent_imports.get("knowledge_synthesis")
-            WebSearchAgent = agent_imports.get("web_search")
-            CodeExecutorAgent = agent_imports.get("code_executor")
-            MediaEditorAgent = agent_imports.get("media_editor")
-            YouTubeDownloadAgent = agent_imports.get("youtube_download")
-            WebScraperAgent = agent_imports.get("web_scraper")
-            APIAgent = agent_imports.get("api_agent")
-            AnalyticsAgent = agent_imports.get("analytics")
-            DatabaseAgent = agent_imports.get("database_agent")
-
-        # CRITICAL: Ensure AssistantAgent is available
-        if not AssistantAgent:
-            self.logger.error("CRITICAL: AssistantAgent not available")
-            AssistantAgent = self._create_fallback_assistant_agent()
-            self.logger.warning("Created fallback AssistantAgent")
+            from .gather_agent import GatherAgent
+        except ImportError:
+            self.logger.debug("GatherAgent not available")
 
         agent_classes = {
             "knowledge_base": KnowledgeBaseAgent,
             "knowledge_synthesis": KnowledgeSynthesisAgent,
             "web_search": WebSearchAgent,
-            "code_executor": CodeExecutorAgent,
-            "media_editor": MediaEditorAgent,
-            "youtube_download": YouTubeDownloadAgent,
             "web_scraper": WebScraperAgent,
-            "api_agent": APIAgent,
-            "analytics": AnalyticsAgent,
-            "database_agent": DatabaseAgent,
-            "assistant": AssistantAgent, # This should never be None now
+            "gather_agent": GatherAgent,
+            "assistant": AssistantAgent,
         }
 
         # Initialize agents with SHARED context and memory
@@ -497,90 +366,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     def _setup_routing_patterns(self):
         """Setup intelligent routing patterns for different query types"""
         self.agent_routing_patterns = {
-            "code_executor": {
-                "keywords": [
-                    "run code",
-                    "execute python",
-                    "run script",
-                    "code execution",
-                    "write code",
-                    "create code",
-                    "python code",
-                    "bash script",
-                    "write a script",
-                    "code to",
-                    "program to",
-                    "function to",
-                    "show code",
-                    "that code",
-                    "the code",
-                    "previous code",
-                    "code again",
-                    "show me that",
-                    "display code",
-                    "see code",
-                ],
-                "patterns": [
-                    r"(?:run|execute|write|create|show)\s+(?:code|script|python|program)",
-                    r"code\s+to\s+\w+",
-                    r"write.*(?:function|script|program)",
-                    r"```(?:python|bash)",
-                    r"can\s+you\s+(?:write|create).*code",
-                    r"(?:show|display|see)\s+(?:me\s+)?(?:that\s+|the\s+)?code",
-                    r"code\s+again",
-                    r"(?:previous|last|that)\s+code",
-                ],
-                "indicators": [
-                    "```",
-                    "def ",
-                    "import ",
-                    "python",
-                    "bash",
-                    "function",
-                    "script",
-                    "code",
-                ],
-                "priority": 1,
-            },
-            "youtube_download": {
-                "keywords": [
-                    "download youtube",
-                    "youtube video",
-                    "download video",
-                    "get from youtube",
-                    "youtube.com",
-                    "youtu.be",
-                ],
-                "patterns": [
-                    r"download\s+(?:from\s+)?youtube",
-                    r"youtube\.com/watch",
-                    r"youtu\.be/",
-                    r"get\s+(?:video|audio)\s+from\s+youtube",
-                ],
-                "indicators": ["youtube.com", "youtu.be", "download video", "download audio"],
-                "priority": 1,
-            },
-            "media_editor": {
-                "keywords": [
-                    "convert video",
-                    "edit media",
-                    "extract audio",
-                    "resize video",
-                    "media processing",
-                    "ffmpeg",
-                    "video format",
-                    "audio format",
-                ],
-                "patterns": [
-                    r"convert\s+(?:video|audio)",
-                    r"extract\s+audio",
-                    r"resize\s+video",
-                    r"trim\s+(?:video|audio)",
-                    r"media\s+(?:processing|editing)",
-                ],
-                "indicators": [".mp4", ".avi", ".mp3", ".wav", "video", "audio"],
-                "priority": 1,
-            },
             "knowledge_base": {
                 "keywords": [
                     "search knowledge",
@@ -663,178 +448,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 "indicators": ["scrape", "crawl", "extract data", "website"],
                 "priority": 2,
             },
-            "api_agent": {
-                "keywords": [
-                    "api call",
-                    "make request",
-                    "http request",
-                    "rest api",
-                    "api endpoint",
-                    "post request",
-                    "get request",
-                    "patch request",
-                    "delete request",
-                    "put request",
-                    "call api",
-                    "invoke api",
-                    "api test",
-                    "test endpoint",
-                    "curl request",
-                    "authenticate",
-                    "bearer token",
-                    "api key",
-                    "oauth",
-                    "webhook",
-                    "send post",
-                    "make get",
-                    "api integration",
-                    "http method",
-                ],
-                "patterns": [
-                    r"(?:make|send|call)\s+(?:api|http|rest)\s+(?:call|request)",
-                    r"(?:get|post|put|patch|delete)\s+(?:request\s+)?(?:to|from|https?://)",
-                    r"api\s+(?:call|request|endpoint)",
-                    r"test\s+(?:api|endpoint)",
-                    r"http\s+(?:get|post|put|patch|delete)",
-                    r"rest\s+api",
-                    r"invoke\s+(?:api|endpoint)",
-                    r"curl\s+request",
-                    r"(?:get|post|put|patch|delete)\s+https?://",
-                    r"authenticate.*(?:api|oauth|bearer)",
-                    r"(?:bearer|api\s+key|oauth).*(?:token|auth)",
-                    r"webhook.*(?:call|send|invoke)",
-                ],
-                "indicators": [
-                    "api",
-                    "http",
-                    "rest",
-                    "endpoint",
-                    "curl",
-                    "json",
-                    "authorization",
-                    "bearer",
-                    "https://",
-                    "http://",
-                    "GET",
-                    "POST",
-                    "PUT",
-                    "PATCH",
-                    "DELETE",
-                    "oauth",
-                    "webhook",
-                    "token",
-                    "auth",
-                ],
-                "priority": 1,
-            },
-            "database_agent": {
-                "keywords": [
-                    "database",
-                    "sql query",
-                    "mongodb",
-                    "mysql",
-                    "postgresql",
-                    "connect database",
-                    "table schema",
-                    "show tables",
-                    "database connection",
-                    "select from",
-                    "count rows",
-                    "describe table",
-                    "database query",
-                    "sql statement",
-                    "query database",
-                    "database operations",
-                    "run sql",
-                    "execute query",
-                    "database info",
-                    "table structure",
-                    "database schema",
-                    "db connection",
-                    "data query",
-                    "sql select",
-                    # File ingestion keywords
-                    "ingest file",
-                    "ingest json",
-                    "ingest csv",
-                    "load file to mongodb",
-                    "import file to database",
-                    "insert file",
-                    "load csv to mongodb",
-                    "load json to mongodb",
-                    "file to database",
-                    "import data",
-                    # Academic data queries that need database access first
-                    "faculty data",
-                    "faculty members",
-                    "faculty distribution",
-                    "researchers",
-                    "publication data",
-                    "publication venues",
-                    "top researchers",
-                    "research profiles",
-                    "academic data",
-                    "university data",
-                    "professor data",
-                    "citation data",
-                    "h-index",
-                    "research interest",
-                ],
-                "patterns": [
-                    r"(?:connect|connection)\s+(?:to\s+)?(?:database|db|mongodb|mysql|postgresql)",
-                    r"(?:sql|database)\s+(?:query|statement|select)",
-                    r"(?:select|count|show|describe)\s+(?:from\s+|tables?|rows?|schema)",
-                    r"(?:mongodb|mysql|postgresql|database)\s+(?:connection|query|operations)",
-                    r"(?:run|execute)\s+(?:sql|query|database)",
-                    r"(?:table|database)\s+(?:schema|structure|info)",
-                    r"(?:show|list)\s+tables?",
-                    r"describe\s+table",
-                    r"count\s+rows?",
-                    r"database\s+(?:info|operations|management)",
-                    # File ingestion patterns - only for explicit database mentions
-                    r"(?:ingest|import|load)\s+.*\.(?:json|csv)\s+(?:into|to)\s+(?:mongodb|database|collection)",
-                    r"(?:read|load|import)\s+(?:file|data)\s+(?:to|into)\s+(?:mongodb|database|collection)",
-                    r"(?:insert|add)\s+(?:file|json|csv)\s+(?:to|into)\s+(?:mongodb|database)",
-                    r"(?:file|csv|json)\s+(?:to|into)\s+mongodb",
-                    r"(?:ingest|load)\s+.*\.(?:json|csv)\s+(?:into|to)\s+database",
-                    # Academic query patterns that should go to database first
-                    r"(?:faculty|researcher|professor)\s+(?:data|members|distribution|profiles)",
-                    r"(?:publication|research)\s+(?:data|venues|trends|analysis)",
-                    r"(?:top|best)\s+(?:researchers|faculty|professors)",
-                    r"(?:find|get|show|query)\s+(?:faculty|publication|university)\s+(?:data|members|information)",
-                    r"(?:academic|university|research)\s+(?:data|database|information)",
-                    r"h-index|citation\s+(?:data|analysis)",
-                ],
-                "indicators": [
-                    "database",
-                    "sql",
-                    "mongodb",
-                    "mysql",
-                    "postgresql",
-                    "table",
-                    "schema",
-                    "query",
-                    "select",
-                    "connect",
-                    "connection",
-                    "db",
-                    # File ingestion indicators
-                    "ingest",
-                    "import",
-                    ".json",
-                    ".csv",
-                    "load file",
-                    "insert file",
-                    # Academic data indicators
-                    "faculty",
-                    "researchers",
-                    "publications",
-                    "academic",
-                    "university",
-                    "research",
-                ],
-                "priority": 2, # Higher priority for academic data queries
-            },
             "assistant": {
                 "keywords": [
                     "help",
@@ -868,28 +481,15 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         """
         msg = user_message.lower()
 
-        # YouTube download: message contains a YouTube URL + download intent
-        has_yt_url = "youtube.com/watch" in msg or "youtu.be/" in msg
-        has_download_word = any(w in msg for w in ["download", "get video", "get audio", "save video", "save audio"])
-        if has_yt_url and has_download_word and "youtube_download" in self.specialized_agents:
+        # Scraping: message contains "scrape" + URL
+        if "scrape" in msg and ("http://" in msg or "https://" in msg) and "web_scraper" in self.specialized_agents:
             return {
-                "primary_agent": "youtube_download",
-                "confidence": 0.98,
-                "requires_multiple_agents": False,
-                "workflow_detected": False,
-                "is_follow_up": False,
-                "reasoning": "Fast-path: YouTube URL with explicit download intent",
-            }
-
-        # YouTube download: bare YouTube URL with no other context
-        if has_yt_url and len(msg.split()) <= 3 and "youtube_download" in self.specialized_agents:
-            return {
-                "primary_agent": "youtube_download",
+                "primary_agent": "web_scraper",
                 "confidence": 0.95,
                 "requires_multiple_agents": False,
                 "workflow_detected": False,
                 "is_follow_up": False,
-                "reasoning": "Fast-path: bare YouTube URL likely means download",
+                "reasoning": "Fast-path: explicit scrape request with URL",
             }
 
         return None
@@ -931,41 +531,18 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         # Build available agents list dynamically
         available_agents_list = list(self.specialized_agents.keys())
         available_agents_desc = []
+        agent_descriptions = {
+            "knowledge_base": "- knowledge_base: Document ingestion, semantic search, storage",
+            "knowledge_synthesis": "- knowledge_synthesis: Multi-source research synthesis with quality assessment",
+            "web_search": "- web_search: Web searches, finding information online",
+            "web_scraper": "- web_scraper: Website content extraction via scraping APIs",
+            "gather_agent": "- gather_agent: Conversational form filling with conditional logic",
+            "assistant": "- assistant: General conversation, explanations",
+        }
         for agent_type in available_agents_list:
-            if agent_type == "code_executor":
-                available_agents_desc.append(
-                    "- code_executor: Code writing, execution, debugging, programming tasks"
-                )
-            elif agent_type == "youtube_download":
-                available_agents_desc.append("- youtube_download: YouTube video/audio downloads")
-            elif agent_type == "media_editor":
-                available_agents_desc.append(
-                    "- media_editor: FFmpeg media processing, video/audio conversion"
-                )
-            elif agent_type == "knowledge_base":
-                available_agents_desc.append(
-                    "- knowledge_base: Document ingestion, semantic search, storage"
-                )
-            elif agent_type == "web_search":
-                available_agents_desc.append(
-                    "- web_search: Web searches, finding information online"
-                )
-            elif agent_type == "web_scraper":
-                available_agents_desc.append("- web_scraper: Website data extraction, crawling")
-            elif agent_type == "api_agent":
-                available_agents_desc.append(
-                    "- api_agent: HTTP/REST API calls, authentication, API integration"
-                )
-            elif agent_type == "analytics":
-                available_agents_desc.append(
-                    "- analytics: Data analysis, CSV/Excel files, SQL queries, charts"
-                )
-            elif agent_type == "database_agent":
-                available_agents_desc.append(
-                    "- database_agent: Database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, academic data queries, file ingestion (JSON/CSV to MongoDB)"
-                )
-            elif agent_type == "assistant":
-                available_agents_desc.append("- assistant: General conversation, explanations")
+            desc = agent_descriptions.get(agent_type)
+            if desc:
+                available_agents_desc.append(desc)
 
         # Enhanced system message for intent analysis
         analysis_system_message = f"""
@@ -1001,16 +578,11 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         6. API integration tasks (authentication, REST calls, webhooks)
 
         ROUTING GUIDELINES:
-        - Route to api_agent for: HTTP method calls (GET/POST/PUT/DELETE), API endpoints, REST API requests, webhook calls, authentication requests, API integration tasks
-        - Route to database_agent for: database connections, SQL queries, MongoDB/MySQL/PostgreSQL operations, table schemas, database operations, academic data queries (faculty, publications, researchers, universities) even when analysis is requested, file ingestion specifically to database/MongoDB (only when "database" or "mongodb" is explicitly mentioned)
         - Route to web_search for: "search", "find information", "look up", research queries
-        - Route to youtube_download for: YouTube URLs, video/audio downloads
-        - Route to media_editor for: video/audio processing, conversion, editing
-        - Route to knowledge_base for: document storage, semantic search, Q&A, file ingestion to knowledge base (when "knowledge base", "knowledgebase", or "kb" is mentioned)
-        - Route to knowledge_synthesis for: queries that don't clearly fit a single agent, need comprehensive multi-source answers, or require synthesis of information
-        - Route to web_scraper for: data extraction, crawling websites
-        - Route to analytics for: CSV/Excel files, data analysis, SQL queries, charts, DuckDB, statistics
-        - Route to code_executor for: code execution, programming tasks
+        - Route to knowledge_base for: document storage, semantic search, Q&A, file ingestion to knowledge base
+        - Route to knowledge_synthesis for: queries needing comprehensive multi-source answers or synthesis
+        - Route to web_scraper for: data extraction from websites, crawling
+        - Route to gather_agent for: form filling, questionnaires, data collection
         - Route to assistant for: general conversation, explanations
 
         IMPORTANT: Only suggest agents that are actually available in this session.
@@ -1147,17 +719,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         ]
 
         # Check for obvious patterns first
-        if self._is_obvious_code_request(user_message):
-            if "code_executor" in self.specialized_agents:
-                return {
-                    "primary_agent": "code_executor",
-                    "confidence": 0.95,
-                    "requires_multiple_agents": False,
-                    "workflow_detected": False,
-                    "is_follow_up": False,
-                    "reasoning": "Forced routing to code_executor for obvious code request",
-                }
-
         if self._is_obvious_search_request(user_message):
             if "web_search" in self.specialized_agents:
                 return {
@@ -1217,30 +778,11 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             return None
 
         # Get scores for relevant agents
-        db_score = agent_scores.get("database_agent", 0)
         kb_score = agent_scores.get("knowledge_base", 0)
 
-        # Check for ambiguous cases where scores are close or both are viable
-        if db_score > 0 and kb_score > 0:
-            score_diff = abs(db_score - kb_score)
-
-            # If scores are very close (within 3 points), ask for clarification
-            if score_diff <= 3:
-                return {
-                    "primary_agent": "assistant",
-                    "confidence": 0.9,
-                    "requires_multiple_agents": False,
-                    "workflow_detected": False,
-                    "is_follow_up": False,
-                    "agent_scores": agent_scores,
-                    "reasoning": "Ingestion destination ambiguous - requesting clarification",
-                    "clarification_request": {
-                        "type": "ingestion_destination",
-                        "message": self._generate_ingestion_clarification(
-                            message, db_score, kb_score
-                        ),
-                    },
-                }
+        # If knowledge base score is high, route there
+        if kb_score > 0:
+            return None  # Let normal routing handle it
 
         # Check for ambiguous ingestion without clear destination
         ambiguous_patterns = [

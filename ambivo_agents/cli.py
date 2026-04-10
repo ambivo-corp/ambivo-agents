@@ -28,30 +28,20 @@ import yaml
 
 # Import agents directly using clean imports
 from ambivo_agents import (
-    AnalyticsAgent,
-    APIAgent,
     AssistantAgent,
-    CodeExecutorAgent,
     KnowledgeBaseAgent,
-    MediaEditorAgent,
     WebScraperAgent,
     WebSearchAgent,
-    YouTubeDownloadAgent,
 )
 
-# Import DatabaseAgent with error handling for optional dependency
-try:
-    from ambivo_agents import DatabaseAgent
-
-    DATABASE_AGENT_AVAILABLE = True
-except ImportError:
-    try:
-        from ambivo_agents.agents.database_agent import DatabaseAgent
-
-        DATABASE_AGENT_AVAILABLE = True
-    except ImportError:
-        DATABASE_AGENT_AVAILABLE = False
-        DatabaseAgent = None
+# Legacy agent stubs - removed from core
+AnalyticsAgent = None
+APIAgent = None
+CodeExecutorAgent = None
+DatabaseAgent = None
+MediaEditorAgent = None
+YouTubeDownloadAgent = None
+DATABASE_AGENT_AVAILABLE = False
 
 # Import AgentSession with fallback
 try:
@@ -817,181 +807,8 @@ class AmbivoAgentsCLI:
         """Built-in routing logic using cached agents with intent detection"""
         message_lower = message.lower()
 
-        # CodeExecutorAgent - enabled by default when Docker is available unless explicitly disabled
-        if self._detect_code_execution_request(message):
-            code_executor_enabled = self.config.get(
-                "agents.code_executor.enabled", DOCKER_AVAILABLE
-            )
-            if code_executor_enabled:
-                # ROUTE TO CODE EXECUTOR AGENT
-                agent, context = await self.get_or_create_agent(
-                    CodeExecutorAgent, session_id, {"operation": "code_execution"}
-                )
-
-                try:
-                    # Let CodeExecutorAgent handle both writing AND executing
-                    from ambivo_agents.core.base import AgentMessage, MessageType
-
-                    agent_message = AgentMessage(
-                        id=f"msg_{str(uuid.uuid4())[:8]}",
-                        sender_id="cli_user",
-                        recipient_id=agent.agent_id,
-                        content=message,
-                        message_type=MessageType.USER_INPUT,
-                        session_id=context.session_id,
-                        conversation_id=context.conversation_id,
-                    )
-
-                    response_message = await agent.process_message(
-                        agent_message, context.to_execution_context()
-                    )
-                    return f"{response_message.content}\n\n*Processed by CodeExecutorAgent with code execution capabilities*"
-
-                except Exception as e:
-                    return f"Error in code execution: {str(e)}"
-            else:
-                return "CodeExecutorAgent is disabled. Enable it by setting AMBIVO_AGENTS_CODE_EXECUTOR_ENABLED=true or ensure Docker is available."
-
-        # API Agent Detection - for API calls and documentation parsing
-        elif self._detect_api_request(message):
-            # ROUTE TO API AGENT
-            agent, context = await self.get_or_create_agent(
-                APIAgent, session_id, {"operation": "api_request"}
-            )
-
-            try:
-                from ambivo_agents.core.base import AgentMessage, MessageType
-
-                agent_message = AgentMessage(
-                    id=f"msg_{str(uuid.uuid4())[:8]}",
-                    sender_id="cli_user",
-                    recipient_id=agent.agent_id,
-                    content=message,
-                    message_type=MessageType.USER_INPUT,
-                    session_id=context.session_id,
-                    conversation_id=context.conversation_id,
-                )
-
-                response_message = await agent.process_message(
-                    agent_message, context.to_execution_context()
-                )
-                return f"{response_message.content}\n\n*Processed by APIAgent with intelligent documentation parsing*"
-
-            except Exception as e:
-                return f"Error in API request: {str(e)}"
-
-        # AnalyticsAgent Detection - enabled by default when Docker is available unless explicitly disabled
-        elif self._detect_analytics_request(message):
-            analytics_enabled = self.config.get("agents.analytics.enabled", DOCKER_AVAILABLE)
-            if analytics_enabled:
-                # ROUTE TO ANALYTICS AGENT
-                agent, context = await self.get_or_create_agent(
-                    AnalyticsAgent, session_id, {"operation": "data_analysis"}
-                )
-
-                try:
-                    from ambivo_agents.core.base import AgentMessage, MessageType
-
-                    agent_message = AgentMessage(
-                        id=f"msg_{str(uuid.uuid4())[:8]}",
-                        sender_id="cli_user",
-                        recipient_id=agent.agent_id,
-                        content=message,
-                        message_type=MessageType.USER_INPUT,
-                        session_id=context.session_id,
-                        conversation_id=context.conversation_id,
-                    )
-
-                    response_message = await agent.process_message(
-                        agent_message, context.to_execution_context()
-                    )
-                    return f"{response_message.content}\n\n*Processed by AnalyticsAgent with DuckDB and Docker execution*"
-
-                except Exception as e:
-                    return f"Error in data analysis: {str(e)}"
-            else:
-                return "AnalyticsAgent is disabled. Enable it by setting AMBIVO_AGENTS_ANALYTICS_ENABLED=true or ensure Docker is available."
-
-        # Database Agent Detection - for database operations and queries
-        elif self._detect_database_request(message) and DATABASE_AGENT_AVAILABLE:
-            # ROUTE TO DATABASE AGENT
-            agent, context = await self.get_or_create_agent(
-                DatabaseAgent, session_id, {"operation": "database_operations"}
-            )
-
-            try:
-                from ambivo_agents.core.base import AgentMessage, MessageType
-
-                agent_message = AgentMessage(
-                    id=f"msg_{str(uuid.uuid4())[:8]}",
-                    sender_id="cli_user",
-                    recipient_id=agent.agent_id,
-                    content=message,
-                    message_type=MessageType.USER_INPUT,
-                    session_id=context.session_id,
-                    conversation_id=context.conversation_id,
-                )
-
-                response_message = await agent.process_message(
-                    agent_message, context.to_execution_context()
-                )
-                return f"{response_message.content}\n\n*Processed by DatabaseAgent with secure query execution*"
-
-            except Exception as e:
-                return f"Error in database operation: {str(e)}"
-
-        # YouTube Download Detection - enabled by default when Docker is available unless explicitly disabled
-        elif any(keyword in message_lower for keyword in ["youtube", "download", "youtu.be"]) and (
-            "http" in message or "www." in message
-        ):
-            youtube_enabled = self.config.get("agents.youtube_download.enabled", DOCKER_AVAILABLE)
-            if youtube_enabled:
-                # REUSE CACHED YOUTUBE AGENT - Preserves download history
-                agent, context = await self.get_or_create_agent(
-                    YouTubeDownloadAgent, session_id, {"operation": "youtube_download"}
-                )
-
-                try:
-                    youtube_patterns = [
-                        r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
-                        r"https?://(?:www\.)?youtu\.be/[\w-]+",
-                    ]
-
-                    urls = []
-                    for pattern in youtube_patterns:
-                        urls.extend(re.findall(pattern, message))
-
-                    if urls:
-                        url = urls[0]
-                        default_audio_only = self.config.get(
-                            "agents.youtube.default_audio_only", True
-                        )
-                        wants_video = any(
-                            keyword in message_lower
-                            for keyword in ["video", "mp4", "watch", "visual"]
-                        )
-                        audio_only = default_audio_only if not wants_video else False
-
-                        if "info" in message_lower or "information" in message_lower:
-                            result = await agent._get_youtube_info(url)
-                        else:
-                            result = await agent._download_youtube(url, audio_only=audio_only)
-
-                        # AGENT STAYS CACHED - No cleanup_session() call
-                        if result["success"]:
-                            return f"YouTube operation completed!\n{result.get('message', '')}\nSession: {context.session_id}\nAgent: {agent.agent_id}\nAgent cached for future use"
-                        else:
-                            return f"YouTube operation failed: {result['error']}"
-                    else:
-                        return "No valid YouTube URLs found in message"
-
-                except Exception as e:
-                    return f"YouTube operation error: {e}"
-            else:
-                return "YouTubeDownloadAgent is disabled. Enable it by setting AMBIVO_AGENTS_YOUTUBE_DOWNLOAD_ENABLED=true or ensure Docker is available."
-
-        # General Assistant (fallback)
-        else:
+        # General Assistant — handles all requests via ModeratorAgent routing
+        if True:
             # REUSE CACHED ASSISTANT AGENT - Preserves full conversation history
             agent, context = await self.get_or_create_agent(
                 AssistantAgent, session_id, {"operation": "general_assistance"}
@@ -1698,58 +1515,7 @@ def api(request: str, token: str, timeout: int, stream: bool):
     - ambivo-agents api "POST https://api.example.com/users" --stream
     """
     async def run_api_request():
-        try:
-            if not cli_instance:
-                initialize_cli()
-
-            # Get or create API agent
-            session_id = cli_instance.get_current_session()
-            agent, context = await cli_instance.get_or_create_agent(
-                APIAgent, session_id, {"operation": "cli_api_request"}
-            )
-
-            # Add token to request if provided
-            if token:
-                request_with_token = f"{request} with token {token}"
-            else:
-                request_with_token = request
-
-            # Add timeout if different from default
-            if timeout != 30:
-                request_with_token += f" with timeout {timeout} seconds"
-
-            if stream:
-                # Streaming response
-                click.echo("API Agent - Streaming Response:")
-                click.echo("=" * 50)
-
-                async for chunk in agent.chat_stream(request_with_token):
-                    chunk_type = chunk.sub_type.value if hasattr(chunk, "sub_type") else "content"
-                    chunk_text = chunk.text if hasattr(chunk, "text") else str(chunk)
-
-                    if chunk_type == "status":
-                        click.echo(f"{chunk_text}")
-                    elif chunk_type == "error":
-                        click.echo(f"{chunk_text}")
-                    else:
-                        click.echo(chunk_text)
-
-            else:
-                # Non-streaming response
-                click.echo("API Agent Response:")
-                click.echo("=" * 30)
-
-                response = await agent.chat(request_with_token)
-                click.echo(response)
-
-            click.echo(f"\nSession: {context.session_id}")
-
-        except Exception as e:
-            click.echo(f"API request failed: {str(e)}")
-            if cli_instance.config.get("cli.verbose", False):
-                import traceback
-
-                traceback.print_exc()
+        click.echo("The /api command has been removed in v2.0.0. Use tool calling via your LLM provider instead.")
 
     asyncio.run(run_api_request())
 

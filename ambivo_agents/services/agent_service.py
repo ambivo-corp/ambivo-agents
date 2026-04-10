@@ -21,18 +21,26 @@ from ..config.loader import (
 )
 from ..core.base import AgentMessage, AgentRole, ExecutionContext, MessageType
 from ..core.llm import create_multi_provider_llm_service
-from ..core.memory import create_redis_memory_manager
+from ..core.memory import create_memory_manager
 from .factory import AgentFactory
 
 
 class AgentSession:
-    """Manages a single agent session - UPDATED WITH YOUTUBE SUPPORT"""
+    """Manages a single agent session with its own set of initialized agents.
+
+    Loads configuration, creates an LLM service, and initializes all enabled
+    agents (assistant, web search, knowledge base, web scraper, gather, moderator,
+    proxy) based on agent_config.yaml capabilities.
+    """
 
     def __init__(self, session_id: str, preferred_llm_provider: str = None):
         # Load configuration from YAML
         self.config = load_config()
         self.session_id = session_id
-        self.redis_config = get_config_section("redis", self.config)
+        try:
+            self.redis_config = get_config_section("redis", self.config)
+        except Exception:
+            self.redis_config = {}
         self.llm_config = get_config_section("llm", self.config)
         self.service_config = self.config.get("service", {})
 
@@ -74,11 +82,11 @@ class AgentSession:
             raise e
 
     def _initialize_agents(self):
-        """Initialize all agents based on configuration - UPDATED WITH YOUTUBE SUPPORT"""
+        """Initialize all agents for this session based on enabled capabilities in config."""
 
         # Core Assistant Agent
         assistant_id = f"assistant_{self.session_id}"
-        assistant_memory = create_redis_memory_manager(assistant_id, self.redis_config)
+        assistant_memory = create_memory_manager(assistant_id, self.redis_config)
 
         self.agents["assistant"] = AgentFactory.create_agent(
             role=AgentRole.ASSISTANT,
@@ -88,25 +96,12 @@ class AgentSession:
             config=self.config,
         )
 
-        # Code Executor Agent (if enabled)
-        if self.capabilities.get("code_execution", False):
-            executor_id = f"executor_{self.session_id}"
-            executor_memory = create_redis_memory_manager(executor_id, self.redis_config)
-
-            self.agents["executor"] = AgentFactory.create_agent(
-                role=AgentRole.CODE_EXECUTOR,
-                agent_id=executor_id,
-                memory_manager=executor_memory,
-                llm_service=self.llm_service,
-                config=self.config,
-            )
-
         # Create specialized agents based on enabled capabilities
 
         # Web Search Agent (if enabled)
         if self.capabilities.get("web_search", False):
             search_id = f"websearch_{self.session_id}"
-            search_memory = create_redis_memory_manager(search_id, self.redis_config)
+            search_memory = create_memory_manager(search_id, self.redis_config)
 
             try:
                 from ..agents.web_search import WebSearchAgent
@@ -121,7 +116,7 @@ class AgentSession:
         # Knowledge Base Agent (if enabled)
         if self.capabilities.get("knowledge_base", False):
             kb_id = f"knowledge_{self.session_id}"
-            kb_memory = create_redis_memory_manager(kb_id, self.redis_config)
+            kb_memory = create_memory_manager(kb_id, self.redis_config)
 
             try:
                 from ..agents.knowledge_base import KnowledgeBaseAgent
@@ -136,7 +131,7 @@ class AgentSession:
         # Web Scraper Agent (if enabled)
         if self.capabilities.get("web_scraping", False):
             scraper_id = f"webscraper_{self.session_id}"
-            scraper_memory = create_redis_memory_manager(scraper_id, self.redis_config)
+            scraper_memory = create_memory_manager(scraper_id, self.redis_config)
 
             try:
                 from ..agents.web_scraper import WebScraperAgent
@@ -148,40 +143,10 @@ class AgentSession:
             except Exception as e:
                 self.logger.error(f"Failed to create WebScraperAgent: {e}")
 
-        # Media Editor Agent (if enabled)
-        if self.capabilities.get("media_editor", False):
-            media_id = f"mediaeditor_{self.session_id}"
-            media_memory = create_redis_memory_manager(media_id, self.redis_config)
-
-            try:
-                from ..agents.media_editor import MediaEditorAgent
-
-                self.agents["media_editor"] = MediaEditorAgent(
-                    agent_id=media_id, memory_manager=media_memory, llm_service=self.llm_service
-                )
-                self.logger.info("Created MediaEditorAgent")
-            except Exception as e:
-                self.logger.error(f"Failed to create MediaEditorAgent: {e}")
-
-        # YouTube Download Agent (if enabled)
-        if self.capabilities.get("youtube_download", False):
-            youtube_id = f"youtube_{self.session_id}"
-            youtube_memory = create_redis_memory_manager(youtube_id, self.redis_config)
-
-            try:
-                from ..agents.youtube_download import YouTubeDownloadAgent
-
-                self.agents["youtube_download"] = YouTubeDownloadAgent(
-                    agent_id=youtube_id, memory_manager=youtube_memory, llm_service=self.llm_service
-                )
-                self.logger.info("Created YouTubeDownloadAgent")
-            except Exception as e:
-                self.logger.error(f"Failed to create YouTubeDownloadAgent: {e}")
-
         # Gather Agent (if enabled)
         if self.capabilities.get("gather", False):
             gather_id = f"gather_{self.session_id}"
-            gather_memory = create_redis_memory_manager(gather_id, self.redis_config)
+            gather_memory = create_memory_manager(gather_id, self.redis_config)
 
             try:
                 from ..agents.gather_agent import GatherAgent
@@ -198,7 +163,7 @@ class AgentSession:
 
         if self.capabilities.get("moderator", False):
             moderator_id = f"moderator_{self.session_id}"
-            moderator_memory = create_redis_memory_manager(moderator_id, self.redis_config)
+            moderator_memory = create_memory_manager(moderator_id, self.redis_config)
 
             try:
                 from ..agents.moderator import ModeratorAgent
@@ -217,12 +182,10 @@ class AgentSession:
             "web_search",
             "knowledge_base",
             "web_scraper",
-            "media_editor",
-            "youtube_download",
         ]
         if not any(key in self.agents for key in specialized_agents):
             researcher_id = f"researcher_{self.session_id}"
-            researcher_memory = create_redis_memory_manager(researcher_id, self.redis_config)
+            researcher_memory = create_memory_manager(researcher_id, self.redis_config)
 
             self.agents["researcher"] = AgentFactory.create_agent(
                 role=AgentRole.RESEARCHER,
@@ -236,7 +199,7 @@ class AgentSession:
         # Proxy Agent (if enabled)
         if self.capabilities.get("proxy", True):
             proxy_id = f"proxy_{self.session_id}"
-            proxy_memory = create_redis_memory_manager(proxy_id, self.redis_config)
+            proxy_memory = create_memory_manager(proxy_id, self.redis_config)
 
             self.proxy_agent = AgentFactory.create_agent(
                 role=AgentRole.PROXY,
@@ -263,7 +226,18 @@ class AgentSession:
         conversation_id: str = None,
         metadata: Dict[str, Any] = None,
     ) -> AgentMessage:
-        """Process a user message through the agent system"""
+        """Route a user message through the proxy (or assistant) agent and return the response.
+
+        Args:
+            message_content: The user's message text.
+            user_id: Identifier for the user.
+            tenant_id: Optional tenant identifier.
+            conversation_id: Optional conversation thread ID (auto-generated if None).
+            metadata: Optional extra metadata to attach to the message context.
+
+        Returns:
+            AgentMessage containing the agent's response.
+        """
 
         self.last_activity = datetime.now()
         self.message_count += 1
@@ -348,7 +322,7 @@ class AgentSession:
             return error_response
 
     def get_session_stats(self) -> Dict[str, Any]:
-        """Get session statistics"""
+        """Return session statistics including age, message count, available agents, and LLM provider."""
         return {
             "session_id": self.session_id,
             "created_at": self.created_at.isoformat(),
@@ -370,10 +344,18 @@ class AgentSession:
 
 
 class AgentService:
-    """Agent Service for managing multiple agent sessions - UPDATED WITH YOUTUBE SUPPORT"""
+    """Service for managing multiple concurrent AgentSession instances.
+
+    Handles session creation, expiration, message routing, health checks,
+    and service-level statistics. Configured via agent_config.yaml.
+    """
 
     def __init__(self, preferred_llm_provider: str = None):
-        """Initialize the Agent Service"""
+        """Initialize the Agent Service.
+
+        Args:
+            preferred_llm_provider: Override the default LLM provider from config.
+        """
 
         # Load configuration from YAML
         self.config = load_config()
@@ -420,7 +402,15 @@ class AgentService:
         )
 
     def create_session(self, session_id: str = None, preferred_llm_provider: str = None) -> str:
-        """Create a new agent session"""
+        """Create a new agent session, evicting the oldest if at capacity.
+
+        Args:
+            session_id: Optional session ID (auto-generated UUID if None).
+            preferred_llm_provider: Optional LLM provider override for this session.
+
+        Returns:
+            The session ID string.
+        """
         if not session_id:
             session_id = str(uuid.uuid4())
 
@@ -461,7 +451,12 @@ class AgentService:
         conversation_id: str = None,
         metadata: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
-        """Process a user message through the agent system"""
+        """Process a user message, auto-creating the session if needed.
+
+        Returns:
+            Dict with 'success', 'response', 'agent_id', 'processing_time', etc.
+            On failure, returns dict with 'success': False and 'error'.
+        """
 
         start_time = time.time()
 
@@ -514,7 +509,7 @@ class AgentService:
             }
 
     def get_service_stats(self) -> Dict[str, Any]:
-        """Get comprehensive service statistics"""
+        """Return comprehensive service statistics including uptime, session counts, and config summary."""
         current_time = datetime.now()
         uptime = current_time - self.start_time
 
@@ -540,7 +535,11 @@ class AgentService:
         }
 
     def health_check(self) -> dict[str, Any]:
-        """Comprehensive health check - UPDATED WITH YOUTUBE SUPPORT"""
+        """Run a comprehensive health check on Redis, LLM service, and session capacity.
+
+        Returns:
+            Dict with availability booleans, provider info, capability lists, and session stats.
+        """
         health_status: dict[str, Any] = {
             "service_available": True,
             "timestamp": datetime.now().isoformat(),
@@ -549,7 +548,7 @@ class AgentService:
 
         try:
             # Test Redis connectivity
-            test_memory = create_redis_memory_manager("health_check", self.redis_config)
+            test_memory = create_memory_manager("health_check", self.redis_config)
             health_status["redis_available"] = True
 
             # Test LLM service
@@ -590,7 +589,7 @@ class AgentService:
         return health_status
 
     def cleanup_expired_sessions(self):
-        """Remove expired sessions"""
+        """Remove sessions that have exceeded the configured timeout."""
         current_time = time.time()
         expired_sessions = []
 
@@ -620,7 +619,7 @@ class AgentService:
         return False
 
     def get_session_info(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Get detailed information about a session"""
+        """Return session statistics for the given session_id, or None if not found."""
         session = self.sessions.get(session_id)
         if session:
             return session.get_session_stats()
@@ -628,14 +627,24 @@ class AgentService:
 
 
 def create_agent_service(preferred_llm_provider: str = None) -> AgentService:
-    """Create agent service using YAML configuration exclusively - UPDATED WITH YOUTUBE SUPPORT"""
+    """Create and return an AgentService configured from agent_config.yaml."""
     return AgentService(preferred_llm_provider=preferred_llm_provider)
 
 
 async def quick_chat(
     agent_service: AgentService, message: str, user_id: str, session_id: str = None, **kwargs
 ) -> str:
-    """Quick chat interface"""
+    """Send a single message and return the response text (convenience wrapper).
+
+    Args:
+        agent_service: The AgentService instance.
+        message: User message text.
+        user_id: User identifier.
+        session_id: Optional session ID (auto-generated if None).
+
+    Returns:
+        Response text string, or an error message prefixed with 'Error:'.
+    """
     if not session_id:
         session_id = str(uuid.uuid4())
 

@@ -926,11 +926,11 @@ class InteractiveWorkflowExecutor:
 async def create_interactive_realtor_workflow():
     """Example: Create an interactive realtor workflow"""
 
-    from ambivo_agents import AssistantAgent, DatabaseAgent
+    from ambivo_agents import AssistantAgent
 
     # Create agents
     realtor = AssistantAgent.create_simple(user_id="interactive_realtor")
-    database = DatabaseAgent.create_simple(user_id="property_db")
+    database = AssistantAgent.create_simple(user_id="property_db")
 
     # Create interactive workflow
     builder = InteractiveWorkflowBuilder()
