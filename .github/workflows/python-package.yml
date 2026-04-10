@@ -142,8 +142,6 @@ jobs:
           qdrant_api_key: "${QDRANT_API_KEY}"
           enable_file_processing: true
           enable_web_ingestion: true
-          enable_api_calls: true
-          enable_database_queries: false
           max_file_size_mb: 50
           supported_file_types:
             - ".pdf"
@@ -223,20 +221,7 @@ jobs:
         agent_capabilities:
           enable_knowledge_base: true
           enable_web_search: true
-          enable_code_execution: false # Disabled for CI
-          enable_file_processing: true
-          enable_web_ingestion: true
-          enable_api_calls: true
-          enable_web_scraping: false # Disabled for CI
-          enable_proxy_mode: false # Disabled for CI
-          enable_media_editor: false # Disabled for CI
-          enable_youtube_download: true
-          enable_agent_collaboration: true
-          enable_result_synthesis: true
-          enable_multi_source_validation: true
-          max_concurrent_operations: 5
-          operation_timeout_seconds: 30
-          max_memory_usage_mb: 500
+          enable_web_scraping: true
 
         # YouTube Download Configuration (info only for CI)
         youtube_download:
@@ -362,7 +347,7 @@ jobs:
         sys.path.insert(0, '.')
         try:
             print('Testing imports...')
-            from ambivo_agents import KnowledgeBaseAgent, WebSearchAgent, YouTubeDownloadAgent
+            from ambivo_agents import KnowledgeBaseAgent, WebSearchAgent, WebScraperAgent
             print(' All agent imports successful')
         except ImportError as e:
             print(f' Import error: {e}')

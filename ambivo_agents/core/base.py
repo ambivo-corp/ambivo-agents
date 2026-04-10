@@ -648,7 +648,7 @@ class BaseAgent(ABC):
         Usage:
             memory = create_redis_memory_manager("custom_agent")
             llm = create_multi_provider_llm_service()
-            agent = YouTubeDownloadAgent.create_advanced("my_id", memory, llm)
+            agent = WebScraperAgent.create_advanced("my_id", memory, llm)
         """
         return cls(
             agent_id=agent_id,
@@ -763,8 +763,8 @@ class BaseAgent(ABC):
             StreamChunk objects with SSE-aligned event types
 
         Usage:
-            agent, context = YouTubeDownloadAgent.create(user_id="john")
-            async for chunk in agent.chat_stream("Download https://youtube.com/watch?v=abc123"):
+            agent, context = WebScraperAgent.create(user_id="john")
+            async for chunk in agent.chat_stream("Scrape https://example.com"):
                 print(chunk.text, end='', flush=True)
         """
         try:

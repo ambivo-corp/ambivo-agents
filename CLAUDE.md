@@ -52,17 +52,14 @@ pip install -r requirements.txt
 pip install -e .
 
 # Install with specific extras
-pip install -e ".[web]"        # Web capabilities (APIAgent, WebScraperAgent)
-pip install -e ".[media]"      # Media processing (YouTubeDownloadAgent)
+pip install -e ".[redis]"      # Distributed memory (Redis + lz4)
+pip install -e ".[aws]"        # AWS Bedrock LLM support (boto3)
 pip install -e ".[knowledge]"  # Knowledge base (LlamaIndex, Qdrant, LangChain)
-pip install -e ".[aws]"        # AWS Bedrock LLM support (boto3, langchain-aws)
-pip install -e ".[database]"   # Database support (DatabaseAgent)
-pip install -e ".[documents]"  # Document processing (PDF, DOCX, PPTX, unstructured)
-pip install -e ".[analytics]"  # Data analytics (AnalyticsAgent - pandas)
+pip install -e ".[documents]"  # Document processing (PDF, DOCX, PPTX)
 pip install -e ".[async]"      # Async utilities (aiohttp, aiofiles, aiosqlite)
 pip install -e ".[full]"       # All runtime extras (Python 3.11-3.13)
 pip install -e ".[all]"        # Everything including dev tools (Python 3.11-3.13)
-pip install -e ".[all-ml]"    # Full + knowledge base (Python 3.11-3.12 only)
+pip install -e ".[all-ml]"     # Full + knowledge base (Python 3.11-3.12 only)
 pip install -e ".[test]"       # Testing dependencies only
 ```
 
@@ -123,12 +120,11 @@ All agents inherit from `BaseAgent` and implement:
 
 **Specialized Agents**:
 - **AssistantAgent**: General conversation and explanations
-- **CodeExecutorAgent**: Secure Python/Bash execution in Docker
 - **WebSearchAgent**: Multi-provider web search (Brave, AVES)
+- **WebScraperAgent**: Content extraction via Jina Reader, Firecrawl, or requests+bs4
 - **KnowledgeBaseAgent**: Document ingestion and semantic search with Qdrant
-- **MediaEditorAgent**: FFmpeg-based audio/video processing
-- **YouTubeDownloadAgent**: YouTube content downloading via Docker
-- **WebScraperAgent**: Website data extraction with proxy support
+- **KnowledgeSynthesisAgent**: Multi-source research with quality assessment loops
+- **GatherAgent**: Conversational form filling with conditional logic
 
 ### Configuration System
 
@@ -139,13 +135,12 @@ All agents inherit from `BaseAgent` and implement:
 - Alternative: Environment variables with `AMBIVO_AGENTS_` prefix
 
 **Configuration Sections**:
-- `redis`: Redis connection settings for memory management
 - `llm`: LLM provider configurations and API keys
 - `agent_capabilities`: Enable/disable specific agent features
 - `knowledge_base`: Qdrant vector database settings
 - `web_search`: Search provider API keys and settings
-- `docker`: Container execution parameters
-- Service-specific configurations for each agent type
+- `web_scraping`: Scraping provider and API keys (Jina, Firecrawl)
+- `redis`: Optional Redis connection for distributed memory
 
 ### Workflow System
 
@@ -182,20 +177,6 @@ All agents inherit from `BaseAgent` and implement:
 - `await agent.cleanup_session()`: Cleanup agent resources
 - `AgentSession` context manager: Automatic cleanup
 - Proper executor shutdown and memory clearing
-
-### Docker Integration
-
-**Secure Execution**:
-- All code execution happens in isolated Docker containers
-- Default image: `sgosain/amb-ubuntu-python-public-pod`
-- Network isolation, memory limits, and timeout controls
-- Automatic container cleanup after execution
-
-**Usage in Agents**:
-- CodeExecutorAgent: Python/Bash script execution
-- YouTubeDownloadAgent: pytubefix-based downloads
-- MediaEditorAgent: FFmpeg media processing
-- WebScraperAgent: Playwright-based scraping
 
 ### File Operations (Available to All Agents)
 
@@ -299,147 +280,6 @@ response = await moderator.chat("What is machine learning?")
 await moderator.cleanup_session()
 ```
 
-### AnalyticsAgent Configuration and Usage
-
-**Basic Data Analysis**:
-```python
-# Simple analytics with auto-configuration
-agent = AnalyticsAgent.create_simple(user_id="user123")
-
-# Load and analyze data
-response = await agent.chat("load data from sample.csv and analyze it")
-response = await agent.chat("show schema") 
-response = await agent.chat("what are the top 10 sales by revenue?")
-
-await agent.cleanup_session()
-```
-
-**Configuration via agent_config.yaml**:
-```yaml
-analytics:
-  # Data Processing Settings
-  input_dir: "./docker_shared/input/analytics"  # Default directory for data files
-  output_dir: "./docker_shared/output/analytics"  # Output directory for results
-  temp_dir: "/tmp/analytics"                 # Temporary files directory
-  
-  # Docker Configuration  
-  docker_image: "sgosain/amb-ubuntu-python-public-pod"
-  work_dir: "/opt/ambivo/work_dir"
-  timeout: 120                               # Processing timeout (2 minutes)
-  memory_limit: "2g"                         # Docker memory limit
-  
-  # File Processing Limits
-  max_file_size_mb: 100                      # Maximum file size
-  supported_file_types:
-    - ".csv"
-    - ".xlsx" 
-    - ".xls"
-    - ".json"
-    - ".parquet"
-  
-  # Analysis Settings
-  max_rows_preview: 1000                     # Max rows for data preview
-  enable_visualizations: true                # Enable chart recommendations
-  enable_sql_queries: true                   # Enable SQL query generation
-```
-
-**Usage Examples**:
-- `"load data from sales.csv and analyze it"` - Loads and provides file summary
-- `"show schema"` - Displays data structure and types
-- `"what are the top 10 products by revenue?"` - Natural language queries
-- `"create a bar chart of sales by region"` - Visualization requests
-
-**File Path Resolution**:
-- Relative paths (e.g., `sample.csv`) are resolved against docker_shared structure:
-  1. `docker_shared/input/analytics/` (highest priority)
-  2. `docker_shared/handoff/analytics/` (for workflow handoffs)
-  3. Current working directory
-  4. Legacy fallback: `docker_shared/input/` and `docker_shared/`
-- Absolute paths are used as-is if they exist
-- The agent lists available files when no path is specified
-
-### APIAgent Usage and Security Configuration
-
-**Basic API Calls**:
-```python
-# Simple API call with natural language
-agent = APIAgent.create_simple(user_id="user123")
-
-# Natural language parsing (recommended)
-response = await agent.chat("call this API POST api.example.com/users with Bearer token abc123")
-
-# Direct API request
-from ambivo_agents.agents.api_agent import APIRequest, HTTPMethod, AuthConfig, AuthType
-request = APIRequest(
-    url="https://api.example.com/users",
-    method=HTTPMethod.POST,
-    auth_config=AuthConfig(auth_type=AuthType.BEARER, token="abc123"),
-    timeout=8  # Use safe timeout
-)
-response = await agent.make_api_request(request)
-```
-
-**Security Configuration**:
-
-The APIAgent has configurable security settings to control which domains and HTTP methods are allowed:
-
-**Default Behavior** (most permissive):
-- `allowed_domains = None` → Allows ALL domains except those in blocked list
-- `blocked_domains = ["localhost", "127.0.0.1", "0.0.0.0"]` → Blocks local network access
-
-**Configuration via agent_config.yaml**:
-```yaml
-api_agent:
-  # Option 1: Allow all domains except blocked ones (recommended for most use cases)
-  allowed_domains: null  # or omit this line entirely
-  blocked_domains:
-    - "localhost"
-    - "127.0.0.1" 
-    - "0.0.0.0"
-    - "169.254.169.254"  # AWS metadata service
-    - "internal.company.com"  # Add your internal domains
-  
-  # Option 2: Restrict to specific allowed domains (more secure)
-  allowed_domains:
-    - "api.example.com"
-    - "*.googleapis.com"  # Wildcards supported
-    - "*.github.com"
-    - "your-api.ambivo.com"
-  blocked_domains:
-    - "localhost"
-    - "127.0.0.1"
-    - "0.0.0.0"
-  
-  # HTTP Method restrictions
-  allowed_methods:
-    - "GET"
-    - "POST" 
-    - "PUT"
-    - "PATCH"
-    - "DELETE"
-  blocked_methods: []  # Block specific methods if needed
-  
-  # Security options
-  verify_ssl: true
-  timeout_seconds: 30
-  max_safe_timeout: 8  # Requests exceeding this use Docker for safety
-  force_docker_above_timeout: true
-```
-
-**Security Best Practices**:
-1. **Default Configuration**: Use `allowed_domains: null` to allow all external domains while blocking localhost access
-2. **Restricted Environments**: Set specific `allowed_domains` list for production environments
-3. **Timeouts**: Keep `max_safe_timeout: 8` to prevent long-running requests outside Docker
-4. **SSL Verification**: Always keep `verify_ssl: true` in production
-5. **Method Restrictions**: Use `blocked_methods` to disable dangerous HTTP methods if needed
-
-**Environment Variable Override**:
-```bash
-# Alternative to YAML configuration
-export AMBIVO_AGENTS_API_AGENT_ALLOWED_DOMAINS="api.example.com,*.safe-domain.com"
-export AMBIVO_AGENTS_API_AGENT_BLOCKED_DOMAINS="localhost,127.0.0.1,internal.company.com"
-```
-
 ### Memory and Context
 
 **Conversation History**:
@@ -486,10 +326,9 @@ export AMBIVO_AGENTS_ENABLE_WEB_SEARCH="true"
 ### Error Handling
 - All agents include comprehensive error handling and fallback mechanisms
 - ModeratorAgent automatically falls back to AssistantAgent when specialist agents fail
-- Docker execution includes timeout and resource limit protection
 
 ### Memory Consistency
-- All agents in a session share the same Redis memory instance
+- All agents in a session share the same memory instance (in-memory or Redis)
 - Session IDs must be consistent across agents for proper context preservation
 - ModeratorAgent automatically synchronizes context across specialized agents
 
@@ -499,13 +338,13 @@ export AMBIVO_AGENTS_ENABLE_WEB_SEARCH="true"
 - System messages integrate with conversation history for context-aware responses
 
 ### Security Considerations
-- Docker containers run with network isolation and resource limits
+- WebScraperAgent includes SSRF protection (blocked hosts, scheme validation)
 - API keys managed through configuration files, not hardcoded
 - Input sanitization and validation throughout the system
 - Session isolation prevents cross-user data leakage
 
 ### Performance
-- Redis compression reduces memory usage
+- Optional Redis compression reduces memory usage
 - LLM provider failover ensures service availability
 - Agent initialization is optimized for quick startup
 - Connection pooling for external services
