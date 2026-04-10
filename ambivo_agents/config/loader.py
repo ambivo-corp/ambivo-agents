@@ -78,88 +78,10 @@ ENV_VARIABLE_MAPPING = {
         "file_access",
         "restricted_directories",
     ),
-    # Workflow Persistence Configuration (New feature)
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_BACKEND": ("workflow_persistence", "backend"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_DATABASE_PATH": (
-        "workflow_persistence",
-        "sqlite",
-        "database_path",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_ENABLE_WAL": (
-        "workflow_persistence",
-        "sqlite",
-        "enable_wal",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_TIMEOUT": (
-        "workflow_persistence",
-        "sqlite",
-        "timeout",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_AUTO_VACUUM": (
-        "workflow_persistence",
-        "sqlite",
-        "auto_vacuum",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_SQLITE_JOURNAL_MODE": (
-        "workflow_persistence",
-        "sqlite",
-        "journal_mode",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_AUTO_CHECKPOINT": (
-        "workflow_persistence",
-        "general",
-        "auto_checkpoint",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_CHECKPOINT_INTERVAL": (
-        "workflow_persistence",
-        "general",
-        "checkpoint_interval",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_MAX_CHECKPOINTS_PER_SESSION": (
-        "workflow_persistence",
-        "general",
-        "max_checkpoints_per_session",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_ENABLE_COMPRESSION": (
-        "workflow_persistence",
-        "general",
-        "enable_compression",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_GENERAL_ENABLE_ENCRYPTION": (
-        "workflow_persistence",
-        "general",
-        "enable_encryption",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_HOST": ("workflow_persistence", "redis", "host"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_PORT": ("workflow_persistence", "redis", "port"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_DB": ("workflow_persistence", "redis", "db"),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_REDIS_SESSION_TTL": (
-        "workflow_persistence",
-        "redis",
-        "session_ttl",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_STORAGE_DIRECTORY": (
-        "workflow_persistence",
-        "file",
-        "storage_directory",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_COMPRESSION": (
-        "workflow_persistence",
-        "file",
-        "compression",
-    ),
-    f"{ENV_PREFIX}WORKFLOW_PERSISTENCE_FILE_ENCRYPTION": (
-        "workflow_persistence",
-        "file",
-        "encryption",
-    ),
 }
 
-# Required environment variables for minimal configuration
-REQUIRED_ENV_VARS = [
-    f"{ENV_PREFIX}REDIS_HOST",
-    f"{ENV_PREFIX}REDIS_PORT",
-]
+# No env vars are strictly required — YAML config or sensible defaults are used
+REQUIRED_ENV_VARS = []
 
 # At least one LLM provider is required
 LLM_PROVIDER_ENV_VARS = [
