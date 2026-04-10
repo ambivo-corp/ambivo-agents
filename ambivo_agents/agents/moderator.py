@@ -474,7 +474,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         Skips the LLM entirely when the user intent is obvious from the message.
         Returns None if no fast-path match, letting the LLM decide.
         """
-        msg = user_message.lower()
+        msg = user_message.lower().strip()
 
         # Scraping: message contains "scrape" + URL
         if "scrape" in msg and ("http://" in msg or "https://" in msg) and "web_scraper" in self.specialized_agents:
@@ -486,6 +486,30 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 "is_follow_up": False,
                 "reasoning": "Fast-path: explicit scrape request with URL",
             }
+
+        # Knowledge synthesis: explicit synthesis intent.
+        # Without this fast-path, the LLM intent analyzer tends to route queries
+        # like "synthesize recent advances in X from multiple sources" to web_search
+        # because the word "research" and phrases like "recent advances" compete
+        # with the synthesis signals. Catch the high-precision cases deterministically.
+        if "knowledge_synthesis" in self.specialized_agents:
+            synthesis_signals = (
+                msg.startswith("synthesize ")
+                or msg.startswith("please synthesize")
+                or "from multiple sources" in msg
+                or "multi-source" in msg
+                or re.search(r"\bresearch\s+(?:thoroughly|comprehensively)\b", msg) is not None
+                or re.search(r"\bcomprehensive\s+(?:research|overview|analysis)\b", msg) is not None
+            )
+            if synthesis_signals:
+                return {
+                    "primary_agent": "knowledge_synthesis",
+                    "confidence": 0.95,
+                    "requires_multiple_agents": False,
+                    "workflow_detected": False,
+                    "is_follow_up": False,
+                    "reasoning": "Fast-path: explicit synthesis request",
+                }
 
         return None
 
@@ -701,16 +725,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             "web search",
             "find information",
             "search about",
-        ]
-
-        # YouTube detection
-        youtube_indicators = [
-            "youtube",
-            "youtu.be",
-            "download video",
-            "download audio",
-            "youtube.com",
-            "get from youtube",
         ]
 
         # Check for obvious patterns first
