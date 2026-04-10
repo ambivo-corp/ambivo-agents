@@ -342,8 +342,11 @@ class WebSearchServiceAdapter:
     async def search_news(
         self, query: str, max_results: int = 10, days_back: int = 7
     ) -> SearchResponse:
-        """Search for news articles"""
-        news_query = f"{query} news latest recent"
+        """Search for news articles. Avoids keyword stuffing if query already mentions news."""
+        if "news" in query.lower():
+            news_query = query
+        else:
+            news_query = f"{query} latest news"
         return await self.search_web(news_query, max_results)
 
     async def search_academic(self, query: str, max_results: int = 10) -> SearchResponse:

@@ -9,7 +9,7 @@ export AMBIVO_AGENTS_ANTHROPIC_API_KEY="sk-ant-your-anthropic-key"
 
 # Web Search (optional — enables WebSearchAgent)
 export AMBIVO_AGENTS_BRAVE_API_KEY="your-brave-key"
-export AMBIVO_AGENTS_ENABLE_WEB_SEARCH="true"
+export AMBIVO_AGENTS_ENABOK it works but tLE_WEB_SEARCH="true"
 
 # Web Scraping works out of the box (Jina Reader, no key needed)
 export AMBIVO_AGENTS_ENABLE_WEB_SCRAPING="true"

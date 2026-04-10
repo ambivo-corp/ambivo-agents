@@ -115,9 +115,6 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
     - When delegating to other agents, explicitly instruct them to use Markdown formatting
     - Ensure all agent responses maintain consistent professional Markdown formatting
 
-    AGENT DELEGATION INSTRUCTIONS:
-    When routing to specialized agents, always include this instruction: "Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
-
     OUTPUT STYLE:
     - Professional, well-structured Markdown formatting
     - Clear visual hierarchy using headers and emphasis
@@ -1510,9 +1507,6 @@ Please write and execute the code to solve this task, explaining each step clear
                 )
                 self.logger.info(f"Using enhanced message for database→analytics workflow")
 
-            # Add markdown formatting instruction
-            enhanced_user_message = f"{enhanced_user_message}\n\n**Formatting Instruction:** Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
-
             agent_message = AgentMessage(
                 id=f"msg_{str(uuid.uuid4())[:8]}",
                 sender_id=user_id,
@@ -2271,14 +2265,11 @@ Please continue with the next step for {agent_type} processing."""
             agent = self.specialized_agents[agent_type]
 
             if hasattr(agent, "process_message_stream"):
-                # Add Markdown formatting instruction for streaming
-                enhanced_user_message = f"{user_message}\n\n**Formatting Instruction:** Please format your response using proper Markdown syntax with appropriate headers, bold text, code blocks, and lists for maximum readability."
-
                 agent_message = AgentMessage(
                     id=str(uuid.uuid4()),
                     sender_id=self.context.user_id,
                     recipient_id=agent.agent_id,
-                    content=enhanced_user_message,
+                    content=user_message,
                     message_type=MessageType.USER_INPUT,
                     session_id=self.context.session_id,
                     conversation_id=self.context.conversation_id,
