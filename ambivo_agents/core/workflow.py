@@ -506,26 +506,6 @@ class WorkflowPatterns:
 
         return builder.build()
 
-    @staticmethod
-    def create_media_processing_workflow(youtube_agent, media_editor_agent) -> AmbivoWorkflow:
-        """
-        Creates a workflow that:
-        1. Downloads video from YouTube
-        2. Processes/converts the media
-        """
-        builder = WorkflowBuilder()
-
-        builder.add_agent(youtube_agent, "download")
-        builder.add_agent(media_editor_agent, "process")
-
-        builder.add_edge("download", "process")
-
-        builder.set_start_node("download")
-        builder.set_end_node("process")
-
-        return builder.build()
-
-
 # Integration with existing ModeratorAgent
 
 

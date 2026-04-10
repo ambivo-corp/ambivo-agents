@@ -333,15 +333,6 @@ def _set_nested_value(config: Dict[str, Any], path: tuple, value: Any) -> None:
             current[final_key] = [fmt.strip() for fmt in value.split(",")]
             return
 
-        # Database agent supported types handling (comma-separated lists)
-        elif (
-            path[0] == "database_agent"
-            and final_key == "supported_types"
-            and isinstance(value, str)
-        ):
-            current[final_key] = [db_type.strip() for db_type in value.split(",")]
-            return
-
         # Security restricted directories handling (comma-separated lists)
         elif (
             path[0] == "security"

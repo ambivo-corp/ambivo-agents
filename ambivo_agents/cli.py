@@ -34,15 +34,6 @@ from ambivo_agents import (
     WebSearchAgent,
 )
 
-# Legacy agent stubs - removed from core
-AnalyticsAgent = None
-APIAgent = None
-CodeExecutorAgent = None
-DatabaseAgent = None
-MediaEditorAgent = None
-YouTubeDownloadAgent = None
-DATABASE_AGENT_AVAILABLE = False
-
 # Import AgentSession with fallback
 try:
     from ambivo_agents import AgentSession
@@ -199,12 +190,7 @@ class EnhancedConfigManager:
             "agent_capabilities": {
                 "enable_knowledge_base": True,
                 "enable_web_search": True,
-                "enable_code_execution": True,
-                "enable_media_editor": True,
-                "enable_youtube_download": True,
                 "enable_web_scraping": True,
-                "enable_proxy_mode": True,
-                "enable_api_agent": True,
             },
             "session": {"auto_cleanup": True, "session_timeout": 3600},
             "mcp": {
@@ -290,12 +276,7 @@ class EnhancedConfigManager:
             "agent_capabilities": {
                 "enable_knowledge_base": True,
                 "enable_web_search": True,
-                "enable_code_execution": True,
-                "enable_media_editor": True,
-                "enable_youtube_download": True,
                 "enable_web_scraping": True,
-                "enable_proxy_mode": True,
-                "enable_api_agent": True,
             },
             "web_search": {"brave_api_key": "your_brave_api_key_here", "default_max_results": 10},
             "knowledge_base": {
@@ -1542,11 +1523,8 @@ def status():
     key_configs = [
         ("Auto Session", "cli.auto_session"),
         ("Web Search", "agent_capabilities.enable_web_search"),
+        ("Web Scraping", "agent_capabilities.enable_web_scraping"),
         ("Knowledge Base", "agent_capabilities.enable_knowledge_base"),
-        ("API Agent", "agent_capabilities.enable_api_agent"),
-        ("Database Agent", "agent_capabilities.enable_database_agent"),
-        ("MCP Enabled", "mcp.enabled"),
-        ("YouTube Downloads", "agent_capabilities.enable_youtube_download"),
     ]
 
     for label, key in key_configs:

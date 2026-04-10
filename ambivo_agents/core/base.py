@@ -55,11 +55,8 @@ class AgentRole(Enum):
 
     ASSISTANT = "assistant"
     PROXY = "proxy"
-    ANALYST = "analyst"
     RESEARCHER = "researcher"
     COORDINATOR = "coordinator"
-    VALIDATOR = "validator"
-    CODE_EXECUTOR = "code_executor"
 
 
 class MessageType(Enum):
@@ -1697,128 +1694,6 @@ class BaseAgent(ABC):
             }
             self._skill_agents = {}  # Cache for instantiated skill agents
 
-    async def assign_api_skill(
-        self,
-        api_spec_path: str,
-        base_url: str = None,
-        api_token: str = None,
-        skill_name: str = None,
-    ) -> Dict[str, Any]:
-        """
-        Assign an API skill to this agent by providing an OpenAPI spec
-
-        Args:
-            api_spec_path: Path to OpenAPI spec (YAML or JSON) or URL
-            base_url: Base URL for API calls (overrides spec servers)
-            api_token: Authentication token for API
-            skill_name: Optional name for this skill (defaults to API title)
-
-        Returns:
-            Dict with success status and skill details
-        """
-        try:
-            if not hasattr(self, "_assigned_skills"):
-                self.__init_skills__()
-
-            # Read and parse API spec
-            spec_result = await self.read_and_parse_file(api_spec_path)
-            if not spec_result["success"]:
-                return {
-                    "success": False,
-                    "error": f"Failed to read API spec: {spec_result['error']}",
-                }
-
-            if not spec_result.get("parsed"):
-                return {"success": False, "error": "Could not parse API specification"}
-
-            api_spec = spec_result["parse_result"]["data"]
-
-            # Extract skill name from spec if not provided
-            if not skill_name:
-                skill_name = api_spec.get("info", {}).get(
-                    "title", f"api_skill_{len(self._assigned_skills['api_skills'])}"
-                )
-
-            # Extract base URL from spec if not provided
-            if not base_url and "servers" in api_spec:
-                base_url = api_spec["servers"][0]["url"]
-
-            # Store skill configuration
-            skill_config = {
-                "spec": api_spec,
-                "base_url": base_url,
-                "api_token": api_token,
-                "spec_path": api_spec_path,
-                "assigned_at": datetime.now().isoformat(),
-                "endpoints": self._extract_api_endpoints(api_spec),
-            }
-
-            self._assigned_skills["api_skills"][skill_name] = skill_config
-
-            self.logger.info(
-                f"Assigned API skill '{skill_name}' with {len(skill_config['endpoints'])} endpoints"
-            )
-
-            return {
-                "success": True,
-                "skill_name": skill_name,
-                "endpoints_count": len(skill_config["endpoints"]),
-                "base_url": base_url,
-                "api_title": api_spec.get("info", {}).get("title", "Unknown"),
-            }
-
-        except Exception as e:
-            return {"success": False, "error": f"Failed to assign API skill: {str(e)}"}
-
-    async def assign_database_skill(
-        self, connection_string: str, skill_name: str = None, description: str = None
-    ) -> Dict[str, Any]:
-        """
-        Assign a database skill to this agent
-
-        Args:
-            connection_string: Database connection string or config dict
-            skill_name: Optional name for this skill
-            description: Optional description of the database
-
-        Returns:
-            Dict with success status and skill details
-        """
-        try:
-            if not hasattr(self, "_assigned_skills"):
-                self.__init_skills__()
-
-            # Generate skill name if not provided
-            if not skill_name:
-                # Extract database name from connection string
-                if "database=" in connection_string:
-                    db_name = connection_string.split("database=")[1].split(";")[0].split("&")[0]
-                    skill_name = f"db_{db_name}"
-                else:
-                    skill_name = f"database_skill_{len(self._assigned_skills['database_skills'])}"
-
-            # Store skill configuration
-            skill_config = {
-                "connection_string": connection_string,
-                "description": description,
-                "assigned_at": datetime.now().isoformat(),
-                "type": self._detect_database_type(connection_string),
-            }
-
-            self._assigned_skills["database_skills"][skill_name] = skill_config
-
-            self.logger.info(f"Assigned database skill '{skill_name}' ({skill_config['type']})")
-
-            return {
-                "success": True,
-                "skill_name": skill_name,
-                "database_type": skill_config["type"],
-                "description": description,
-            }
-
-        except Exception as e:
-            return {"success": False, "error": f"Failed to assign database skill: {str(e)}"}
-
     async def assign_kb_skill(
         self, documents_path: str, collection_name: str = None, skill_name: str = None,
         temporary: bool = True, ttl_hours: float = None,
@@ -2315,78 +2190,14 @@ Only return JSON, no other text."""
                     "error": f"Could not create {skill_type} agent for skill '{skill_name}'",
                 }
 
-            # Execute based on skill type
-            if skill_type == "api":
-                return await self._execute_api_skill(skill_agent, skill_name, user_message)
-            elif skill_type == "database":
-                return await self._execute_database_skill(skill_agent, skill_name, user_message)
-            elif skill_type == "kb":
+            # Execute based on skill type (only kb skills supported in v2.0+)
+            if skill_type == "kb":
                 return await self._execute_kb_skill(skill_agent, skill_name, user_message)
             else:
-                return {"success": False, "error": f"Unknown skill type: {skill_type}"}
+                return {"success": False, "error": f"Skill type '{skill_type}' is not supported in v2.0"}
 
         except Exception as e:
             return {"success": False, "error": f"Skill execution failed: {str(e)}"}
-
-    async def _execute_api_skill(
-        self, api_agent: Any, skill_name: str, user_message: str
-    ) -> Dict[str, Any]:
-        """Execute API skill request"""
-        try:
-            # Get skill configuration
-            skill_config = self._assigned_skills["api_skills"][skill_name]
-
-            # Use the APIAgent's natural language processing
-            # Add context about the available API spec
-            enhanced_message = f"""Using the assigned API specification for '{skill_name}':
-            
-{user_message}
-
-Available endpoints include:
-{chr(10).join([f"- {ep['method']} {ep['path']}: {ep.get('summary', 'No description')}" for ep in skill_config['endpoints'][:5]])}
-
-Base URL: {skill_config['base_url']}
-"""
-
-            response = await api_agent.chat(enhanced_message)
-
-            return {
-                "success": True,
-                "response": response,
-                "skill_type": "api",
-                "skill_name": skill_name,
-                "agent_type": "APIAgent",
-            }
-
-        except Exception as e:
-            return {"success": False, "error": f"API skill execution failed: {str(e)}"}
-
-    async def _execute_database_skill(
-        self, db_agent: Any, skill_name: str, user_message: str
-    ) -> Dict[str, Any]:
-        """Execute database skill request"""
-        try:
-            # Connect to database if not already connected
-            skill_config = self._assigned_skills["database_skills"][skill_name]
-
-            # Add connection context to the message
-            enhanced_message = f"""Connect to the assigned {skill_config['type']} database and then: {user_message}
-            
-Connection: {skill_config['connection_string']}
-"""
-
-            response = await db_agent.chat(enhanced_message)
-
-            return {
-                "success": True,
-                "response": response,
-                "skill_type": "database",
-                "skill_name": skill_name,
-                "agent_type": "DatabaseAgent",
-            }
-
-        except Exception as e:
-            return {"success": False, "error": f"Database skill execution failed: {str(e)}"}
 
     async def _execute_kb_skill(
         self, kb_agent: Any, skill_name: str, user_message: str

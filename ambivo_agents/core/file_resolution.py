@@ -186,7 +186,7 @@ def get_agent_type_from_config(agent_name: str) -> str:
     Get the agent type from configuration for file resolution.
 
     Args:
-        agent_name: Name of the agent (e.g., "AnalyticsAgent", "MediaEditorAgent")
+        agent_name: Name of the agent (e.g., "WebScraperAgent", "KnowledgeBaseAgent")
 
     Returns:
         Agent type string for directory resolution

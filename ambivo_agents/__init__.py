@@ -4,7 +4,7 @@ Ambivo Agents Framework
 A lightweight agent framework for AI-powered research synthesis.
 """
 
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 
 # Agent imports
 from .agents.assistant import AssistantAgent

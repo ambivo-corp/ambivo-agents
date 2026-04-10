@@ -1075,7 +1075,7 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
                 "conversation_history": conversation_history, # KEY FIX
                 "conversation_id": original_message.conversation_id,
                 "streaming": True,
-                "agent_type": "knowledge_base", # media_editor, web_scraper, etc.
+                "agent_type": "knowledge_base",
                 "routed_from_moderator": bool(llm_context_from_routing),
             }
 
