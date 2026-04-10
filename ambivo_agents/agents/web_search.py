@@ -350,8 +350,12 @@ class WebSearchServiceAdapter:
         return await self.search_web(news_query, max_results)
 
     async def search_academic(self, query: str, max_results: int = 10) -> SearchResponse:
-        """Search for academic content"""
-        academic_query = f"{query} research paper study academic"
+        """Search for academic content. Avoids keyword stuffing if query already mentions academic terms."""
+        lower = query.lower()
+        if any(term in lower for term in ("research", "paper", "study", "academic")):
+            academic_query = query
+        else:
+            academic_query = f"{query} research paper"
         return await self.search_web(academic_query, max_results)
 
 

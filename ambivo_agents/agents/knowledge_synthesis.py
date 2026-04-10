@@ -328,9 +328,9 @@ Please provide analysis in JSON format:
             
             for kb_name, confidence in target_collections:
                 self.logger.info(f"Querying KB: {kb_name} (relevance: {confidence:.2f})")
-                # Format query for the specific KB
-                kb_query = f"Query {kb_name}: {query}"
-                # Create async task for this KB query
+                # Use natural-language query format that KnowledgeBaseAgent recognizes
+                # without polluting the semantic meaning of the query
+                kb_query = f"Using the knowledge base {kb_name}, answer: {query}"
                 kb_tasks.append(self._route_to_agent_with_context('knowledge_base', kb_query))
             
             # Execute all KB queries in parallel
@@ -460,11 +460,10 @@ Please provide analysis in JSON format:
             if not urls:
                 return None
             
-            # Scrape URLs
+            # Scrape URLs — pass URL directly, WebScraperAgent extracts it from the message
             scrape_results = []
             for url in urls:
-                scrape_query = f"scrape {url} for information about: {query}"
-                scrape_response = await self._route_to_agent_with_context('web_scraper', scrape_query)
+                scrape_response = await self._route_to_agent_with_context('web_scraper', f"scrape {url}")
                 if scrape_response.success:
                     scrape_results.append(scrape_response.content)
             
