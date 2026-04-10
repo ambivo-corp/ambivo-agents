@@ -488,20 +488,49 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
             }
 
         # Knowledge synthesis: explicit synthesis intent.
-        # Without this fast-path, the LLM intent analyzer tends to route queries
-        # like "synthesize recent advances in X from multiple sources" to web_search
-        # because the word "research" and phrases like "recent advances" compete
-        # with the synthesis signals. Catch the high-precision cases deterministically.
+        #
+        # Signals are split into STRONG (fire alone) and MEDIUM (fire only when
+        # accompanied by a research-flavor indicator). Previously "from multiple
+        # sources" alone was enough — but that let trivial queries like
+        # "from multiple sources tell me what color the sky is" steal routing
+        # from the general assistant path. Now weaker phrases require the
+        # query to also look like a research question (contains words like
+        # advances/history/analysis/trends/review/etc.).
         if "knowledge_synthesis" in self.specialized_agents:
-            synthesis_signals = (
+            # STRONG signals — explicit user intent to synthesize. Fire alone.
+            strong_signal = (
                 msg.startswith("synthesize ")
                 or msg.startswith("please synthesize")
-                or "from multiple sources" in msg
+                or msg.startswith("synthesis:")
+                or msg.startswith("/synthesis")
+            )
+
+            # MEDIUM signals — weak phrasing that might or might not be a
+            # synthesis request depending on topicality.
+            medium_signal = (
+                "from multiple sources" in msg
                 or "multi-source" in msg
                 or re.search(r"\bresearch\s+(?:thoroughly|comprehensively)\b", msg) is not None
                 or re.search(r"\bcomprehensive\s+(?:research|overview|analysis)\b", msg) is not None
             )
-            if synthesis_signals:
+
+            # Research-flavor indicator — the query has to look research-y for
+            # MEDIUM signals to fire. Covers the common research question shapes.
+            research_indicator = bool(re.search(
+                r"\b("
+                r"advance(?:s|ments?)?|"
+                r"state[\s\-]of[\s\-]the[\s\-]art|state\s+of|"
+                r"history|impact|analysis|trends?|developments?|"
+                r"comparison|compar(?:ing|ed)|evolution|progress|"
+                r"breakthroughs?|findings|studies|"
+                r"literature|review|overview|summary|"
+                r"research\s+(?:on|into|paper|report)|"
+                r"report\s+on|insights?\s+(?:on|into)"
+                r")\b",
+                msg,
+            ))
+
+            if strong_signal or (medium_signal and research_indicator):
                 return {
                     "primary_agent": "knowledge_synthesis",
                     "confidence": 0.95,

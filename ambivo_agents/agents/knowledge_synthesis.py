@@ -89,7 +89,7 @@ Quality Standards:
         self.max_iterations = kwargs.pop('max_iterations', 3)
         self.quality_threshold = kwargs.pop('quality_threshold', QualityLevel.GOOD)
         self.enable_auto_scraping = kwargs.pop('enable_auto_scraping', True)
-        self.max_scrape_urls = kwargs.pop('max_scrape_urls', 3)
+        self.max_scrape_urls = kwargs.pop('max_scrape_urls', 5)
         self.source_timeouts = kwargs.pop('source_timeouts', {
             'knowledge_base': 10,
             'web_search': 15,
@@ -407,48 +407,82 @@ Please provide analysis in JSON format:
         
         return None
     
+    @staticmethod
+    def _extract_urls_from_content(content: str) -> List[str]:
+        """Extract http(s) URLs from formatted search result text.
+
+        Fallback for when the inner agent's response metadata doesn't surface
+        the raw URL list (the current ModeratorAgent._route_to_agent_with_context
+        path does not propagate inner response metadata through the AgentResponse
+        wrapper, so we parse URLs directly from the rendered content).
+        """
+        import re
+        # Conservative regex — stops at whitespace or common bracket closers.
+        raw_urls = re.findall(r"https?://[^\s<>\)\]\"']+", content or "")
+        seen = set()
+        ordered: List[str] = []
+        for url in raw_urls:
+            # Strip trailing punctuation the regex may have picked up.
+            url = url.rstrip(".,;:)]}'\"")
+            if url and url not in seen:
+                seen.add(url)
+                ordered.append(url)
+        return ordered
+
     async def gather_from_web_search(self, query: str) -> Optional[SourceResponse]:
-        """Run an optimized web search and return results as a SourceResponse."""
+        """Run an optimized web search and return results as a SourceResponse.
+
+        Guarantees ``metadata['urls']`` is populated whenever the search
+        succeeds — either from the inner agent's metadata (if it ever starts
+        propagating it) or by extracting URLs from the formatted content.
+        This guarantee is load-bearing for scraping, which reuses these URLs
+        to avoid re-running the search.
+        """
         try:
-            # Optimize the search query for better results
             optimized_query = self.optimize_search_query(query)
             if optimized_query != query:
                 self.logger.info(f"Optimized search query: '{query}' -> '{optimized_query}'")
-            
-            # Route to web search agent with optimized query
+
             search_response = await self._route_to_agent_with_context('web_search', optimized_query)
-            
+
             if search_response.success:
-                # Ensure we have content
                 content = search_response.content or ""
-                
-                # Clean up the content - handle cases where it might contain "No results found"
+
+                # Reject known "no useful results" patterns before we waste
+                # downstream processing on them.
                 if content and not any(phrase in content.lower() for phrase in [
-                    "no results found", 
-                    "no results", 
+                    "no results found",
+                    "no results",
                     "try a different search term",
-                    "search returned no results"
+                    "search returned no results",
                 ]):
+                    # Extract URLs. Prefer inner metadata if present, fall
+                    # back to parsing them from the rendered content.
+                    inner_metadata = search_response.metadata or {}
+                    urls = inner_metadata.get('urls', []) or []
+                    if not urls:
+                        urls = self._extract_urls_from_content(content)
+
                     return SourceResponse(
                         source=ResponseSource.WEB_SEARCH,
                         content=content,
-                        confidence=0.75,  # Moderate confidence for search
+                        confidence=0.75,
                         metadata={
                             'agent_response': search_response,
-                            'urls': search_response.metadata.get('urls', []),
+                            'urls': urls,
                             'raw_content': search_response.content,
-                            'content_length': len(content)
-                        }
+                            'content_length': len(content),
+                        },
                     )
                 else:
                     self.logger.warning(f"Web search returned no useful results for query: {query}")
                     self.logger.warning(f"Content preview: {content[:200]}...")
-                    
+
         except Exception as e:
             self.logger.error(f"Error performing web search: {e}")
             import traceback
             self.logger.error(f"Full traceback: {traceback.format_exc()}")
-        
+
         return None
     
     async def gather_from_web_scraping(self, query: str, urls: Optional[List[str]] = None) -> Optional[SourceResponse]:
@@ -492,27 +526,61 @@ Please provide analysis in JSON format:
         return None
     
     async def gather_responses_parallel(self, query: str) -> List[SourceResponse]:
-        """Gather responses from KB, web search, and optionally web scraping in parallel."""
-        tasks = [
-            self.gather_from_knowledge_base(query),
-            self.gather_from_web_search(query),
-        ]
-        
-        # Add scraping if enabled
-        if self.enable_auto_scraping:
-            tasks.append(self.gather_from_web_scraping(query))
-        
-        # Execute in parallel with timeout
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Filter out None and exceptions
-        responses = []
-        for result in results:
-            if isinstance(result, SourceResponse):
-                responses.append(result)
-            elif isinstance(result, Exception):
-                self.logger.error(f"Error in parallel gathering: {result}")
-        
+        """Gather from KB + web search + scraping with proper search→scrape chaining.
+
+        Architecture: KB and web_search start concurrently. Scraping waits for
+        web_search to finish so it can reuse the discovered URLs — without
+        this, the old code called ``gather_from_web_scraping(query)`` which
+        internally re-ran ``gather_from_web_search(query)`` to get URLs,
+        wasting a full API call and rate-limit budget per synthesis. KB still
+        overlaps with scraping, so the total wall-clock is max(KB, search+scrape).
+        """
+        kb_task = asyncio.create_task(self.gather_from_knowledge_base(query))
+        search_task = asyncio.create_task(self.gather_from_web_search(query))
+
+        # Wait for search to finish — needed to discover scrape URLs.
+        try:
+            search_response = await search_task
+        except Exception as e:
+            self.logger.error(f"Error in web search: {e}")
+            search_response = None
+
+        # Start scraping as soon as URLs are available, in parallel with the
+        # still-pending KB task.
+        scrape_task = None
+        if self.enable_auto_scraping and search_response:
+            urls = (search_response.metadata or {}).get('urls') or []
+            if urls:
+                scrape_urls = urls[: self.max_scrape_urls]
+                scrape_task = asyncio.create_task(
+                    self.gather_from_web_scraping(query, urls=scrape_urls)
+                )
+            else:
+                self.logger.warning(
+                    "Web search returned no URLs to scrape — skipping scrape step"
+                )
+
+        # Collect the remaining tasks. KB and scrape overlap.
+        try:
+            kb_response = await kb_task
+        except Exception as e:
+            self.logger.error(f"Error in knowledge base gather: {e}")
+            kb_response = None
+
+        scrape_response = None
+        if scrape_task is not None:
+            try:
+                scrape_response = await scrape_task
+            except Exception as e:
+                self.logger.error(f"Error in web scraping: {e}")
+
+        responses: List[SourceResponse] = []
+        if search_response:
+            responses.append(search_response)
+        if kb_response:
+            responses.append(kb_response)
+        if scrape_response:
+            responses.append(scrape_response)
         return responses
     
     async def gather_responses_sequential(

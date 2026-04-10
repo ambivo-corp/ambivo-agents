@@ -113,12 +113,37 @@ class WebSearchServiceAdapter:
         return available_providers[0][0]
 
     async def search_web(
-        self, query: str, max_results: int = 10, country: str = "US", language: str = "en"
+        self,
+        query: str,
+        max_results: int = 15,
+        country: str = "US",
+        language: str = "en",
+        freshness: Optional[str] = None,
     ) -> SearchResponse:
-        """Perform web search using the current provider with rate limiting"""
+        """Fan out to all configured providers in parallel, merge, and dedupe.
+
+        This is the default search behavior: every configured provider (Brave,
+        Aves, ...) is queried concurrently. Results are deduplicated by
+        canonicalized URL and interleaved round-robin so each provider gets
+        representation in the final list. If a provider fails (rate limit,
+        network error, etc.), its absence is logged but does not block the
+        merged result — as long as at least one provider succeeds, we return
+        its results.
+
+        Args:
+            query: Search query string.
+            max_results: Maximum merged result count to return. Internally
+                each provider is asked for up to this many, then the merged
+                set is truncated.
+            country: Country code for locale (Brave only).
+            language: Language code (currently unused but kept for API
+                compatibility).
+            freshness: Optional Brave freshness filter ("pd", "pw", "pm",
+                "py"). Leave None for no time filter (default).
+        """
         start_time = time.time()
 
-        if not self.current_provider:
+        if not self.providers:
             return SearchResponse(
                 query=query,
                 results=[],
@@ -126,57 +151,212 @@ class WebSearchServiceAdapter:
                 search_time=0.0,
                 provider="none",
                 status="error",
-                error="No search provider available",
+                error="No search provider configured",
             )
 
-        # Rate limiting
-        provider_config = self.providers[self.current_provider]
-        if "last_request_time" in provider_config:
-            last_request_time = provider_config["last_request_time"]
-            if last_request_time is not None:
-                elapsed = time.time() - last_request_time
-                delay = provider_config.get("rate_limit_delay", 1.0)
-                if delay is None or not isinstance(delay, (int, float)):
-                    delay = 1.0
-                if isinstance(elapsed, (int, float)) and elapsed < delay:
-                    await asyncio.sleep(delay - elapsed)
+        # Build per-provider search tasks. Each task wraps the provider call in
+        # a safe helper so a single provider's failure doesn't kill the gather.
+        # Skip providers currently in cooldown.
+        now = time.time()
+        tasks = []
+        for name, config in self.providers.items():
+            if not config.get("available", True):
+                cooldown_until = config.get("cooldown_until", 0) or 0
+                if now < cooldown_until:
+                    continue
+                # Cooldown expired — re-enable
+                config["available"] = True
 
-        provider_config["last_request_time"] = time.time()
+            if name == "brave":
+                tasks.append(self._search_brave_safe(query, max_results, country, freshness))
+            elif name == "aves":
+                tasks.append(self._search_aves_safe(query, max_results))
 
-        try:
-            if self.current_provider == "brave":
-                return await self._search_brave(query, max_results, country)
-            elif self.current_provider == "aves":
-                return await self._search_aves(query, max_results)
-            else:
-                raise ValueError(f"Unknown provider: {self.current_provider}")
+        if not tasks:
+            return SearchResponse(
+                query=query,
+                results=[],
+                total_results=0,
+                search_time=time.time() - start_time,
+                provider="none",
+                status="error",
+                error="All providers are unavailable or in cooldown",
+            )
 
-        except Exception as e:
-            search_time = time.time() - start_time
+        # Fan out in parallel. Each _*_safe wrapper catches its own exceptions
+        # and returns an error SearchResponse, so gather won't raise.
+        responses = await asyncio.gather(*tasks)
 
-            # Mark provider as temporarily unavailable on certain errors
-            error_str = str(e).lower()
-            if any(keyword in error_str for keyword in ["429", "rate limit", "quota exceeded"]):
-                self.providers[self.current_provider]["available"] = False
-                self.providers[self.current_provider]["cooldown_until"] = time.time() + 300
+        # Merge + dedupe across providers
+        merged_results = self._merge_search_responses(responses, max_results)
 
-            # Try fallback provider
-            fallback = self._try_fallback_provider()
-            if fallback:
-                return await self.search_web(query, max_results, country, language)
+        # Build the merged SearchResponse
+        successful_providers = [r.provider for r in responses if r.status == "success"]
+        provider_label = "+".join(successful_providers) if successful_providers else "none"
+        search_time = time.time() - start_time
 
+        if not merged_results:
+            # No results from any provider — bubble up the first error if any
+            error_msg = None
+            for r in responses:
+                if r.status != "success" and r.error:
+                    error_msg = r.error
+                    break
             return SearchResponse(
                 query=query,
                 results=[],
                 total_results=0,
                 search_time=search_time,
-                provider=self.current_provider,
+                provider=provider_label or "none",
+                status="error" if error_msg else "success",
+                error=error_msg,
+            )
+
+        return SearchResponse(
+            query=query,
+            results=merged_results,
+            total_results=len(merged_results),
+            search_time=search_time,
+            provider=provider_label,
+            status="success",
+        )
+
+    async def _rate_limit(self, provider_name: str) -> None:
+        """Enforce per-provider rate limit with a simple last-request-time gate."""
+        provider_config = self.providers[provider_name]
+        last = provider_config.get("last_request_time")
+        if last is not None:
+            elapsed = time.time() - last
+            delay = provider_config.get("rate_limit_delay", 1.0) or 1.0
+            if isinstance(elapsed, (int, float)) and elapsed < delay:
+                await asyncio.sleep(delay - elapsed)
+        provider_config["last_request_time"] = time.time()
+
+    async def _search_brave_safe(
+        self,
+        query: str,
+        max_results: int,
+        country: str,
+        freshness: Optional[str] = None,
+    ) -> SearchResponse:
+        """Rate-limited Brave search that converts exceptions into error SearchResponses."""
+        try:
+            await self._rate_limit("brave")
+            return await self._search_brave(query, max_results, country, freshness)
+        except Exception as e:
+            error_str = str(e).lower()
+            if any(kw in error_str for kw in ["429", "rate limit", "quota exceeded"]):
+                self.providers["brave"]["available"] = False
+                self.providers["brave"]["cooldown_until"] = time.time() + 300
+            return SearchResponse(
+                query=query,
+                results=[],
+                total_results=0,
+                search_time=0.0,
+                provider="brave",
                 status="error",
                 error=str(e),
             )
 
-    async def _search_brave(self, query: str, max_results: int, country: str) -> SearchResponse:
-        """Search using Brave Search API"""
+    async def _search_aves_safe(self, query: str, max_results: int) -> SearchResponse:
+        """Rate-limited Aves search that converts exceptions into error SearchResponses."""
+        try:
+            await self._rate_limit("aves")
+            return await self._search_aves(query, max_results)
+        except Exception as e:
+            error_str = str(e).lower()
+            if any(kw in error_str for kw in ["429", "rate limit", "quota exceeded"]):
+                self.providers["aves"]["available"] = False
+                self.providers["aves"]["cooldown_until"] = time.time() + 300
+            return SearchResponse(
+                query=query,
+                results=[],
+                total_results=0,
+                search_time=0.0,
+                provider="aves",
+                status="error",
+                error=str(e),
+            )
+
+    @staticmethod
+    def _canonicalize_url(url: str) -> str:
+        """Canonicalize a URL for dedup: lowercase host, strip 'www.', trailing slash, tracking params.
+
+        Two URLs that differ only in these aspects will hash to the same key.
+        """
+        from urllib.parse import urlparse, urlunparse
+
+        if not url:
+            return ""
+        try:
+            parsed = urlparse(url.strip())
+            netloc = parsed.netloc.lower()
+            if netloc.startswith("www."):
+                netloc = netloc[4:]
+            path = parsed.path.rstrip("/") or "/"
+            query = ""
+            if parsed.query:
+                tracking_params = {
+                    "utm_source", "utm_medium", "utm_campaign", "utm_term",
+                    "utm_content", "fbclid", "gclid", "mc_cid", "mc_eid",
+                    "ref", "ref_src",
+                }
+                keep = []
+                for pair in parsed.query.split("&"):
+                    key = pair.split("=", 1)[0].lower()
+                    if key and key not in tracking_params:
+                        keep.append(pair)
+                query = "&".join(keep)
+            return urlunparse((parsed.scheme.lower(), netloc, path, "", query, ""))
+        except Exception:
+            return url.strip().lower()
+
+    def _merge_search_responses(
+        self, responses: List[SearchResponse], max_results: int
+    ) -> List[SearchResult]:
+        """Merge results from multiple providers: dedupe by canonical URL, interleave by rank.
+
+        Strategy: round-robin pick from each successful provider's ranked list.
+        The first-seen URL wins (ensuring we get the highest-ranked version
+        across providers). Truncate to ``max_results``.
+        """
+        successful = [r for r in responses if r.status == "success" and r.results]
+        if not successful:
+            return []
+
+        seen_urls: set = set()
+        merged: List[SearchResult] = []
+        max_list_len = max(len(r.results) for r in successful)
+
+        for i in range(max_list_len):
+            for response in successful:
+                if i >= len(response.results):
+                    continue
+                result = response.results[i]
+                canonical = self._canonicalize_url(result.url)
+                if canonical in seen_urls:
+                    continue
+                seen_urls.add(canonical)
+                merged.append(result)
+                if len(merged) >= max_results:
+                    return merged
+
+        return merged
+
+    async def _search_brave(
+        self,
+        query: str,
+        max_results: int,
+        country: str,
+        freshness: Optional[str] = None,
+    ) -> SearchResponse:
+        """Search using Brave Search API.
+
+        ``freshness`` values (Brave API): 'pd' (past day), 'pw' (past week),
+        'pm' (past month), 'py' (past year). Omit for no time filter — this
+        is the default so research queries can surface older canonical
+        references instead of being limited to pages indexed in the last 24h.
+        """
         start_time = time.time()
 
         provider_config = self.providers["brave"]
@@ -193,8 +373,9 @@ class WebSearchServiceAdapter:
             "country": country,
             "search_lang": "en",
             "ui_lang": "en-US",
-            "freshness": "pd",
         }
+        if freshness:
+            params["freshness"] = freshness
 
         try:
             response = requests.get(
@@ -495,7 +676,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             "context_type": "previous_search" if uses_context else "none",
             "requirements": {
                 "time_range": "recent" if "recent" in content_lower else "any",
-                "max_results": 5,
+                "max_results": 15,
                 "country": "US",
                 "language": "en",
             },
@@ -525,7 +706,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             "search_type": search_type,
             "uses_context_reference": False,
             "context_type": "none",
-            "requirements": {"max_results": 5, "country": "US", "language": "en"},
+            "requirements": {"max_results": 15, "country": "US", "language": "en"},
             "confidence": 0.6,
         }
 
@@ -786,7 +967,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             return self._get_search_help_message()
 
         try:
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
             result = await self._search_web(query, max_results=max_results)
 
             if result["success"]:
@@ -803,7 +984,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             return "I can search for news articles. What news topic are you interested in?"
 
         try:
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
             result = await self._search_news(query, max_results=max_results)
 
             if result["success"]:
@@ -820,7 +1001,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             return "I can search for academic papers and research. What research topic are you looking for?"
 
         try:
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
             result = await self._search_academic(query, max_results=max_results)
 
             if result["success"]:
@@ -849,7 +1030,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             else:
                 return f" **Refined search failed:** {result['error']}"
         else:
-            return await self._handle_general_search(query, {"max_results": 5})
+            return await self._handle_general_search(query, {"max_results": 15})
 
     async def _handle_help_request(self, user_message: str) -> str:
         """Handle help requests"""
@@ -885,7 +1066,12 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
     def _format_search_results(
         self, result: Dict[str, Any], search_type: str, show_header: bool = True
     ) -> str:
-        """Format search results consistently - FIXED VERSION"""
+        """Format search results for display.
+
+        Shows ALL results returned (previously capped at top-3 which starved
+        synthesis of signal). Snippet previews are truncated to 400 chars
+        (previously 150) to give the synthesis step enough context per item.
+        """
         results = result.get("results", [])
         query = result.get("query", "")
 
@@ -897,30 +1083,22 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
         if results:
             response += f" **Found {len(results)} results:**\n\n"
 
-            # FIXED: Safe iteration over results
             for i, res in enumerate(results):
-                if i >= 3: # Limit to 3 results
-                    break
-
-                # FIXED: Safe access to result properties
                 title = res.get("title", "No title") or "No title"
                 url = res.get("url", "No URL") or "No URL"
                 snippet = res.get("snippet", "No description") or "No description"
 
-                # FIXED: Safe string slicing
-                snippet_preview = str(snippet)[:150]
-                if len(str(snippet)) > 150:
+                snippet_str = str(snippet)
+                snippet_preview = snippet_str[:400]
+                if len(snippet_str) > 400:
                     snippet_preview += "..."
 
                 response += f"**{i + 1}. {title}**\n"
                 response += f" {url}\n"
                 response += f" {snippet_preview}\n\n"
 
-            # FIXED: Safe access to result metadata
             provider = result.get("provider", "search engine")
             search_time = result.get("search_time", 0)
-
-            # FIXED: Ensure search_time is a number
             if not isinstance(search_time, (int, float)):
                 search_time = 0
 
@@ -937,9 +1115,9 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
 
         try:
             # FIXED: Safe access to requirements
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
             if not isinstance(max_results, int) or max_results is None:
-                max_results = 5
+                max_results = 15
 
             result = await self._search_web(query, max_results=max_results)
 
@@ -1278,7 +1456,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 text="Contacting search providers...\n", sub_type=StreamSubType.STATUS
             )
 
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
             provider_info = self.search_service.providers.get(
                 self.search_service.current_provider, {}
             )
@@ -1388,7 +1566,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 text="Contacting search providers...\n", sub_type=StreamSubType.STATUS
             )
 
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
 
             # Show which provider we're using
             provider_info = self.search_service.providers.get(
@@ -1478,7 +1656,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 text="Finding latest news articles...\n", sub_type=StreamSubType.STATUS
             )
 
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
 
             result = await self._search_news(query, max_results=max_results)
 
@@ -1551,7 +1729,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 text="Finding research papers and studies...\n", sub_type=StreamSubType.STATUS
             )
 
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
 
             result = await self._search_academic(query, max_results=max_results)
 
@@ -1624,7 +1802,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 text="Finding latest news articles...\n", sub_type=StreamSubType.STATUS
             )
 
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
 
             result = await self._search_news(query, max_results=max_results)
 
@@ -1725,7 +1903,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 text="Finding research papers and studies...\n", sub_type=StreamSubType.STATUS
             )
 
-            max_results = requirements.get("max_results", 5)
+            max_results = requirements.get("max_results", 15)
 
             result = await self._search_academic(query, max_results=max_results)
 
