@@ -550,7 +550,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                     limit=5, include_metadata=True
                 )
             except Exception as e:
-                print(f"Could not get conversation history: {e}")
+                self.logger.warning(f"Could not get conversation history: {e}")
 
             # FIX: Build LLM context with conversation history
             llm_context = {
@@ -641,7 +641,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
             else:
                 return self._extract_intent_from_llm_response(response, user_message)
         except Exception as e:
-            print(f"LLM intent analysis failed: {e}")
+            self.logger.warning(f"LLM intent analysis failed: {e}")
             return self._keyword_based_analysis(user_message)
 
     async def _route_with_llm_analysis_with_context(
@@ -693,7 +693,7 @@ class WebSearchAgent(BaseAgent, WebAgentHistoryMixin):
                 )
                 return intelligent_help
             except Exception as e:
-                print(f"LLM help generation failed: {e}")
+                self.logger.warning(f"LLM help generation failed: {e}")
 
         # Fallback to standard help message
         recent_search = self.get_recent_search_term()

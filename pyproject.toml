@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ambivo-agents"
-version = "2.0.3"
+version = "2.0.4"
 description = "Lightweight AI agent framework for research synthesis"
 authors = [
     {name = "Hemant Gosain 'Sunny'", email = "info@ambivo.com"}

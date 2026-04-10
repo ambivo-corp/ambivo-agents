@@ -74,7 +74,6 @@ def _retry_with_backoff(func, max_retries=3, base_delay=1.0):
             return func()
         except Exception as e:
             status = getattr(e, "status_code", None) or getattr(e, "status", None)
-            status = getattr(e, "status_code", None) or getattr(e, "status", None)
             err_str = str(e).lower()
             is_rate_limit = status == 429 or "rate_limit" in err_str or "rate limit" in err_str
             if is_rate_limit and attempt < max_retries:

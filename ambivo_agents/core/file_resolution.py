@@ -68,9 +68,6 @@ def resolve_agent_file_path(
             "legacy_fallback_dirs", ["docker_shared/input", "docker_shared"]
         )
 
-        # Get shared manager
-        shared_manager = get_shared_manager(shared_base_dir, legacy_fallback_dirs)
-
         # If it's already an absolute path and exists, return it (if within allowed dirs)
         if Path(filename).is_absolute() and Path(filename).exists():
             abs_path = Path(filename).resolve()

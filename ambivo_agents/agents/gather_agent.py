@@ -142,16 +142,16 @@ class GatherAgent(BaseAgent):
         return f"gather_state:{session_id}"
 
     async def _load_state(self) -> Dict[str, Any]:
-        """Load and return the gather state from Redis, resetting if TTL expired."""
+        """Load and return the gather state, resetting if TTL expired."""
         session_id = self.context.session_id
         state = {}
         try:
             if self.memory:
-                raw = await self.memory.get_context(self._state_key(session_id))
+                raw = self.memory.get_context(self._state_key(session_id))
                 if raw:
                     state = raw
         except Exception as e:
-            self.logger.warning(f"Failed to load state: {e}")
+            self.logger.warning(f"Failed to load gather state: {e}")
 
         # Reset if expired
         started_at = state.get("started_at")
@@ -160,30 +160,30 @@ class GatherAgent(BaseAgent):
                 started = datetime.fromisoformat(started_at)
                 if datetime.now(timezone.utc) - started > timedelta(seconds=self.memory_ttl_seconds):
                     state = {}
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Failed to parse gather started_at: {e}")
         return state or {}
 
     async def _save_state(self, state: Dict[str, Any]):
-        """Persist gather state to Redis, setting started_at if not present."""
+        """Persist gather state, setting started_at if not present."""
         session_id = self.context.session_id
         state = dict(state)
         if "started_at" not in state:
             state["started_at"] = datetime.now(timezone.utc).isoformat()
         try:
             if self.memory:
-                await self.memory.store_context(self._state_key(session_id), state)
+                self.memory.store_context(self._state_key(session_id), state)
         except Exception as e:
-            self.logger.warning(f"Failed to save state: {e}")
+            self.logger.warning(f"Failed to save gather state: {e}")
 
     async def _clear_state(self):
         """Clear all gather state for the current session."""
         session_id = self.context.session_id
         try:
             if self.memory:
-                await self.memory.store_context(self._state_key(session_id), {})
-        except Exception:
-            pass
+                self.memory.store_context(self._state_key(session_id), {})
+        except Exception as e:
+            self.logger.debug(f"Failed to clear gather state: {e}")
 
     # -------- Questionnaire Handling --------
     @staticmethod

@@ -262,13 +262,15 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
 
     # --- URL validation ---
 
-    _BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]"}
+    _BLOCKED_HOSTS = {"localhost", "metadata.google.internal"}
     _ALLOWED_SCHEMES = {"http", "https"}
 
     def _validate_url(self, url: str) -> None:
         """Validate a URL to prevent SSRF attacks.
 
-        Blocks non-HTTP(S) schemes, localhost, and private IP ranges.
+        Blocks non-HTTP(S) schemes, localhost, and any hostname that resolves
+        to a private, loopback, link-local, or reserved IP address (including
+        cloud metadata services like 169.254.169.254).
 
         Args:
             url: URL to validate.
@@ -276,16 +278,40 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
         Raises:
             ValueError: If the URL uses a blocked scheme, host, or IP range.
         """
+        import ipaddress
+        import socket
         from urllib.parse import urlparse
 
         parsed = urlparse(url)
         if parsed.scheme not in self._ALLOWED_SCHEMES:
             raise ValueError(f"Unsupported URL scheme: {parsed.scheme}")
-        hostname = parsed.hostname or ""
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            raise ValueError("URL missing hostname")
         if hostname in self._BLOCKED_HOSTS:
             raise ValueError(f"Blocked host: {hostname}")
-        if hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
-            raise ValueError(f"Private IP range blocked: {hostname}")
+
+        # Resolve hostname to IP(s) and check each one
+        try:
+            addrinfo = socket.getaddrinfo(hostname, None)
+        except socket.gaierror as e:
+            raise ValueError(f"Could not resolve hostname {hostname}: {e}")
+
+        for family, _, _, _, sockaddr in addrinfo:
+            ip_str = sockaddr[0]
+            try:
+                ip = ipaddress.ip_address(ip_str)
+            except ValueError:
+                continue
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_unspecified
+            ):
+                raise ValueError(f"Blocked IP {ip_str} for host {hostname}")
 
     # --- Core scraping methods ---
 
@@ -643,8 +669,8 @@ class WebScraperAgent(BaseAgent, WebAgentHistoryMixin):
                     system_message=self.system_message,
                 )
                 return response
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.warning(f"LLM help generation failed: {e}")
 
         return (
             "**Web Scraper Agent**\n\n"

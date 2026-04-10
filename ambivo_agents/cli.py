@@ -559,7 +559,7 @@ class AmbivoAgentsCLI:
             return response
         except Exception as e:
             # Fallback to built-in routing
-            print(f"ModeratorAgent routing failed, using fallback: {e}")
+            logging.error(f"ModeratorAgent routing failed, using fallback: {e}")
             return await self._route_with_builtin_logic(message, session_id)
 
     def _detect_code_execution_request(self, message: str) -> bool:

@@ -25,6 +25,17 @@ from ambivo_agents.core.memory import RedisMemoryManager
 from ambivo_agents.core.llm import MultiProviderLLMService
 
 
+# Ordinal ranking for quality levels (higher = better).
+# Used for comparison because enum string values don't order correctly.
+_QUALITY_ORDINALS = {
+    QualityLevel.UNACCEPTABLE: 0,
+    QualityLevel.POOR: 1,
+    QualityLevel.FAIR: 2,
+    QualityLevel.GOOD: 3,
+    QualityLevel.EXCELLENT: 4,
+}
+
+
 class SearchStrategy(Enum):
     """Search strategies for information gathering"""
     KNOWLEDGE_FIRST = "knowledge_first"    # Check KB first, then web if needed
@@ -582,7 +593,8 @@ Please provide analysis in JSON format:
         
         best_assessment = None
         all_responses = []
-        
+        iteration = -1
+
         for iteration in range(self.max_iterations):
             # Gather responses based on strategy
             if query_analysis.search_strategy == SearchStrategy.PARALLEL:
@@ -605,8 +617,8 @@ Please provide analysis in JSON format:
                     user_preferences
                 )
                 
-                # Check if quality is acceptable
-                if assessment.quality_level.value >= self.quality_threshold.value:
+                # Check if quality is acceptable (use ordinal comparison, not string)
+                if _QUALITY_ORDINALS.get(assessment.quality_level, 0) >= _QUALITY_ORDINALS.get(self.quality_threshold, 0):
                     best_assessment = assessment
                     break
                 

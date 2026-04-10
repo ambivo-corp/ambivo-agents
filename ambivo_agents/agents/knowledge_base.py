@@ -2139,7 +2139,14 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
     async def _ingest_web_content(
         self, kb_name: str, url: str, custom_meta: Dict[str, Any] = None
     ) -> Dict[str, Any]:
-        """Ingest content from web URLs"""
+        """Ingest content from web URLs."""
+        # Validate URL to prevent SSRF (private IPs, loopback, metadata services)
+        try:
+            self._validate_ingest_url(url)
+        except ValueError as e:
+            return {"success": False, "error": f"URL validation failed: {e}"}
+
+        tmp_path = None
         try:
             # Fetch web content
             response = requests.get(url, timeout=30)
@@ -2165,9 +2172,6 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             # Ingest the content
             result = await self._ingest_document(kb_name, tmp_path, custom_meta)
 
-            # Clean up temporary file
-            Path(tmp_path).unlink()
-
             if result["success"]:
                 result["url"] = url
                 result["message"] = f"Web content from {url} successfully ingested into {kb_name}"
@@ -2175,7 +2179,46 @@ class KnowledgeBaseAgent(BaseAgent, KnowledgeBaseAgentHistoryMixin):
             return result
 
         except Exception as e:
+            self.logger.error(f"Failed to ingest web content from {url}: {e}")
             return {"success": False, "error": str(e)}
+        finally:
+            # Always clean up temp file, even on failure
+            if tmp_path:
+                try:
+                    Path(tmp_path).unlink()
+                except OSError as e:
+                    self.logger.warning(f"Failed to clean up temp file {tmp_path}: {e}")
+
+    def _validate_ingest_url(self, url: str) -> None:
+        """Validate URL for ingestion to prevent SSRF. Raises ValueError on blocked URLs."""
+        import ipaddress
+        import socket
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"Unsupported scheme: {parsed.scheme}")
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            raise ValueError("URL missing hostname")
+        try:
+            addrinfo = socket.getaddrinfo(hostname, None)
+        except socket.gaierror as e:
+            raise ValueError(f"Could not resolve hostname {hostname}: {e}")
+        for family, _, _, _, sockaddr in addrinfo:
+            try:
+                ip = ipaddress.ip_address(sockaddr[0])
+            except ValueError:
+                continue
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_unspecified
+            ):
+                raise ValueError(f"Blocked IP {sockaddr[0]} for host {hostname}")
 
     async def _call_api(
         self,

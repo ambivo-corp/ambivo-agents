@@ -10,17 +10,27 @@ import ambivo_agents.core.base as base_mod
 
 
 class LocalMemory:
+    """Sync mock matching the real MemoryManagerInterface contract."""
+
     def __init__(self):
         self._ctx = {}
+        self._messages = []
 
-    async def store_context(self, key, value, conversation_id=None):
+    def store_message(self, message):
+        self._messages.append(message)
+
+    def get_recent_messages(self, limit=10, conversation_id=None, session_id=None):
+        return self._messages[-limit:]
+
+    def store_context(self, key, value, conversation_id=None, session_id=None):
         self._ctx[key] = value
 
-    async def get_context(self, key, conversation_id=None):
+    def get_context(self, key, conversation_id=None, session_id=None):
         return self._ctx.get(key)
 
-    async def clear_memory(self, conversation_id=None):
+    def clear_memory(self, conversation_id=None, session_id=None):
         self._ctx.clear()
+        self._messages.clear()
 
 
 @pytest.mark.asyncio

@@ -492,17 +492,14 @@ class BaseAgent(ABC):
     def _get_default_system_message(self) -> str:
         """Get role-specific default system message"""
         role_messages = {
-            AgentRole.ASSISTANT: """You are a helpful AI assistant. Provide accurate, thoughtful responses to user queries. 
-            Maintain conversation context and reference previous discussions when relevant. 
+            AgentRole.ASSISTANT: """You are a helpful AI assistant. Provide accurate, thoughtful responses to user queries.
+            Maintain conversation context and reference previous discussions when relevant.
             Be concise but thorough in explanations.""",
-            AgentRole.CODE_EXECUTOR: """You are a code execution specialist. Write clean, well-commented code. 
-            Always explain what the code does before execution. Handle errors gracefully and suggest fixes. 
-            Use best practices for security and efficiency.""",
-            AgentRole.RESEARCHER: """You are a research specialist. Provide thorough, well-sourced information. 
-            Verify facts when possible and clearly distinguish between verified information and analysis. 
+            AgentRole.RESEARCHER: """You are a research specialist. Provide thorough, well-sourced information.
+            Verify facts when possible and clearly distinguish between verified information and analysis.
             Structure your research logically.""",
-            AgentRole.COORDINATOR: """You are an intelligent coordinator. Analyze user requests carefully and 
-            route them to the most appropriate specialized agent. Consider context, complexity, and agent 
+            AgentRole.COORDINATOR: """You are an intelligent coordinator. Analyze user requests carefully and
+            route them to the most appropriate specialized agent. Consider context, complexity, and agent
             capabilities when making routing decisions.""",
         }
         return role_messages.get(self.role, "You are a helpful AI agent.")
@@ -518,12 +515,7 @@ class BaseAgent(ABC):
                 base_message += "\n\nIMPORTANT: This conversation has history. Consider previous messages when responding and maintain conversational continuity."
 
             # Add agent-specific context
-            if self.role == AgentRole.CODE_EXECUTOR and context.get("streaming"):
-                base_message += (
-                    "\n\nYou are in streaming mode. Provide step-by-step progress updates."
-                )
-
-            elif self.role == AgentRole.COORDINATOR:
+            if self.role == AgentRole.COORDINATOR:
                 available_agents = context.get("available_agents", [])
                 if available_agents:
                     base_message += (

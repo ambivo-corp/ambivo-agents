@@ -15,8 +15,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional, Union, Tuple
 
-from ambivo_agents.core import WorkflowPatterns
-
 from ..config.loader import get_config_section, load_config
 from ..core.base import (
     AgentMessage,
@@ -788,7 +786,7 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
         ]
 
         if any(re.search(pattern, message_lower) for pattern in ambiguous_patterns):
-            # No clear destination specified
+            # No clear destination specified — ask the user for a KB name
             return {
                 "primary_agent": "assistant",
                 "confidence": 0.9,
@@ -799,29 +797,22 @@ class ModeratorAgent(BaseAgent, BaseAgentHistoryMixin):
                 "reasoning": "Ingestion destination not specified - requesting clarification",
                 "clarification_request": {
                     "type": "ingestion_destination",
-                    "message": self._generate_ingestion_clarification(message, db_score, kb_score),
+                    "message": self._generate_ingestion_clarification(message),
                 },
             }
 
         return None
 
-    def _generate_ingestion_clarification(
-        self, original_message: str, db_score: int, kb_score: int
-    ) -> str:
-        """Generate clarification message for ingestion commands"""
+    def _generate_ingestion_clarification(self, original_message: str) -> str:
+        """Generate clarification message for ingestion commands."""
         return f"""I can help you ingest data, but I need clarification on the destination:
 
 **Your request**: "{original_message}"
 
-**Available options**:
-1. **Database Ingestion** (MongoDB/MySQL/PostgreSQL) - For structured data storage and SQL queries
-2. **Knowledge Base Ingestion** (Vector Database) - For document search and semantic retrieval
+Please specify the knowledge base name:
+- "ingest [file] into knowledge base [name]"
 
-**Please specify**:
-- "ingest [file] into **database**" (for MongoDB/SQL database)
-- "ingest [file] into **knowledge base** [name]" (for semantic search)
-
-Which type of ingestion would you like?"""
+Which knowledge base would you like to ingest into?"""
 
     def _is_obvious_code_request(self, user_message: str) -> bool:
         """Detect obvious code execution requests"""
@@ -1603,7 +1594,7 @@ Please continue with the next step for {agent_type} processing."""
                 f"**Step {result['step']} - {result['agent'].replace('_', ' ').title()}:** {status_emoji} {context_emoji}\n"
             )
             response_parts.append(f"{result['content']}\n\n")
-            response_parts.append("" * 50 + "\n\n")
+            response_parts.append("-" * 50 + "\n\n")
 
         if failed_agents:
             response_parts.append(
@@ -1710,23 +1701,24 @@ Please continue with the next step for {agent_type} processing."""
             # PHASE 3: Stream Actual Processing with Context
             if intent_analysis.get("requires_multiple_agents", False):
                 if workflow_type == "sequential":
-                    yield "**Sequential Workflow Coordination...**\n\n"
-                    async for chunk in self._coordinate_multiple_agents_stream_with_context(
-                        intent_analysis.get("agent_chain", [intent_analysis["primary_agent"]]),
-                        user_message,
-                        context,
-                        llm_context,
-                    ):
-                        yield chunk
+                    yield StreamChunk(
+                        text="**Sequential Workflow Coordination...**\n\n",
+                        sub_type=StreamSubType.STATUS,
+                        metadata={"phase": "coordination"},
+                    )
                 else:
-                    yield "**Parallel Agent Coordination...**\n\n"
-                    async for chunk in self._coordinate_multiple_agents_stream_with_context(
-                        intent_analysis.get("agent_chain", [intent_analysis["primary_agent"]]),
-                        user_message,
-                        context,
-                        llm_context,
-                    ):
-                        yield chunk
+                    yield StreamChunk(
+                        text="**Parallel Agent Coordination...**\n\n",
+                        sub_type=StreamSubType.STATUS,
+                        metadata={"phase": "coordination"},
+                    )
+                async for chunk in self._coordinate_multiple_agents_stream_with_context(
+                    intent_analysis.get("agent_chain", [intent_analysis["primary_agent"]]),
+                    user_message,
+                    context,
+                    llm_context,
+                ):
+                    yield chunk
             else:
                 # Single agent processing with context and fallback support
                 try:
@@ -1742,17 +1734,20 @@ Please continue with the next step for {agent_type} processing."""
                         metadata={"error": str(e)},
                     )
 
-            # PHASE 4: Completion Summary
-            reasoning = intent_analysis.get("reasoning", "Standard routing")
-            context_preserved = len(conversation_history) > 0
-            # yield f"\n\n*Completed by: {agent_name}*\n*Reasoning: {reasoning}*"
-            # if context_preserved:
-            # yield f"\n*Context: {len(conversation_history)} messages preserved*"
-            yield f"\n"
+            # PHASE 4: Completion newline
+            yield StreamChunk(
+                text="\n",
+                sub_type=StreamSubType.STATUS,
+                metadata={"phase": "complete"},
+            )
 
         except Exception as e:
             self.logger.error(f"ModeratorAgent streaming error: {e}")
-            yield f"\n\n**Error:** {str(e)}"
+            yield StreamChunk(
+                text=f"\n\n**Error:** {str(e)}",
+                sub_type=StreamSubType.ERROR,
+                metadata={"error": str(e)},
+            )
 
     async def _route_to_agent_stream_with_context(
         self,
@@ -1763,7 +1758,11 @@ Please continue with the next step for {agent_type} processing."""
     ) -> AsyncIterator[StreamChunk]:
         """Stream routing to a specific agent with context preservation"""
         if agent_type not in self.specialized_agents:
-            yield f"Agent {agent_type} not available"
+            yield StreamChunk(
+                text=f"Agent {agent_type} not available",
+                sub_type=StreamSubType.ERROR,
+                metadata={"error": "agent_unavailable", "agent_type": agent_type},
+            )
             return
 
         try:
@@ -1839,7 +1838,7 @@ Please continue with the next step for {agent_type} processing."""
                     metadata={"agent_sequence": i, "agent_type": agent_type},
                 )
                 yield StreamChunk(
-                    text="" * 50 + "\n",
+                    text="-" * 50 + "\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"separator": True},
                 )
@@ -1850,7 +1849,7 @@ Please continue with the next step for {agent_type} processing."""
                     yield chunk
 
                 yield StreamChunk(
-                    text="\n" + "" * 50 + "\n\n",
+                    text="\n" + "-" * 50 + "\n\n",
                     sub_type=StreamSubType.STATUS,
                     metadata={"separator": True, "agent_completed": agent_type},
                 )
