@@ -248,5 +248,164 @@ async def test_synthesize_strips_surrounding_whitespace_from_llm_output():
     assert result == "Answer with surrounding whitespace."
 
 
+# ---------------------------------------------------------------------------
+# assess_response integration — ensures LOW-quality responses still go through
+# the LLM synthesis path (the second short-circuit fix shipped in v2.0.7)
+# ---------------------------------------------------------------------------
+
+async def test_assess_response_poor_quality_still_calls_synthesis():
+    """Regression test for the second short-circuit bug: when the assessor
+    scores responses as POOR/UNACCEPTABLE, assess_response used to skip
+    _synthesize_response entirely and return raw best-response content.
+
+    This caused technical queries against /kh/chat to return raw
+    '**Academic Search Results for:**' output because brave's mixed-quality
+    results triggered a low assessor score. This test simulates that exact
+    scenario and verifies the LLM synthesis is still called.
+    """
+    # Build a concrete ResponseQualityAssessor without hitting BaseAgent.__init__
+    # (which requires Redis, etc.). Instead, mock everything and call
+    # assess_response via the unbound method.
+    mock = MagicMock(spec=ResponseQualityAssessor)
+    mock.llm_service = MagicMock()
+    mock.logger = MagicMock()
+    mock.system_message = "assessor system message"
+
+    # Quality thresholds — same defaults as ResponseQualityAssessor.__init__
+    mock.quality_thresholds = {
+        'excellent': 0.9,
+        'good': 0.75,
+        'fair': 0.6,
+        'poor': 0.4,
+    }
+    mock.source_weights = {
+        ResponseSource.KNOWLEDGE_BASE: 0.9,
+        ResponseSource.WEB_SEARCH: 0.7,
+        ResponseSource.WEB_SCRAPE: 0.8,
+        ResponseSource.COMBINED: 1.0,
+    }
+
+    # First LLM call: assessment (returns JSON scoring the response as POOR).
+    # Second LLM call: the synthesis call we want to verify happens.
+    assessment_json = (
+        '{"overall_assessment": "Mixed-quality search results", '
+        '"relevance_score": 0.3, "completeness_score": 0.2, '
+        '"accuracy_score": 0.3, "clarity_score": 0.4, '
+        '"strengths": [], "weaknesses": ["off-topic result"], '
+        '"recommendations": [], "missing_information": [], '
+        '"best_response_index": 1, "should_combine_responses": false, '
+        '"suggested_improvements": "gather more sources"}'
+    )
+    synthesis_output = "Clean synthesized prose answer about the topic."
+
+    mock.llm_service.generate_response = AsyncMock(
+        side_effect=[assessment_json, synthesis_output]
+    )
+
+    # Delegate helper methods to their real implementations via bound method
+    # wrappers so _calculate_confidence etc. work as intended.
+    mock._build_assessment_prompt = lambda q, r, p: (
+        ResponseQualityAssessor._build_assessment_prompt(mock, q, r, p)
+    )
+    mock._parse_assessment = lambda c: (
+        ResponseQualityAssessor._parse_assessment(mock, c)
+    )
+    mock._calculate_confidence = lambda r, a: (
+        ResponseQualityAssessor._calculate_confidence(mock, r, a)
+    )
+    mock._determine_quality_level = lambda c: (
+        ResponseQualityAssessor._determine_quality_level(mock, c)
+    )
+    mock._suggest_additional_sources = lambda r, a: (
+        ResponseQualityAssessor._suggest_additional_sources(mock, r, a)
+    )
+
+    # _synthesize_response is the thing we want to verify runs. Use a real
+    # AsyncMock so we can assert it was called.
+    real_synthesize = AsyncMock(return_value=synthesis_output)
+    mock._synthesize_response = real_synthesize
+
+    responses = [
+        SourceResponse(
+            source=ResponseSource.WEB_SEARCH,
+            content=(
+                "**Academic Search Results for:** quantum error correction\n"
+                "**Found 2 results:**\n"
+                "... raw web search output ..."
+            ),
+            confidence=0.75,
+            metadata={},
+        )
+    ]
+
+    result = await ResponseQualityAssessor.assess_response(
+        mock, "What are recent advances in quantum error correction?", responses
+    )
+
+    # Confirm the quality was POOR (sanity check that we hit the old
+    # short-circuit's trigger condition)
+    from ambivo_agents.agents.response_quality_assessor import QualityLevel
+    assert result.quality_level in (QualityLevel.POOR, QualityLevel.UNACCEPTABLE), (
+        f"Expected POOR/UNACCEPTABLE to exercise the fix, got {result.quality_level}"
+    )
+
+    # The critical assertion: _synthesize_response MUST have been called
+    assert real_synthesize.called, (
+        "_synthesize_response must be called even when quality_level is POOR"
+    )
+
+    # And the returned final_response must be the synthesis output, NOT the
+    # raw web_search content
+    assert result.final_response == synthesis_output
+    assert "**Academic Search Results for:**" not in result.final_response
+
+
+async def test_assess_response_empty_responses_returns_apology():
+    """When there are no responses at all, _synthesize_response is not called
+    and we return the stock 'couldn't find' message."""
+    mock = MagicMock(spec=ResponseQualityAssessor)
+    mock.llm_service = MagicMock()
+    mock.logger = MagicMock()
+    mock.system_message = "assessor system message"
+    mock.quality_thresholds = {
+        'excellent': 0.9, 'good': 0.75, 'fair': 0.6, 'poor': 0.4,
+    }
+    mock.source_weights = {
+        ResponseSource.KNOWLEDGE_BASE: 0.9,
+        ResponseSource.WEB_SEARCH: 0.7,
+        ResponseSource.WEB_SCRAPE: 0.8,
+        ResponseSource.COMBINED: 1.0,
+    }
+
+    # Only the assessment LLM call happens (synthesis is not called for empty)
+    mock.llm_service.generate_response = AsyncMock(
+        return_value='{"relevance_score": 0.0, "completeness_score": 0.0, '
+                     '"accuracy_score": 0.0, "clarity_score": 0.0, '
+                     '"should_combine_responses": false, "best_response_index": 1}'
+    )
+
+    mock._build_assessment_prompt = lambda q, r, p: (
+        ResponseQualityAssessor._build_assessment_prompt(mock, q, r, p)
+    )
+    mock._parse_assessment = lambda c: (
+        ResponseQualityAssessor._parse_assessment(mock, c)
+    )
+    mock._calculate_confidence = lambda r, a: (
+        ResponseQualityAssessor._calculate_confidence(mock, r, a)
+    )
+    mock._determine_quality_level = lambda c: (
+        ResponseQualityAssessor._determine_quality_level(mock, c)
+    )
+    mock._suggest_additional_sources = lambda r, a: (
+        ResponseQualityAssessor._suggest_additional_sources(mock, r, a)
+    )
+    mock._synthesize_response = AsyncMock(return_value="should not be called")
+
+    result = await ResponseQualityAssessor.assess_response(mock, "Q?", [])
+
+    assert not mock._synthesize_response.called
+    assert "couldn't find" in result.final_response.lower()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

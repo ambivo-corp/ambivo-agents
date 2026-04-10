@@ -155,14 +155,16 @@ When assessing, be thorough but fair. Consider the context and complexity of the
         # Determine quality level
         quality_level = self._determine_quality_level(confidence_score)
         
-        # Generate final synthesized response - always generate for meaningful responses
-        final_response = ""
-        if quality_level in [QualityLevel.EXCELLENT, QualityLevel.GOOD, QualityLevel.FAIR]:
+        # Generate final synthesized response. Always run the LLM synthesis path
+        # when responses exist, regardless of assessed quality level. Raw
+        # sub-agent content is never appropriate as a user-facing answer — even
+        # for low-quality results, the synthesis step can restructure the
+        # content into readable prose or explicitly acknowledge that the
+        # sources don't cover the question (see the _synthesize_response
+        # prompt). _synthesize_response has its own LLM-failure fallback to
+        # raw best-confidence content, so there's no loss-of-information risk.
+        if responses:
             final_response = await self._synthesize_response(question, responses, assessment_data)
-        elif responses:
-            # Fallback: use the best available response even for poor quality
-            best_response = max(responses, key=lambda r: r.confidence)
-            final_response = best_response.content
         else:
             final_response = "I couldn't find sufficient information to answer your question."
         
