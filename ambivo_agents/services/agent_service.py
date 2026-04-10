@@ -1,6 +1,6 @@
 # ambivo_agents/services/agent_service.py
 """
-Agent Service for managing agent sessions and message processing - UPDATED WITH YOUTUBE SUPPORT.
+Agent Service for managing agent sessions and message processing
 """
 
 import asyncio
@@ -384,7 +384,7 @@ class AgentService:
         self.total_sessions_created = 0
         self.start_time = datetime.now()
 
-        self.logger.info("Agent Service initialized from agent_config.yaml with YouTube support")
+
 
     def _setup_logging(self):
         """Setup logging configuration"""

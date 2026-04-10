@@ -182,8 +182,7 @@ class EnhancedConfigManager:
                 "theme": "default",
             },
             "agents": {
-                "youtube": {"default_audio_only": True, "output_directory": "./downloads"},
-                "media": {"supported_formats": ["mp4", "avi", "mov", "mp3", "wav"]},
+
                 "web_search": {"default_max_results": 5},
                 "moderator": {"enabled": MODERATOR_AVAILABLE},
             },
@@ -1147,8 +1146,7 @@ Ambivo Agents Enhanced Shell Commands:
    <message> - Direct message (shortcut)
 
 **Specialized Agent Commands:**
-   youtube download <url> - Download video/audio (cached agent)
-   youtube info <url> - Get video information
+  
    search <query> - Web search (cached agent)
    scrape <url> - Web scraping (cached agent)
    database <message> - Database operations (cached agent)

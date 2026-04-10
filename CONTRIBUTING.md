@@ -272,13 +272,13 @@ The system automatically sets environment variables internally from your YAML co
 ambivo_agents/
  agents/ # Agent implementations
   assistant.py
-  code_executor.py
+
   knowledge_base.py
-  media_editor.py
+
   simple_web_search.py
   web_scraper.py
   web_search.py
-  youtube_download.py
+ 
  config/ # Configuration management
  core/ # Core functionality (base classes, LLM, memory)
   base.py

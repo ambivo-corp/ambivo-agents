@@ -1,6 +1,6 @@
 # ambivo_agents/services/factory.py
 """
-Agent Factory for creating different types of agents - UPDATED WITH YOUTUBE SUPPORT
+Agent Factory for creating different types of agents
 
 Author: Hemant Gosain 'Sunny'
 Company: Ambivo
@@ -90,7 +90,7 @@ class ProxyAgent(BaseAgent):
         try:
             content = message.content.lower()
 
-            # Improved routing logic with YouTube support
+
             target_agent = None
 
             # Web search routing (HIGH PRIORITY for web search requests)
@@ -260,7 +260,7 @@ class AgentFactory:
             # Import specialized agents dynamically based on configuration
             capabilities = validate_agent_capabilities(config)
 
-            # PRIORITY ORDER: Knowledge Base > Web Search > YouTube > Web Scraper > Media Editor
+
             if capabilities.get("knowledge_base", False):
                 try:
                     from ..agents.knowledge_base import KnowledgeBaseAgent
