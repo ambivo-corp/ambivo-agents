@@ -377,7 +377,7 @@ jobs:
         
         # Run the real integration tests from tests directory
         echo " Running integration tests with dynamic configuration..."
-        pytest tests/test_basic.py -v -s --tb=short --timeout=300
+        pytest tests/test_basic.py -v -s --tb=short --timeout=300 -m "integration or not integration"
         
         echo " Integration tests completed successfully!"
 
