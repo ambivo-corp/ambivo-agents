@@ -495,7 +495,6 @@ class RedisMemoryManager(MemoryManagerInterface):
                 "encoding_errors": "replace",
                 "socket_timeout": 10,
                 "socket_connect_timeout": 10,
-                "retry_on_timeout": True,
             }
         )
 

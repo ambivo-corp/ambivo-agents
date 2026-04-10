@@ -186,9 +186,16 @@ ensure_newline_before_comments = true
 # pytest configuration
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-ra -q --strict-markers"
+addopts = "-ra -q --strict-markers -m 'not integration'"
 testpaths = [
     "tests",
 ]
 asyncio_mode = "auto"
 timeout = 300
+markers = [
+    "integration: Tests requiring infrastructure (Qdrant, Redis, real APIs)",
+    "slow: Slow running tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:redis.*",
+]
