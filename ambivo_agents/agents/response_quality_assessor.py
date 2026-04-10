@@ -320,42 +320,82 @@ Please provide your assessment in the following JSON format:
         responses: List[SourceResponse],
         assessment_data: Dict[str, Any]
     ) -> str:
-        """Synthesize multiple source responses into a single comprehensive answer via LLM."""
+        """Synthesize source responses into a clean, user-facing answer via LLM.
+
+        Always calls the LLM when responses exist — never returns raw sub-agent
+        content verbatim. Sources like web_search produce formatted output
+        (e.g. "**Academic Search Results for:**", "**Found N results**", URL
+        lists) that is never appropriate as a final user-facing answer, and KB
+        or scraper responses are raw document chunks. The whole point of the
+        synthesis agent is to rewrite those into a direct prose answer.
+
+        Returns:
+            Synthesized answer text, or "" when there are no responses. If the
+            LLM synthesis call fails, falls back to the highest-confidence
+            source's raw content so the user still gets something.
+        """
         if not responses:
             return ""
-        
-        # If only one response or one is clearly best, use it
-        if len(responses) == 1 or not assessment_data.get('should_combine_responses', False):
-            best_index = assessment_data.get('best_response_index', 1) - 1
-            if 0 <= best_index < len(responses):
-                return responses[best_index].content
-            return responses[0].content
-        
-        # Synthesize multiple responses
-        synthesis_prompt = f"""Given the following question and multiple responses from different sources, 
-create a comprehensive, well-structured final answer that combines the best information from all sources.
 
-Question: {question}
+        # Adaptive prompt intro based on source count. The `assessment_data`
+        # flags `best_response_index` and `should_combine_responses` used to
+        # short-circuit this method entirely — that's the bug we're fixing.
+        # We now always run LLM synthesis regardless of those flags; they can
+        # still be used as hints in a future version to order sources or bias
+        # the synthesis prompt, but they must not skip the synthesis step.
+        if len(responses) == 1:
+            prompt_intro = (
+                "You have a single source of information. Extract the key facts "
+                "and write a clear, well-structured direct answer to the user's "
+                "question. Rewrite the content — do NOT echo the source's "
+                "formatting (markdown headers, 'Found N results', raw URL lists)."
+            )
+        else:
+            prompt_intro = (
+                f"You have {len(responses)} sources of information. Combine the "
+                "best information from all sources into a single comprehensive "
+                "answer. Eliminate redundancy and resolve contradictions by "
+                "favoring higher-confidence sources."
+            )
 
-Responses:
-"""
+        synthesis_prompt = f"{prompt_intro}\n\nUser's question: {question}\n\nSource(s):\n"
         for i, response in enumerate(responses, 1):
-            synthesis_prompt += f"\nSource {i} ({response.source.value}):\n{response.content}\n"
-        
-        synthesis_prompt += """
-Create a synthesized response that:
-1. Combines the most accurate and relevant information from all sources
-2. Eliminates redundancy
-3. Maintains clarity and coherence
-4. Properly attributes information to sources when appropriate
-5. Provides a complete answer to the user's question"""
-        
-        synthesis_response = await self.llm_service.generate_response(
-            prompt=synthesis_prompt,
-            system_message="You are a response synthesizer. Create comprehensive answers from multiple sources."
+            synthesis_prompt += (
+                f"\n--- Source {i} ({response.source.value}, "
+                f"confidence={response.confidence:.2f}) ---\n"
+                f"{response.content}\n"
+            )
+
+        synthesis_prompt += (
+            "\n\nWrite a direct answer to the user's question in clean prose. "
+            "Do NOT copy source formatting verbatim. Do NOT fabricate information "
+            "not present in the sources. If the sources do not actually cover the "
+            "question, say so explicitly instead of inventing an answer."
         )
-        
-        return synthesis_response
+
+        try:
+            synthesized = await self.llm_service.generate_response(
+                prompt=synthesis_prompt,
+                system_message=(
+                    "You are a response synthesizer. You read one or more source "
+                    "documents and write a clean, direct answer to the user's "
+                    "question. You never echo raw search-result formatting and "
+                    "you never fabricate information absent from the sources."
+                ),
+            )
+            if synthesized and synthesized.strip():
+                return synthesized.strip()
+            self.logger.warning(
+                "LLM synthesis returned empty response; falling back to best source content"
+            )
+        except Exception as e:
+            self.logger.error(f"LLM synthesis call failed: {e}")
+
+        # Fallback: return the highest-confidence source's raw content. This
+        # preserves the pre-fix behavior when the LLM is unavailable so the
+        # user still sees something, even if it's the ugly raw format.
+        best_response = max(responses, key=lambda r: r.confidence)
+        return best_response.content
     
     def _suggest_additional_sources(
         self,
