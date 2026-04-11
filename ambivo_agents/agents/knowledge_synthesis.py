@@ -504,14 +504,26 @@ Please provide analysis in JSON format:
             
             if not urls:
                 return None
-            
-            # Scrape URLs — pass URL directly, WebScraperAgent extracts it from the message
-            scrape_results = []
-            for url in urls:
-                scrape_response = await self._route_to_agent_with_context('web_scraper', f"scrape {url}")
-                if scrape_response.success:
-                    scrape_results.append(scrape_response.content)
-            
+
+            # Scrape URLs IN PARALLEL. Previously this loop was sequential, so
+            # scraping N URLs cost ~sum(per-URL latency). With N=5 and Jina
+            # Reader calls around 5-10s each, that was 25-50s just in scraping
+            # — enough to push synthesis over the outer gateway's 120s timeout.
+            # Parallel gather collapses the wall-clock to max(per-URL latency).
+            scrape_tasks = [
+                self._route_to_agent_with_context('web_scraper', f"scrape {url}")
+                for url in urls
+            ]
+            scrape_responses = await asyncio.gather(*scrape_tasks, return_exceptions=True)
+
+            scrape_results: List[str] = []
+            for resp in scrape_responses:
+                if isinstance(resp, Exception):
+                    self.logger.warning(f"Scrape task raised: {resp}")
+                    continue
+                if resp and getattr(resp, "success", False) and resp.content:
+                    scrape_results.append(resp.content)
+
             if scrape_results:
                 combined_content = "\n\n".join(scrape_results)
                 return SourceResponse(
