@@ -8,6 +8,7 @@ best possible answer is provided to users.
 
 import asyncio
 import json
+import time
 from typing import Dict, Any, List, Optional, Tuple, Union
 from dataclasses import dataclass
 from enum import Enum
@@ -811,7 +812,16 @@ Please provide analysis in JSON format:
     async def process_message_stream(self, message, context=None, **kwargs):
         """
         Stream processing with quality assessment.
-        Quality assessment happens before streaming begins.
+
+        Synthesis runs in a background task so we can emit periodic heartbeat
+        status chunks while it's working. Without heartbeats, the SSE stream
+        would be silent for the entire 60-120s+ quality-assessment phase,
+        which triggers idle-based gateway timeouts (vectordbapi.ambivo.com's
+        gateway has a ~120s idle cutoff). Each heartbeat sends a ``status``
+        chunk with empty text but non-empty metadata — that serializes to a
+        full ``data: {...}\\n\\n`` SSE line on the wire, which resets the
+        proxy's idle timer.
+
         Yields StreamChunk objects conforming to the SSE protocol.
         """
         from ambivo_agents.core.base import AgentMessage, StreamChunk, StreamSubType, SSEEventType
@@ -826,9 +836,38 @@ Please provide analysis in JSON format:
             metadata={"agent_id": self.agent_id},
         )
 
-        result = await self.process_with_quality_assessment(
-            message_text, kwargs.get('user_preferences', {})
+        # Kick off synthesis in a background task so we can interleave heartbeat
+        # status chunks while it runs. process_with_quality_assessment is a
+        # long-running coroutine (60-120s+ for technical queries) — without
+        # this, the stream is silent for the entire duration and intermediate
+        # proxies with idle-based timeouts kill the connection.
+        synthesis_task = asyncio.create_task(
+            self.process_with_quality_assessment(
+                message_text, kwargs.get('user_preferences', {})
+            )
         )
+
+        heartbeat_interval = 20.0  # seconds between keep-alive chunks
+        start_time = time.time()
+        while True:
+            done, _ = await asyncio.wait({synthesis_task}, timeout=heartbeat_interval)
+            if synthesis_task in done:
+                break
+            elapsed = time.time() - start_time
+            yield StreamChunk(
+                text="",
+                sub_type=StreamSubType.STATUS,
+                event_type=SSEEventType.STATUS,
+                metadata={
+                    "heartbeat": True,
+                    "elapsed_seconds": round(elapsed, 1),
+                    "stage": "synthesizing",
+                    "agent_id": self.agent_id,
+                },
+            )
+
+        # Propagates any exception raised inside synthesis
+        result = synthesis_task.result()
 
         response_text = result.get('response', '')
 
